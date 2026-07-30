@@ -1,0 +1,13 @@
+{
+  "name": "dogtag",
+  "version": "0.1.0-beta.0",
+  "private": true,
+  "description": "Reserved scaffold for the dogtag TypeScript binding: a napi-style native binding that will wrap the Rust core (exact mechanism decided at M6). Not installable yet.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mdml/dogtag.git",
+    "directory": "bindings/typescript"
+  },
+  "homepage": "https://dogtag.dev"
+}
