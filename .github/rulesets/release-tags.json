@@ -1,0 +1,67 @@
+{
+  "name": "release-tags",
+  "target": "tag",
+  "enforcement": "active",
+  "bypass_actors": [],
+  "conditions": {
+    "ref_name": {
+      "include": [
+        "refs/tags/v*"
+      ],
+      "exclude": []
+    }
+  },
+  "rules": [
+    {
+      "type": "update"
+    },
+    {
+      "type": "deletion"
+    },
+    {
+      "type": "non_fast_forward"
+    },
+    {
+      "type": "required_status_checks",
+      "parameters": {
+        "strict_required_status_checks_policy": false,
+        "do_not_enforce_on_create": false,
+        "required_status_checks": [
+          {
+            "context": "Format, lint, test (Linux)"
+          },
+          {
+            "context": "Commit messages"
+          },
+          {
+            "context": "Test (macOS arm64)"
+          },
+          {
+            "context": "MSRV (Rust 1.85)"
+          },
+          {
+            "context": "Coverage thresholds"
+          },
+          {
+            "context": "CodeScene Code Health"
+          },
+          {
+            "context": "Workflow security (zizmor)"
+          },
+          {
+            "context": "Release build check (x86_64 musl)"
+          },
+          {
+            "context": "Markdown link integrity"
+          },
+          {
+            "context": "cargo-deny"
+          },
+          {
+            "context": "osv-full / osv-scan"
+          }
+        ]
+      }
+    }
+  ]
+}
