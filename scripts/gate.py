@@ -100,9 +100,13 @@ STEPS = (
     Step("msrv-test", "cargo +1.85.0 test --workspace --locked", "cargo-test"),
     Step("deny", "cargo deny --workspace --locked check", "cargo-deny"),
     Step("osv", "osv-scanner scan source -r .", "osv-scanner"),
+    # Scoped to the repository root, not .github/workflows, because the CI
+    # action defaults to the whole repository: the narrower local scope meant
+    # `just zizmor` never read .github/dependabot.yml, and a finding there
+    # reached CI having passed every local gate.
     Step(
         "zizmor",
-        "zizmor --persona regular --min-severity low --no-online-audits .github/workflows",
+        "zizmor --persona regular --min-severity low --no-online-audits .",
         "zizmor",
     ),
     Step("codescene", "scripts/codescene-gate.sh", "codescene-gate"),

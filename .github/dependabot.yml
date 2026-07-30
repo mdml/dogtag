@@ -1,11 +1,26 @@
 version: 2
+# `cooldown` holds an ordinary version update back until a release has been
+# public for seven days, so a compromised or immediately-yanked release is
+# less likely to reach a pull request here at all. It matches the seven-day
+# quarantine the TypeScript binding already applies to npm dependencies
+# (docs/security/exceptions.toml, bindings/typescript/bunfig.toml), so the
+# two ecosystems wait the same length of time for the same reason.
+#
+# It delays **ordinary version updates only.** Dependabot security updates —
+# the ones raised against a published advisory — are not subject to cooldown
+# and still arrive immediately, which is the behaviour worth having: waiting
+# out a cooldown on a known-vulnerable dependency would invert the point.
 updates:
   # Keep SHA-pinned actions from going stale.
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
   - package-ecosystem: cargo
     directory: "/"
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
