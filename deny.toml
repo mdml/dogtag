@@ -1,0 +1,46 @@
+# cargo-deny policy (cargo-deny 0.20.2). Strict by default: any suppression
+# added here (e.g. [advisories].ignore) REQUIRES a matching entry in
+# docs/security/exceptions.toml — scripts/check_security_exceptions.py
+# enforces the pairing in CI. See that file for the exception process.
+
+[advisories]
+yanked = "deny"
+# cargo-deny defaults `unsound` to "workspace", which only reaches direct
+# workspace dependencies — leaving most of the shipped closure exempt from a
+# class of advisory that describes real memory-safety problems. This
+# repository forbids unsafe code in its own crates precisely because that
+# class matters; scoping the check to the three crates that contain none
+# would be backwards.
+unsound = "all"
+# Vulnerabilities are unconditional errors under cargo-deny's v2 semantics,
+# and `unmaintained` already defaults to "all". Exceptions take the form
+# ignore = [{ id = "RUSTSEC-...", reason = "..." }] and each one REQUIRES a
+# matching entry in docs/security/exceptions.toml (CI-enforced).
+#
+# Known limit worth stating rather than discovering later: cargo-deny warns
+# (`yanked-not-detected`) when an ignore matches nothing, but that warning
+# cannot be promoted to an error in 0.20.2 — so a dead suppression does not
+# fail the build. The expiry date in the registry is what eventually catches
+# one, which makes that date load-bearing rather than decorative.
+
+[licenses]
+allow = ["Apache-2.0", "MIT"]
+exceptions = [
+    # unicode-ident is licensed (MIT OR Apache-2.0) AND Unicode-3.0 — the AND
+    # clause makes Unicode-3.0 unavoidable, so it is allowed scoped to the one
+    # crate that needs it rather than globally.
+    { allow = ["Unicode-3.0"], name = "unicode-ident" },
+]
+
+[bans]
+multiple-versions = "deny"
+# Every dependency states a version, including the workspace's own path
+# dependency on the SDK — a wildcard requirement is never resolvable to a
+# reviewed version, and crates.io rejects one outright.
+wildcards = "deny"
+
+[sources]
+unknown-registry = "deny"
+unknown-git = "deny"
+# allow-registry defaults to crates.io only; git dependencies and alternate
+# registries are denied unless explicitly reviewed and listed here.

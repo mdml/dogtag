@@ -1,0 +1,67 @@
+name: Security
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "37 5 * * *" # daily, off-peak minute
+  workflow_dispatch:
+
+permissions: {}
+
+# Grouped by commit outside pull requests, for the reason given in ci.yml: a
+# cancelled pending run leaves a `main` commit without the check contexts the
+# tag ruleset requires.
+concurrency:
+  group: security-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  # PR diff scan: fails only on vulnerabilities the PR introduces.
+  osv-pr:
+    if: github.event_name == 'pull_request'
+    permissions:
+      actions: read # the reusable workflow reads run metadata
+      contents: read # check out the base and head commits to diff
+      security-events: write # upload the SARIF result to code scanning
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable-pr.yml@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
+    with:
+      scan-args: |-
+        -r
+        ./
+
+  # Full scan on push and on the daily schedule: catches advisories published
+  # after the code merged, not just ones a change introduces.
+  osv-full:
+    if: github.event_name == 'push' || github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    permissions:
+      actions: read # the reusable workflow reads run metadata
+      contents: read # check out the tree to scan
+      security-events: write # upload the SARIF result to code scanning
+    uses: google/osv-scanner-action/.github/workflows/osv-scanner-reusable.yml@9a498708959aeaef5ef730655706c5a1df1edbc2 # v2.3.8
+    with:
+      scan-args: |-
+        -r
+        ./
+
+  cargo-deny:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@2c7215f132e9ebf062739d9130488b56d53c060c # master 2026-07-16
+        with:
+          toolchain: "1.97.1"
+      - uses: taiki-e/install-action@065d6a08a14e61e89fb0a4c10eecdbdef39c7d8e # v2.85.4
+        with:
+          tool: cargo-deny@0.20.2
+      - name: cargo deny (advisories, bans, licenses, sources)
+        # Network fetch of the RustSec advisory DB is the point: advisories
+        # update daily, so the scheduled run catches new ones.
+        run: cargo deny --workspace --locked check
+      - name: Security-exception registry
+        run: python3 scripts/check_security_exceptions.py
