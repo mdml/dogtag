@@ -179,7 +179,7 @@ Verified for the published release on 2026-07-30: `gh attestation verify dogtag-
 
 ### Provisioning order
 
-The order is load-bearing: the rulesets depend on context names that do not exist until the branch has run, and that run is only authoritative if the secrets it needs were already in place.
+The order is load-bearing, and it is load-bearing twice. The rulesets depend on context names that do not exist until the branch has run, and that run is only authoritative if the secrets it needs were already in place — so the branch ruleset is created once the pull request is green and its eleven names have been read off a real run, which is early enough that the first merge goes *through* the rule rather than around it. The *tag* ruleset then depends on a name no pull request can produce, so it cannot be created until a commit has reached `main` and its own run has finished. Each is read back afterwards rather than assumed from an exit status.
 
 1. **Add the secrets first.** `CS_ACCESS_TOKEN` twice — once for Actions, once for Dependabot, which receives no Actions secrets and would otherwise be unable to pass the Code Health check on its own pin-freshness pull requests. Doing this *before* the first run matters: the Code Health job fails closed when the token is absent, so a run that predates the secret is red for a reason that says nothing about the code.
 
@@ -198,18 +198,59 @@ The order is load-bearing: the rulesets depend on context names that do not exis
 
    Expect eleven passing contexts matching [.github/rulesets/main-branch.json](../../.github/rulesets/main-branch.json). Reconcile before creating anything; it costs one command and is the cheapest moment to find a typo.
 
-4. **Create the rulesets** from the checked-in payloads, branch first, then tag:
+   **Create the branch ruleset here**, once those names are reconciled and before the merge — everything it requires has now been observed, and applying it first means the very first merge goes through the rule rather than around it:
 
    ```bash
    gh api -X POST repos/mdml/dogtag/rulesets --input .github/rulesets/main-branch.json
-   gh api -X POST repos/mdml/dogtag/rulesets --input .github/rulesets/release-tags.json
    ```
 
-   The tag ruleset is the one worth staging with `"enforcement": "disabled"` and flipping to `active` after inspection, since its `required_status_checks` rule on a tag target is documented-implied rather than confirmed. Rollback for either is `gh api -X DELETE repos/mdml/dogtag/rulesets/<id>`, with `gh api repos/mdml/dogtag/rulesets` listing the ids.
+   Only the *tag* ruleset has to wait, and step 4 explains why.
 
-5. **Enable immutable releases** (above). Independent of the rest.
+4. **Merge by rebase, and let every workflow `main` triggers finish.** The *tag* payload cannot be reconciled against a pull request at all: it requires `osv-full / osv-scan`, and that job is conditioned on push, schedule and dispatch, so its rendered name does not exist until a commit lands on `main`.
 
-The payloads are checked in rather than pasted from a transcript so the thing reviewed is the thing posted; `scripts/check-ruleset-payloads.py` holds them to the copies quoted in this record, and to their context counts, on every run of `just check`. Steps 1, 4, and 5 need a token with repository-administration scope, which the maintainer's current PAT does not carry.
+   Two workflows fire on that push — CI and Security — so watch the runs for the merged commit rather than the most recent one, and read the conclusions rather than assuming them:
+
+   ```bash
+   sha="$(git rev-parse main)"
+   for id in $(gh run list --commit "$sha" --json databaseId --jq '.[].databaseId'); do
+     gh run watch "$id"
+   done
+   gh api repos/mdml/dogtag/commits/"$sha"/check-runs \
+     --jq '.check_runs[] | "\(.conclusion // "pending")  \(.name)"'
+   ```
+
+   Expect every check green and none pending, and expect the names to match [.github/rulesets/release-tags.json](../../.github/rulesets/release-tags.json) — eleven again, differing from the branch list in exactly one place: `osv-full / osv-scan` where the pull request produced `osv-pr / osv-scan`. Reconcile that name here, for the same reason the branch names were reconciled in step 3.
+
+5. **Create the tag ruleset**, staged disabled:
+
+   ```bash
+   jq '.enforcement = "disabled"' .github/rulesets/release-tags.json \
+     | gh api -X POST repos/mdml/dogtag/rulesets --input -
+   ```
+
+   The tag ruleset is staged disabled deliberately: its `required_status_checks` rule on a tag target is documented-implied rather than confirmed (above). Inspect it, then activate it with the checked-in payload, which carries `"enforcement": "active"`:
+
+   ```bash
+   gh api -X PUT repos/mdml/dogtag/rulesets/<tag-ruleset-id> \
+     --input .github/rulesets/release-tags.json
+   ```
+
+   Rollback for either is `gh api -X DELETE repos/mdml/dogtag/rulesets/<id>`, with `gh api repos/mdml/dogtag/rulesets` listing the ids.
+
+6. **Enable immutable releases** (above). Independent of the rest.
+
+7. **Read all three back**, because "the command exited 0" is not the same claim as "the rule is in force with the contents intended". GitHub can normalize a payload on the way in, and a ruleset created `disabled` looks identical to an active one in a list that omits enforcement.
+
+   ```bash
+   gh api repos/mdml/dogtag/rulesets --jq '.[] | "\(.id)  \(.name)  \(.target)  \(.enforcement)"'
+   gh api repos/mdml/dogtag/rulesets/<id> --jq '{enforcement, bypass_actors,
+     contexts: [.rules[] | select(.type == "required_status_checks")
+                | .parameters.required_status_checks[].context]}'
+   ```
+
+   For each of the two rulesets, confirm `enforcement` is `active`, `bypass_actors` is empty, and the context list is the eleven strings from its payload — the branch one ending `osv-pr / osv-scan`, the tag one ending `osv-full / osv-scan`. For immutable releases, `gh api repos/mdml/dogtag/immutable-releases` should succeed; **that read-back is documented-implied rather than confirmed**, like the setting's own endpoint, so if it does not answer `GET`, confirm it under Settings → General instead and record which method was used.
+
+The payloads are checked in rather than pasted from a transcript so the thing reviewed is the thing posted; `scripts/check-ruleset-payloads.py` holds them to the copies quoted in this record, and to their context counts, on every run of `just check`. Steps 1, 5, 6 and 7 need a token with repository-administration scope, which the maintainer's current PAT does not carry.
 
 ### Secrets
 
