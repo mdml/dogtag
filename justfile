@@ -1,79 +1,126 @@
 # Dogtag task runner. `just` alone lists the recipes.
 #
-# `just check` is the offline, deterministic gate to run before handing off
-# work. `just gate` adds everything CI enforces that can run locally, which
-# means network and, for Code Health, a CodeScene token. CI is authoritative.
+# Four commands carry the day-to-day work, in a strict ladder:
+#
+#   just fast          while implementing   seconds, offline
+#   just check         before handing off   seconds, offline, deterministic
+#   just gate          before a pull request  needs network + pinned tools + CS_ACCESS_TOKEN
+#   just gate-verbose  the same run, with every gate's full output
+#
+# Each is a superset of the one above it, and every gate is declared once in
+# scripts/gate.py as the exact command CI runs — `just gates` prints that
+# table. CI and the repository rulesets remain authoritative; nothing here
+# is a merge signal.
 
 # List available recipes
 default:
     @just --list
 
-# Format check, clippy, tests, docs, and the offline policy checks — the gate to run before handing off
+# Print the gate table: every gate, the suites it belongs to, and the command it runs
+gates:
+    @python3 scripts/gate.py --list
+
+# Inner loop while implementing — format, clippy, tests, commits, cheap policy checks (seconds, offline; NOT a merge gate)
+fast:
+    python3 scripts/gate.py fast
+
+# The complete offline gate — `fast` plus docs, links, and every deterministic policy check. Run before handing work off
 check:
-    cargo fmt --all --check
-    cargo clippy --all-targets --workspace --locked -- -D warnings
-    cargo test --workspace --locked
-    RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --locked
-    python3 scripts/check-tool-pins.py
-    python3 scripts/test_check_tool_pins.py
-    python3 scripts/check-ruleset-payloads.py
-    python3 scripts/check_security_exceptions.py
-    cargo run --quiet --locked -p commit-lint -- --range main..HEAD
+    python3 scripts/gate.py check
 
-# Everything CI enforces that can run locally (network required; slower than check)
-gate: check links coverage msrv deny osv zizmor codescene
-    @echo "gate: every locally runnable CI check passed."
+# Everything CI enforces that can run locally — `check` plus coverage, MSRV, deny, OSV, zizmor, Code Health (network + pinned tools + CS_ACCESS_TOKEN)
+gate:
+    python3 scripts/gate.py gate
 
-# Format all Rust code
+# `gate` with every gate's full output — identical checks, thresholds and exit codes; more evidence
+gate-verbose:
+    python3 scripts/gate.py gate --verbose
+
+# Format all Rust code (writes; `just fast` checks it)
 fmt:
     cargo fmt --all
 
 # Run the full test suite
 test:
-    cargo test --workspace
+    python3 scripts/gate.py tests
+
+# The full test suite with every harness's output
+test-verbose:
+    python3 scripts/gate.py tests --verbose
 
 # Run the conformance harness and print the scenario x profile matrix
 conformance:
-    cargo test -p dogtag-conformance -- --nocapture
+    cargo test -p dogtag-conformance --locked -- --nocapture
 
 # Debug build of the whole workspace
 build:
-    cargo build --workspace
+    cargo build --workspace --locked
 
-# Measure coverage and enforce the thresholds and ratchet baseline
+# Measure coverage and enforce the thresholds and ratchet baseline (nightly toolchain; ~seconds)
 coverage:
-    ./scripts/coverage-gate.sh
+    python3 scripts/gate.py coverage
 
-# Build and test against the declared MSRV floor
+# Coverage with the full per-file evidence table
+coverage-verbose:
+    python3 scripts/gate.py coverage --verbose
+
+# Build and test against the declared MSRV floor (needs the 1.85.0 toolchain)
 msrv:
-    cargo +1.85.0 build --workspace --locked
-    cargo +1.85.0 test --workspace --locked
+    python3 scripts/gate.py msrv-build msrv-test
 
-# Rust advisories, licenses, bans, and sources
+# MSRV build and tests with full output
+msrv-verbose:
+    python3 scripts/gate.py msrv-build msrv-test --verbose
+
+# Rust advisories, licenses, bans, and sources (network: fetches the RustSec DB)
 deny:
-    cargo deny --workspace --locked check
+    python3 scripts/gate.py deny
 
-# Cross-ecosystem vulnerability scan of every lockfile
+# cargo-deny with its full per-check output
+deny-verbose:
+    python3 scripts/gate.py deny --verbose
+
+# Cross-ecosystem vulnerability scan of every lockfile (network; CI's pinned scanner is the verdict)
 osv:
-    osv-scanner scan source -r .
+    python3 scripts/gate.py osv
 
-# Lint every workflow for supply-chain and permission mistakes
+# OSV scan with the full report
+osv-verbose:
+    python3 scripts/gate.py osv --verbose
+
+# Lint every workflow for supply-chain and permission mistakes (offline)
 zizmor:
-    zizmor --persona regular --min-severity low --no-online-audits .github/workflows
+    python3 scripts/gate.py zizmor
 
-# Code Health of every supported file — the floor (network + CS_ACCESS_TOKEN)
+# zizmor with every finding and suppression listed
+zizmor-verbose:
+    python3 scripts/gate.py zizmor --verbose
+
+# Check that internal Markdown links resolve (offline)
+links:
+    python3 scripts/gate.py links
+
+# Link check, listing every link it resolved
+links-verbose:
+    python3 scripts/gate.py links --verbose
+
+# Code Health of every supported file — the floor (network + CS_ACCESS_TOKEN; one round trip per file)
 codescene:
-    ./scripts/codescene-gate.sh
+    python3 scripts/gate.py codescene
 
-# Code Health of specific paths, e.g. `just codescene-files src/lib.rs`
+# Code Health of every supported file, listing each file's score
+codescene-verbose:
+    python3 scripts/gate.py codescene --verbose
+
+# Code Health of specific paths, e.g. `just codescene-files src/lib.rs` (delta; prints per-file scores)
 codescene-files *FILES:
     ./scripts/codescene-gate.sh --files {{FILES}}
 
-# Code Health of staged changes — the pre-commit check
+# Code Health of staged changes — the pre-commit check (delta; findings print in full)
 codescene-staged:
     ./scripts/codescene-gate.sh --staged
 
-# Code Health of this branch against a base (default main)
+# Code Health of this branch against a base (delta; findings print in full)
 codescene-branch BASE="main":
     ./scripts/codescene-gate.sh --branch {{BASE}}
 
@@ -81,8 +128,10 @@ codescene-branch BASE="main":
 semver BASELINE="v0.1.0-beta.0":
     cargo semver-checks --package dogtag --baseline-rev {{BASELINE}} --release-type patch
 
-# Validate commit messages as Conventional Commits (default: this branch vs main)
-commits RANGE="main..HEAD":
+# Validate commit messages as Conventional Commits over an explicit range (the
+# default matches what `just fast` resolves; CI validates the range a pull
+# request introduces, which is not necessarily either of them)
+commits RANGE="origin/main..HEAD":
     cargo run --quiet --locked -p commit-lint -- --range {{RANGE}}
 
 # Install the git hooks defined in lefthook.yml
@@ -106,8 +155,9 @@ dist:
         *-unknown-linux-gnu) triple="${triple%-gnu}-musl" ;;
     esac
     rustup target add "$triple" >/dev/null
-    # Matches the release workflow exactly, cargo-auditable wrapper included.
-    cargo auditable build --release --locked --target "$triple" -p dogtag-cli
+    # Byte-for-byte the release workflow's invocation, cargo-auditable wrapper
+    # and argument order included; only the target is substituted.
+    cargo auditable build --release --locked -p dogtag-cli --target "$triple"
     ./scripts/package.sh "$triple"
 
 # Rehearse install.sh end-to-end against the locally packaged dist/
@@ -120,7 +170,3 @@ install-local: dist
         DOGTAG_INSTALL_DIR="$tmpdir" \
         sh install.sh
     "$tmpdir/dogtag" version
-
-# Check that internal Markdown links resolve (same script as the CI links job)
-links:
-    ./scripts/check-links.sh

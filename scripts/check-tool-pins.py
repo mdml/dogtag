@@ -29,7 +29,11 @@ WORKFLOWS = (
     ".github/workflows/security.yml",
     ".github/workflows/release.yml",
 )
-JUSTFILE = "justfile"
+# Files that invoke a toolchain by name. scripts/gate.py declares each gate
+# as the command string it runs, so the MSRV `cargo +toolchain` lives there
+# rather than in a recipe; reading only the justfile would leave this check
+# passing having found nothing to compare.
+RECIPE_FILES = ("justfile", "scripts/gate.py")
 
 # Each pattern anchors to declaration syntax, never to prose.
 INSTALL_ACTION_TOOL = re.compile(r"^\s*tool:\s*([A-Za-z0-9_.-]+)@(\S+)\s*$", re.MULTILINE)
@@ -50,6 +54,9 @@ class Repo:
 
     def workflow_text(self) -> str:
         return "\n".join(self.text(path) for path in WORKFLOWS)
+
+    def recipe_text(self) -> str:
+        return "\n".join(self.text(path) for path in RECIPE_FILES)
 
 
 def declared_tool_versions(text: str, tool: str) -> set[str]:
@@ -124,7 +131,7 @@ def check_toolchains(repo: Repo, rust: dict) -> list[str]:
     """Every toolchain a workflow or recipe invokes is one of the three pinned."""
     pinned = {rust["toolchain"], rust["msrv"], rust["coverage_nightly"]}
     declared = set(TOOLCHAIN_INPUT.findall(repo.workflow_text()))
-    recipes = set(CARGO_PLUS.findall(repo.text(JUSTFILE)))
+    recipes = set(CARGO_PLUS.findall(repo.recipe_text()))
 
     violations = [
         f"a workflow declares `toolchain: \"{name}\"`, which tools.toml does "
@@ -132,10 +139,16 @@ def check_toolchains(repo: Repo, rust: dict) -> list[str]:
         for name in sorted(declared - pinned)
     ]
     violations += [
-        f"the justfile invokes `cargo +{name}`, which tools.toml does not pin "
-        f"(pinned: {sorted(pinned)})"
+        f"a recipe file invokes `cargo +{name}`, which tools.toml does not "
+        f"pin (pinned: {sorted(pinned)})"
         for name in sorted(recipes - pinned)
     ]
+    if rust["msrv"] not in recipes:
+        violations.append(
+            f"tools.toml pins the MSRV toolchain {rust['msrv']}, but no "
+            f"recipe file invokes `cargo +{rust['msrv']}` — the floor would "
+            f"be declared and never built"
+        )
     violations += [
         f"tools.toml pins the {key} toolchain {rust[key]}, but no workflow "
         f"declares it"
@@ -217,8 +230,19 @@ def main() -> int:
             print(f"  - {violation}", file=sys.stderr)
         return 1
 
+    # Counted as what was actually compared, not as tables in the file: the
+    # `[rust]` table is toolchains rather than a tool, and a `form = "none"`
+    # entry declares nothing for this check to verify.
     tools = tomllib.loads(Repo(root).text("tools.toml"))
-    print(f"check-tool-pins: {len(tools)} pinned versions agree with their declarations.")
+    compared = sum(
+        1
+        for name, spec in tools.items()
+        if name != "rust" and spec.get("form") not in (None, "none")
+    )
+    print(
+        f"check-tool-pins: {compared} declared tool pins and 3 toolchains "
+        f"agree with the commands that use them."
+    )
     return 0
 
 

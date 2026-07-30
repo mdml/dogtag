@@ -22,6 +22,7 @@ check_tool_pins = __import__("check-tool-pins")
 REPO_ROOT = Path(__file__).resolve().parent.parent
 CI = ".github/workflows/ci.yml"
 SECURITY = ".github/workflows/security.yml"
+GATE = "scripts/gate.py"
 
 
 class PinCheckerTest(unittest.TestCase):
@@ -108,8 +109,19 @@ class PinCheckerTest(unittest.TestCase):
         self.assert_rejected("does not pin")
 
     def test_an_unpinned_cargo_plus_toolchain_is_caught(self) -> None:
-        self.edit("justfile", "cargo +1.85.0 build", "cargo +1.84.0 build")
+        self.edit(GATE, "cargo +1.85.0 build", "cargo +1.84.0 build")
         self.assert_rejected("cargo +1.84.0")
+
+    def test_a_toolchain_hidden_in_a_recipe_file_is_still_read(self) -> None:
+        """The MSRV moved out of the justfile; the checker had to follow it."""
+        self.edit("justfile", "python3 scripts/gate.py msrv-build", "cargo +9.9.9 build")
+        self.assert_rejected("cargo +9.9.9")
+
+    def test_dropping_the_msrv_invocation_entirely_is_caught(self) -> None:
+        """A pinned floor nothing builds is a pin that stopped meaning anything."""
+        self.edit(GATE, "cargo +1.85.0 build --workspace --locked", "cargo build")
+        self.edit(GATE, "cargo +1.85.0 test --workspace --locked", "cargo test")
+        self.assert_rejected("declared and never built")
 
     def test_an_msrv_prefix_is_not_accepted_as_equality(self) -> None:
         """1.85.1 shares a prefix with the pin and is still a different pin."""
