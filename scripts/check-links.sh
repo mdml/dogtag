@@ -17,6 +17,13 @@ checked=0
 
 while IFS= read -r file; do
   dir="$(dirname "$file")"
+  # awk's own failure must not read as "this file has no links": without
+  # this the whole file is silently skipped and the run still reports that
+  # every link resolved. `grep` is the one command allowed to find nothing.
+  if ! outside_fences="$(awk '/^[[:space:]]*(```|~~~)/ { fence = !fence; next } !fence' "$file")"; then
+    echo "check-links: cannot read $file" >&2
+    exit 1
+  fi
   while IFS= read -r dest; do
     [ -n "$dest" ] || continue
     case "$dest" in
@@ -36,7 +43,7 @@ while IFS= read -r file; do
       printf 'MISSING: %s -> %s\n' "$file" "$dest"
       fail=1
     fi
-  done < <(awk '/^[[:space:]]*(```|~~~)/ { fence = !fence; next } !fence' "$file" \
+  done < <(printf '%s\n' "$outside_fences" \
     | { grep -o '\[[^]]*\]([^)]*)' || true; } \
     | sed 's/^.*(\(.*\))$/\1/')
 done < <(find . \
@@ -45,6 +52,13 @@ done < <(find . \
 
 if [ "$fail" -ne 0 ]; then
   echo "check-links: broken relative markdown links found (see MISSING lines above)." >&2
+  exit 1
+fi
+# Zero links checked means the walk found nothing, not that everything
+# resolved: a broken prune, a bad cd, or a changed layout would otherwise
+# report success having verified nothing at all.
+if [ "$checked" -eq 0 ]; then
+  echo "check-links: no relative markdown links found; the scan matched nothing." >&2
   exit 1
 fi
 echo "check-links: all $checked relative markdown links resolve."
