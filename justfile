@@ -16,6 +16,7 @@ check:
     RUSTDOCFLAGS="-D warnings" cargo doc --workspace --no-deps --locked
     python3 scripts/check-tool-pins.py
     python3 scripts/test_check_tool_pins.py
+    python3 scripts/check-ruleset-payloads.py
     python3 scripts/check_security_exceptions.py
     cargo run --quiet --locked -p commit-lint -- --range main..HEAD
 
