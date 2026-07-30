@@ -4,9 +4,21 @@ on:
   push:
     branches: [main]
   pull_request:
+  schedule:
+    - cron: "17 5 * * *" # daily: re-measures the Code Health floor
+  workflow_dispatch:
 
-permissions:
-  contents: read
+permissions: {}
+
+# Pull-request runs group by ref, so a new push supersedes the run it made
+# obsolete. Everything else groups by commit SHA, deliberately: runs sharing
+# a group are not only cancelled when in progress, they are cancelled when
+# *pending*, and a `main` commit whose queued run got dropped would carry no
+# check contexts — which the tag ruleset reads as "never verified" and
+# refuses to tag, permanently.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   CARGO_TERM_COLOR: always
@@ -15,6 +27,8 @@ jobs:
   check:
     name: Format, lint, test (Linux)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -29,10 +43,54 @@ jobs:
         run: cargo clippy --all-targets --workspace --locked -- -D warnings
       - name: Test
         run: cargo test --workspace --locked
+      - name: Documentation (warnings are errors)
+        run: cargo doc --workspace --no-deps --locked
+        env:
+          RUSTDOCFLAGS: -D warnings
+      - name: Tool pins agree
+        run: python3 scripts/check-tool-pins.py
+      - name: Security-exception registry
+        run: python3 scripts/check_security_exceptions.py
+
+  commit-messages:
+    name: Commit messages
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0 # the whole range being merged, not just its tip
+      - uses: dtolnay/rust-toolchain@2c7215f132e9ebf062739d9130488b56d53c060c # master 2026-07-16
+        with:
+          toolchain: "1.97.1"
+      # This is what makes the local commit-msg hook non-optional: hooks are
+      # not installed on a fresh clone and `--no-verify` always exists, so
+      # every commit a pull request introduces is validated again here.
+      - name: Validate Conventional Commits
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: |
+          set -euo pipefail
+          if [ -n "$BASE_SHA" ]; then
+            range="$BASE_SHA..HEAD"
+          elif [ -n "$BEFORE_SHA" ] && git cat-file -e "$BEFORE_SHA^{commit}" 2>/dev/null; then
+            range="$BEFORE_SHA..HEAD"
+          else
+            # First push of a branch, a scheduled run, or a manual dispatch:
+            # nothing defines an incoming range, so check the newest commit.
+            range="HEAD~1..HEAD"
+          fi
+          echo "checking $range"
+          cargo run --quiet --locked -p commit-lint -- --range "$range"
 
   test-macos:
     name: Test (macOS arm64)
     runs-on: macos-15
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -43,9 +101,136 @@ jobs:
       - name: Test
         run: cargo test --workspace --locked
 
+  msrv:
+    name: MSRV (Rust 1.85)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # The declared floor from Cargo.toml's rust-version, built and tested —
+      # a declared-but-unexercised MSRV is a promise nobody checked.
+      - uses: dtolnay/rust-toolchain@2c7215f132e9ebf062739d9130488b56d53c060c # master 2026-07-16
+        with:
+          toolchain: "1.85.0"
+      # RUSTUP_TOOLCHAIN, not the installed default: rust-toolchain.toml pins
+      # 1.97.1 and outranks `rustup default`, so without this the job builds
+      # on the pinned stable and proves nothing about the MSRV.
+      - name: Confirm the toolchain really is the MSRV
+        env:
+          RUSTUP_TOOLCHAIN: "1.85.0"
+        run: |
+          set -euo pipefail
+          version="$(cargo --version)"
+          echo "$version"
+          case "$version" in
+            "cargo 1.85.0"*) ;;
+            *) echo "error: expected cargo 1.85.0, got: $version" >&2; exit 1 ;;
+          esac
+      - name: Build
+        env:
+          RUSTUP_TOOLCHAIN: "1.85.0"
+        run: cargo build --workspace --locked
+      - name: Test
+        env:
+          RUSTUP_TOOLCHAIN: "1.85.0"
+        run: cargo test --workspace --locked
+
+  coverage:
+    name: Coverage thresholds
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Branch coverage needs nightly instrumentation (rust-lang/rust#79649);
+      # this is the only job that leaves the pinned stable toolchain.
+      - uses: dtolnay/rust-toolchain@2c7215f132e9ebf062739d9130488b56d53c060c # master 2026-07-16
+        with:
+          toolchain: "nightly-2026-07-30"
+          components: llvm-tools-preview
+      - uses: taiki-e/install-action@065d6a08a14e61e89fb0a4c10eecdbdef39c7d8e # v2.85.4
+        with:
+          tool: cargo-llvm-cov@0.8.7
+      - name: Measure and enforce coverage
+        run: scripts/coverage-gate.sh
+
+  code-health:
+    name: CodeScene Code Health
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0 # delta needs the base ref
+      - name: Install the pinned CodeScene CLI
+        # CodeScene CLI 1.0.36. Upstream publishes no checksums and keys
+        # downloads by build SHA rather than version, so the repository
+        # carries both, plus a sha256 of its own (tools.toml).
+        # Staged in RUNNER_TEMP, never the checkout: putting the repository
+        # root on PATH would let any executable committed at the top level
+        # shadow a system binary in the step that holds CS_ACCESS_TOKEN.
+        run: |
+          set -euo pipefail
+          url="https://downloads.codescene.io/enterprise/cli/cs-linux-amd64-5f703ce1f9c264701f32c795fa7104467f1e4ab4.zip"
+          curl -fsSL --proto '=https' --tlsv1.2 -o "$RUNNER_TEMP/cs.zip" "$url"
+          echo "b6a1b259c6b53d94d34c85b85bb725b6665973ab2bec9f6c678a371d7a0202ee  $RUNNER_TEMP/cs.zip" | sha256sum -c -
+          unzip -q "$RUNNER_TEMP/cs.zip" -d "$RUNNER_TEMP/codescene"
+          chmod +x "$RUNNER_TEMP/codescene/cs"
+          echo "$RUNNER_TEMP/codescene" >> "$GITHUB_PATH"
+      - name: Code Health gate
+        env:
+          CS_ACCESS_TOKEN: ${{ secrets.CS_ACCESS_TOKEN }}
+          BASE_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.ref || '' }}
+        run: |
+          set -euo pipefail
+          # Forked pull requests get no secrets, so the gate cannot run. It
+          # fails rather than passing unmeasured: a required check that goes
+          # green without checking anything is worse than no check, and this
+          # repository prevents rather than detects. A maintainer lands an
+          # external contribution by pushing the branch into this repository,
+          # where the gate runs for real.
+          if [ -z "${CS_ACCESS_TOKEN:-}" ]; then
+            echo "::error::CS_ACCESS_TOKEN is unavailable (forked pull request). Re-push this branch inside the canonical repository so the Code Health gate can run."
+            exit 1
+          fi
+          if [ -n "$BASE_REF" ]; then
+            git fetch --no-tags origin "$BASE_REF"
+            scripts/codescene-gate.sh --branch "origin/$BASE_REF"
+          else
+            scripts/codescene-gate.sh
+          fi
+
+  workflow-security:
+    name: Workflow security (zizmor)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: zizmorcore/zizmor-action@6fc4b006235f201fdab3722e17240ab420d580e5 # v0.6.1
+        with:
+          version: "1.28.0"
+          # Exit codes propagate only outside SARIF mode, and a lint that
+          # cannot fail the job is a lint people stop reading.
+          advanced-security: false
+          persona: regular
+          min-severity: low
+          online-audits: false
+
   release-build-check:
     name: Release build check (x86_64 musl)
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -58,12 +243,21 @@ jobs:
         with:
           toolchain: "1.97.1"
           targets: x86_64-unknown-linux-musl
+      - uses: taiki-e/install-action@065d6a08a14e61e89fb0a4c10eecdbdef39c7d8e # v2.85.4
+        with:
+          tool: cargo-auditable@0.7.5
+      # Byte-for-byte the release workflow's build invocation, including the
+      # cargo-auditable wrapper. A rehearsal that builds differently from the
+      # real thing rehearses nothing — it would not have caught the wrapper
+      # failing on this target.
       - name: Release build (same invocation as the release workflow)
-        run: cargo build --release --locked -p dogtag-cli --target x86_64-unknown-linux-musl
+        run: cargo auditable build --release --locked -p dogtag-cli --target x86_64-unknown-linux-musl
 
   links:
     name: Markdown link integrity
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
