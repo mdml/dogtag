@@ -17,14 +17,33 @@ Verifying that invariant from scratch means one network round trip per file, whi
 
 | Invocation | What it checks | Where it runs |
 | --- | --- | --- |
-| `codescene-gate.sh` | every supported file scores 10.0 | push to main, daily schedule, `just codescene` |
-| `--branch [BASE]` | delta against a base ref | every pull request (required check), `just codescene-branch` |
-| `--staged` | delta over staged changes | pre-commit, `just codescene-staged` |
+| `codescene-gate.sh` | every supported file scores 10.0 | `just gate`, `just codescene` |
+| `--branch [BASE]` | delta against a base ref | pre-push hook, `just codescene-branch` |
+| `--staged` | delta over staged changes | pre-commit hook, `just codescene-staged` |
 | `--files P...` | the named paths | `just codescene-files`, ad hoc |
 
-Delta is sufficient for the inductive step because it fails on both ways the floor can break: a file whose score dropped, and a **new** file born below 10.0 (verified against CLI 1.0.36 — a newly added file scoring 8.67 exits nonzero with no prior score to compare against). What delta cannot see is a file that no change touched, which is why the full scan still runs on every push to main and daily: CodeScene's rules evolve between CLI versions, so a scored floor is only as current as its last measurement.
+Delta is sufficient for the inductive step because it fails on both ways the floor can break: a file whose score dropped, and a **new** file born below 10.0 (verified against CLI 1.0.36 — a newly added file scoring 8.67 exits nonzero with no prior score to compare against). What delta cannot see is a file that no change touched.
 
-CI pins the CodeScene CLI at 1.0.36, fetching the binary by its build SHA (`5f703ce1f9c264701f32c795fa7104467f1e4ab4`) and verifying it against a sha256 recorded in [tools.toml](../../tools.toml) — upstream publishes no checksums, so the repository carries its own. The gate needs the `CS_ACCESS_TOKEN` secret and network access; that dependence is an accepted cost, recorded in Consequences.
+### Where this is enforced: locally, not in CI
+
+**Code Health is a maintainer-local invariant, not a GitHub-enforced required check.** There is no CodeScene job, no `CS_ACCESS_TOKEN` secret, and no CodeScene context in either ruleset. `just gate` runs the full sweep against the pinned CLI and is fail-closed without a token; the git hooks run deltas; the maintainer runs `just gate` before merging, and that run is the gate.
+
+This is a real weakening of the merge rules and is chosen deliberately, because the alternative had no honest form. A required check needs a credential, and a forked pull request cannot have one — GitHub correctly withholds secrets from fork-triggered runs. That left exactly two behaviours, and both were worse than moving the gate:
+
+- **Fail the job on forks.** Every external contribution fails a required check for a reason that says nothing about its code, and can never be merged from its own branch. Tenable while there are no external contributors, which is precisely the moment the cost is invisible.
+- **Pass the job unmeasured on forks.** A required check that goes green without checking anything, on exactly the contributions nobody has reviewed yet. This one is not tenable at all.
+
+Requiring every contributor to hold a CodeScene account was the third option, and it prices a paid third-party account into sending a patch.
+
+So the enforcement moved to where the credential already is. What the repository gives up is stated plainly rather than softened: **nothing mechanical stops a merge that skipped the sweep.** The rulesets cannot require it, and a maintainer who forgets `just gate` has no backstop. Three things reduce that exposure without pretending to close it — the pre-push delta, which is the last automatic signal before a change leaves the machine; the hooks' refusal to ever print a false pass; and the CLI-bump rule below.
+
+### The floor is re-established whenever the CLI moves
+
+Losing the daily CI sweep loses the thing that kept the induction's base case current. CodeScene's rules evolve between CLI versions, so a bump can drop an untouched file below 10.0 — and a delta cannot see it, because no change touched that file.
+
+[tools.toml](../../tools.toml) therefore records `swept_at` beside the CodeScene CLI `version`, and `scripts/check-tool-pins.py` fails `just check` unless the two are equal. Bumping the pinned CLI means running a full `just codescene` sweep and moving `swept_at` in the same commit. That is the mechanism that keeps "every supported file scores 10.0" a measured fact rather than a memory of one.
+
+The CLI stays pinned at 1.0.36, fetched by its build SHA (`5f703ce1f9c264701f32c795fa7104467f1e4ab4`) and verified against a sha256 recorded in tools.toml — upstream publishes no checksums, so the repository carries its own. `scripts/install-dev-tools.sh` reads all three fields at install time, so the pin, the URL and the checksum have exactly one copy between them.
 
 ### Formatting and lints, now contractual
 
@@ -61,17 +80,20 @@ cargo-semver-checks 0.49.0 is pinned and wired as `just semver` (`--package dogt
 
 ### Alternatives considered
 
-- **`cs delta`-only gating, with no full scan at all.** Rejected, but narrowly: delta is the per-change gate precisely because it is cheap and catches both degradation and new sub-10 files. What it cannot do is notice a file nobody touched — so a delta-only repository silently inherits whatever the floor was on the day the tool last changed its rules. The full scan on push to main and on the daily schedule is what makes the induction's base case a measured fact rather than a memory.
+- **`cs delta`-only gating, with no full scan at all.** Rejected, but narrowly: delta is the per-change gate precisely because it is cheap and catches both degradation and new sub-10 files. What it cannot do is notice a file nobody touched — so a delta-only repository silently inherits whatever the floor was on the day the tool last changed its rules. The full sweep in `just gate`, plus the `swept_at` rule that forces one on every CLI bump, is what makes the induction's base case a measured fact rather than a memory.
 - **Full-scan-only gating, on every commit.** Rejected for cost: one network round trip per supported file, paid on every push, growing with the repository, to re-derive a property the previous run already established. The layering above buys the same guarantee for a fraction of the calls.
 - **Grep-based or self-reported quality metrics.** Rejected: fakeable, and in an agent-maintained repository "fakeable" means "will eventually be faked", with no malice required.
-- **MCP-only CodeScene enforcement.** Rejected: the CodeScene MCP server serves interactive review well, but it is not CI-runnable; an invariant only checked when someone remembers to ask is not an invariant.
+- **MCP-only CodeScene enforcement.** Rejected: the CodeScene MCP server serves interactive review well, but it is not scriptable from a gate, produces no exit status a runner can read, and spends agent context on output the summary line replaces. Local enforcement means the pinned CLI through `scripts/codescene-gate.sh` — never the MCP.
+- **Keeping the CI job and accepting the fork behaviour.** Rejected above, and it is the decision this record most expects to be revisited. If GitHub ever offers a way to run a credentialed check on fork content safely, or if CodeScene offers per-repository rather than per-user authentication, the required check should come back and this ADR should be superseded rather than quietly ignored.
 - **cargo-tarpaulin for coverage.** Rejected: branch coverage is literally marked "NOT IMPLEMENTED" in its feature table as of 0.37.0, and the branch threshold is half the contract.
 - **Waiting for stable branch coverage.** Rejected: rust-lang/rust#79649 has no timeline; the wait is unbounded and the interim would be line-only.
 - **Line-only coverage.** Rejected: line coverage misses exactly the conditional paths the conformance harness and the future contract-validation code are full of; a 95% line number can hide entire untested branches.
 
 ## Consequences
 
-- The CodeScene gate needs the network and a secret: a codescene.io outage blocks merges. This is deliberate — the alternative is an unenforced invariant — but it puts one more external SaaS in the trust base and adds the repository's only secret (see the [workflow security ADR](2026-07-30-workflow-security-and-repository-rules.md)).
+- **Code Health can be skipped by a maintainer who forgets `just gate`**, and no rule prevents the merge. This is the cost of the move out of CI, and it is the one consequence in this record with no mechanical mitigation. The pre-push delta and the `swept_at` rule narrow it; neither closes it.
+- A codescene.io outage no longer blocks merges — it blocks `just gate`, which is the maintainer's problem rather than the repository's. In exchange the repository now has **no secrets at all** (see the [workflow security ADR](2026-07-30-workflow-security-and-repository-rules.md)), and a forked pull request can run every required check.
+- **Contributors need no CodeScene account.** The hooks decline loudly when no token is configured — a conspicuous `CODE HEALTH NOT MEASURED` notice, never a pass — so an external contributor gets a working hook set without a paid third-party account, and never a false green.
 - The nightly coverage toolchain is a second toolchain to keep pinned and bumped, and coverage numbers may shift slightly at bump time — hence the rule that re-baselining lands in the bump commit, where the cause is visible.
 - `scripts/coverage_check.py` adds a python3-stdlib dependency to the local gate — accepted over fragile bash TOML parsing; ubuntu runners and the dev machine both ship 3.11+.
 - `just check` stays offline and deterministic; the full `just gate` is network-dependent and slower. CI remains authoritative. How those recipes are invoked, rendered, and held to the workflows they mirror is the [gate ergonomics ADR](2026-07-30-gate-ergonomics-and-the-command-ladder.md); the thresholds and rules recorded here are unchanged by it.

@@ -4,8 +4,6 @@ on:
   push:
     branches: [main]
   pull_request:
-  schedule:
-    - cron: "17 5 * * *" # daily: re-measures the Code Health floor
   workflow_dispatch:
 
 permissions: {}
@@ -60,6 +58,7 @@ jobs:
         run: |
           python3 scripts/check-gate-parity.py
           python3 scripts/test_gate.py
+          python3 scripts/test_hooks.py
       - name: Security-exception registry
         run: python3 scripts/check_security_exceptions.py
 
@@ -90,7 +89,7 @@ jobs:
           elif [ -n "$BEFORE_SHA" ] && git cat-file -e "$BEFORE_SHA^{commit}" 2>/dev/null; then
             range="$BEFORE_SHA..HEAD"
           else
-            # First push of a branch, a scheduled run, or a manual dispatch:
+            # First push of a branch, or a manual dispatch:
             # nothing defines an incoming range, so check the newest commit.
             range="HEAD~1..HEAD"
           fi
@@ -169,54 +168,6 @@ jobs:
           tool: cargo-llvm-cov@0.8.7
       - name: Measure and enforce coverage
         run: scripts/coverage-gate.sh
-
-  code-health:
-    name: CodeScene Code Health
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-          fetch-depth: 0 # delta needs the base ref
-      - name: Install the pinned CodeScene CLI
-        # CodeScene CLI 1.0.36. Upstream publishes no checksums and keys
-        # downloads by build SHA rather than version, so the repository
-        # carries both, plus a sha256 of its own (tools.toml).
-        # Staged in RUNNER_TEMP, never the checkout: putting the repository
-        # root on PATH would let any executable committed at the top level
-        # shadow a system binary in the step that holds CS_ACCESS_TOKEN.
-        run: |
-          set -euo pipefail
-          url="https://downloads.codescene.io/enterprise/cli/cs-linux-amd64-5f703ce1f9c264701f32c795fa7104467f1e4ab4.zip"
-          curl -fsSL --proto '=https' --tlsv1.2 -o "$RUNNER_TEMP/cs.zip" "$url"
-          echo "b6a1b259c6b53d94d34c85b85bb725b6665973ab2bec9f6c678a371d7a0202ee  $RUNNER_TEMP/cs.zip" | sha256sum -c -
-          unzip -q "$RUNNER_TEMP/cs.zip" -d "$RUNNER_TEMP/codescene"
-          chmod +x "$RUNNER_TEMP/codescene/cs"
-          echo "$RUNNER_TEMP/codescene" >> "$GITHUB_PATH"
-      - name: Code Health gate
-        env:
-          CS_ACCESS_TOKEN: ${{ secrets.CS_ACCESS_TOKEN }}
-          BASE_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.ref || '' }}
-        run: |
-          set -euo pipefail
-          # Forked pull requests get no secrets, so the gate cannot run. It
-          # fails rather than passing unmeasured: a required check that goes
-          # green without checking anything is worse than no check, and this
-          # repository prevents rather than detects. A maintainer lands an
-          # external contribution by pushing the branch into this repository,
-          # where the gate runs for real.
-          if [ -z "${CS_ACCESS_TOKEN:-}" ]; then
-            echo "::error::CS_ACCESS_TOKEN is unavailable (forked pull request). Re-push this branch inside the canonical repository so the Code Health gate can run."
-            exit 1
-          fi
-          if [ -n "$BASE_REF" ]; then
-            git fetch --no-tags origin "$BASE_REF"
-            scripts/codescene-gate.sh --branch "origin/$BASE_REF"
-          else
-            scripts/codescene-gate.sh
-          fi
 
   workflow-security:
     name: Workflow security (zizmor)

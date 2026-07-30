@@ -37,6 +37,10 @@ Five rules:
 5. No table carries a stale entry: a divergence whose command has since become
    verbatim-identical is dropped rather than kept, and neither context table
    names a check the ruleset stopped requiring.
+6. A step recorded in LOCAL_ONLY is genuinely absent from CI — not merely its
+   command, but every marker that would signal it creeping back in a
+   different shape. A local-only gate weakens the merge rules by definition,
+   so it has to stay a deliberate, recorded choice.
 
 Stdlib only (itertools, json, re). Usage:
     check-gate-parity.py [repo-root]
@@ -96,12 +100,23 @@ ARGUMENT_SUFFIX = {
 }
 
 # Repository commands a workflow runs that no gate step covers, and why.
-CI_ONLY = {
-    'scripts/codescene-gate.sh --branch "origin/$BASE_REF"': (
-        "on a pull request CI scores the delta against the base ref, which "
-        "needs a fetched base; the local gate runs the full sweep instead — "
-        "the stricter of the two, and the one that cannot inherit a stale "
-        "floor from an untouched file"
+CI_ONLY: dict[str, str] = {}
+
+# Gate steps CI does not run at all, and the strings that must therefore stay
+# out of the workflows. A local-only gate is a real weakening of the merge
+# rules, so it is spelled out here rather than left as an absence: if any of
+# these markers reappears in a workflow, the ruleset payloads, the required
+# contexts and this table all have to move together, and the check below is
+# what forces that conversation.
+LOCAL_ONLY = {
+    "codescene": (
+        "Code Health is a maintainer-local invariant, not a required check. "
+        "Enforcing it in CI needs a CodeScene account per contributor or a "
+        "repository secret that forked pull requests cannot reach, and the "
+        "fork case has no honest resolution — the job either fails every "
+        "external contribution or passes it unmeasured. The maintainer runs "
+        "`just gate` with the token before merging, and that run is the gate",
+        ("CS_ACCESS_TOKEN", "codescene", "CodeScene", "cs-linux-amd64"),
     ),
 }
 
@@ -118,11 +133,11 @@ CONTEXT_STEPS = {
         "exceptions",
         "gate-parity",
         "gate-test",
+        "hooks-test",
     ),
     "Commit messages": ("commits",),
     "MSRV (Rust 1.85)": ("msrv-build", "msrv-test"),
     "Coverage thresholds": ("coverage",),
-    "CodeScene Code Health": ("codescene",),
     "Workflow security (zizmor)": ("zizmor",),
     "Markdown link integrity": ("links",),
     "cargo-deny": ("deny",),
@@ -229,13 +244,44 @@ def expected_line(step_id: str) -> str:
 
 
 def check_commands(commands: set[str]) -> list[str]:
-    """Rule 1: every gate step is a whole CI command line, or a divergence."""
+    """Rule 1: every gate step is a whole CI command line, or is excused."""
+    excused = set(DIVERGENCES) | set(LOCAL_ONLY)
     return [
         f"gate.py step {step_id!r} runs `{expected_line(step_id)}`, which is "
-        f"not a whole `run:` line in any workflow, and DIVERGENCES gives no "
-        f"reason"
+        f"not a whole `run:` line in any workflow, and neither DIVERGENCES "
+        f"nor LOCAL_ONLY gives a reason"
         for step_id in gate.GATE
-        if step_id not in DIVERGENCES and expected_line(step_id) not in commands
+        if step_id not in excused and expected_line(step_id) not in commands
+    ]
+
+
+def check_local_only(root: Path, commands: set[str]) -> list[str]:
+    """Rule 6: a local-only gate really is absent from CI, markers and all.
+
+    Checking only that the *command* is missing would let Code Health creep
+    back as a differently-shaped job — a token here, an install step there —
+    while the ruleset still required nothing. The markers are what make the
+    absence deliberate instead of incidental.
+    """
+    text = "\n".join((root / path).read_text() for path in WORKFLOWS)
+    violations = [
+        f"LOCAL_ONLY names {step_id!r}, which is not a gate step"
+        for step_id in LOCAL_ONLY
+        if step_id not in gate.BY_ID
+    ]
+    violations += [
+        f"LOCAL_ONLY excuses {step_id!r}, but a workflow now runs "
+        f"`{expected_line(step_id)}` — restore its required status check and "
+        f"drop the entry"
+        for step_id in LOCAL_ONLY
+        if step_id in gate.BY_ID and expected_line(step_id) in commands
+    ]
+    return violations + [
+        f"a workflow mentions {marker!r}, but {step_id!r} is recorded as "
+        f"local-only — CI and the ruleset payloads must change together"
+        for step_id, (_reason, markers) in LOCAL_ONLY.items()
+        for marker in markers
+        if marker in text
     ]
 
 
@@ -392,6 +438,7 @@ def check(root: Path) -> list[str]:
     contexts = required_contexts(root)
     return (
         check_commands(commands)
+        + check_local_only(root, commands)
         + check_env(root)
         + unmapped_contexts(contexts)
         + missing_mapped_steps()
@@ -413,11 +460,11 @@ def main() -> int:
             print(f"  - {violation}", file=sys.stderr)
         return 1
 
-    verbatim = len(gate.GATE) - len(DIVERGENCES)
+    verbatim = len(gate.GATE) - len(DIVERGENCES) - len(LOCAL_ONLY)
     print(
         f"check-gate-parity: OK — {verbatim} commands whole-line identical to "
-        f"CI, {len(DIVERGENCES)} recorded divergences, "
-        f"{len(required_contexts(root))} required contexts mapped."
+        f"CI, {len(DIVERGENCES)} recorded divergences, {len(LOCAL_ONLY)} "
+        f"local-only, {len(required_contexts(root))} required contexts mapped."
     )
     return 0
 

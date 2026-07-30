@@ -38,21 +38,24 @@ Declaring the command rather than a recipe name is what makes the next part poss
 
 ### check-gate-parity.py binds the table to the workflows
 
-The repository already refused to let a comment vouch for a version: `scripts/check-tool-pins.py` reads the declaration that actually runs. [scripts/check-gate-parity.py](../../scripts/check-gate-parity.py) extends that reasoning from versions to commands. It runs in `just check` and in CI, and enforces five rules:
+The repository already refused to let a comment vouch for a version: `scripts/check-tool-pins.py` reads the declaration that actually runs. [scripts/check-gate-parity.py](../../scripts/check-gate-parity.py) extends that reasoning from versions to commands. It runs in `just check` and in CI, and enforces six rules:
 
-1. Every step in the `gate` suite is a **whole `run:` line** in a workflow, or is listed in `DIVERGENCES` with the reason it cannot be. Fifteen match; four diverge.
+1. Every step in the `gate` suite is a **whole `run:` line** in a workflow, or is listed in `DIVERGENCES` (CI does it differently) or `LOCAL_ONLY` (CI does not do it at all) with the reason. Fifteen match; four diverge; one is local-only.
 2. Every environment variable a step declares is declared on the CI side too, so the docs gate cannot lose `-D warnings` on one side only.
 3. Every required status check in `.github/rulesets/main-branch.json` maps to gate steps that exist, or is listed in `NOT_LOCAL` with the reason; each mapped step really runs in the job reporting that context; and every required context is still reported by a job of that name. This is the rule that would have caught `gate`'s missing `links`, and it is what makes "everything CI enforces that can run locally" a checked claim rather than a slogan. The job-name half also turns the fragility the [workflow security ADR](2026-07-30-workflow-security-and-repository-rules.md) names — renaming a job silently un-requires its context — into a failed build rather than a blocked merge.
 4. Every repository script a workflow runs is a gate step, or is listed in `CI_ONLY` with the reason. This is the direction that notices a check added inside an already-required job. It is scoped to commands naming `scripts/`, so ordinary shell plumbing needs no entry.
 5. No table carries a stale entry — a divergence whose command has since become identical is deleted, not kept, and neither context table may name a check the ruleset stopped requiring.
+6. A `LOCAL_ONLY` step is genuinely absent from CI — not merely its command, but every *marker* that would signal it creeping back in a different shape (`CS_ACCESS_TOKEN`, `codescene`, `cs-linux-amd64`). A gate with no required check weakens the merge rules by definition, so restoring the job and restoring its required context cannot come apart silently.
 
 Matching is whole-line against a parsed `run:` step rather than a substring search of the file, and the difference is not pedantry: a substring search accepts a command sitting in a YAML comment, a CI line that is a strict superset of the local one (`… --locked --offline` satisfying `… --locked`), and a trailing flag added in CI only. All three are exactly the drift the checker exists to catch, and all three are covered by tests that mutate the real workflows.
 
-The one entry in `CI_ONLY` records a genuine asymmetry: on a pull request CI scores the CodeScene *delta* against the base ref, while the local gate runs the full sweep. The local side is the stricter of the two — a delta cannot see a file no change touched — so this is a difference worth having rather than a gap.
+`CI_ONLY` is currently empty, and the table is kept rather than deleted because the rule it serves — a repository script running in CI with nothing local behind it — is the one that would otherwise go unnoticed.
 
 The four recorded divergences, each with its reason in the source: **msrv-build** and **msrv-test** (CI sets `RUSTUP_TOOLCHAIN` because `rust-toolchain.toml` outranks `rustup default`; `cargo +1.85.0` does the same job locally), **osv** (CI runs Google's pinned reusable workflow with its own scanner image; the local binary is pinned separately in `tools.toml` and will drift, so a local scan is a pre-flight and CI is the verdict), and **zizmor** (CI passes the pinned action its settings as inputs; the local command mirrors them as flags and scopes the audit to `.github/workflows`).
 
 Two required checks have no local counterpart, and say so: **`Test (macOS arm64)`**, which a Linux developer cannot reproduce, and **`Release build check (x86_64 musl)`**, which needs a cross target that is not available on every supported development platform — `just dist` rehearses the same build where it is.
+
+And one gate runs the other way round: **`codescene` has no required check at all.** Code Health is enforced only by the maintainer's `just gate` and the git hooks, for the reasons in the [code health ADR](2026-07-30-code-health-and-coverage-gates.md) — a required check needs a credential a forked pull request cannot have. That is the one place `just gate` is *stronger* than CI rather than a mirror of it, and it is the one gate whose absence from a merge nothing mechanical would notice.
 
 `commits` is deliberately not a divergence: its *command* is verbatim, and what differs is the range appended at runtime. CI validates exactly the commits a pull request introduces; the local run resolves `origin/main..HEAD`. That is recorded in `gate.prepare_commits` and in AGENTS.md, because a stale `origin/main` moves the range under the developer.
 
@@ -111,7 +114,9 @@ This also preserves something worth keeping: CI's per-job logs stay full. The su
 
 `commit-msg` is unchanged: the fast Conventional Commit check. `pre-commit` now runs `python3 scripts/gate.py fmt clippy` instead of restating those two command strings a fourth time, plus the staged Code Health delta, still skipped when no token is configured. It deliberately does **not** run `just fast`: a commit hook that also compiles the test suite and walks the commit range stops being a hook people leave installed.
 
-**No pre-push hook.** A long gate that fires on push is a gate people learn to `--no-verify` past, and this repository's enforcement boundary is CI plus the rulesets, not the developer's machine. `just gate` before opening a pull request is the documented step, and it is a step someone chooses.
+**One pre-push hook, and it needs its justification.** The general rule still holds — a long gate that fires on push is a gate people learn to `--no-verify` past, and for everything with a required check behind it the enforcement boundary is CI, not the developer's machine. Code Health is the exception, because it has no required check at all: the pre-push delta against `origin/main` is the last automatic signal before a change leaves the machine, and the only one that fires without someone remembering to. It is a delta, not the sweep, so it costs one round trip per changed file rather than per file.
+
+Both Code Health hooks decline rather than fail when no `CS_ACCESS_TOKEN` is configured, printing a conspicuous `CODE HEALTH NOT MEASURED` banner. That is a deliberate asymmetry with `just gate`, which stays fail-closed: an external contributor needs a working hook set without a paid third-party account, and `scripts/codescene-gate.sh` — the thing `just gate` calls — still refuses to run token-less. Only `scripts/codescene-hook.sh` is allowed to decline, and `scripts/test_hooks.py` asserts both halves, including that the notice never contains a success claim.
 
 ### Alternatives considered
 

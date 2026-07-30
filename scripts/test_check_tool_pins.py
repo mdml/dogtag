@@ -87,22 +87,15 @@ class PinCheckerTest(unittest.TestCase):
         self.edit(CI, 'version: "1.28.0"', 'version: "1.27.0" # 1.28.0')
         self.assert_rejected("zizmor-action")
 
-    def test_a_swapped_download_sha_is_caught(self) -> None:
-        """The URL is the pin; a correct comment beside it changes nothing."""
-        self.edit(
-            CI,
-            "cs-linux-amd64-5f703ce1f9c264701f32c795fa7104467f1e4ab4.zip",
-            "cs-linux-amd64-" + "0" * 40 + ".zip",
-        )
-        self.assert_rejected("CodeScene download URL")
+    def test_bumping_the_codescene_cli_without_re_sweeping_is_caught(self) -> None:
+        """A new CLI can drop an untouched file below 10.0; the delta cannot see it."""
+        self.edit("tools.toml", 'version = "1.0.36"', 'version = "1.0.37"')
+        self.assert_rejected("re-establish the floor")
 
-    def test_a_swapped_checksum_assertion_is_caught(self) -> None:
-        self.edit(
-            CI,
-            "b6a1b259c6b53d94d34c85b85bb725b6665973ab2bec9f6c678a371d7a0202ee",
-            "d" * 64,
-        )
-        self.assert_rejected("CodeScene checksum")
+    def test_moving_the_sweep_record_alone_is_also_caught(self) -> None:
+        """Claiming a sweep on a version that is not the pinned one is the same lie."""
+        self.edit("tools.toml", 'swept_at = "1.0.36"', 'swept_at = "1.0.37"')
+        self.assert_rejected("re-establish the floor")
 
     def test_an_unpinned_toolchain_input_is_caught(self) -> None:
         self.edit(CI, 'toolchain: "1.85.0"', 'toolchain: "1.86.0"')

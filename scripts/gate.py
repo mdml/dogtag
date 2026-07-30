@@ -94,6 +94,7 @@ STEPS = (
     Step("rulesets", "python3 scripts/check-ruleset-payloads.py", "check-ruleset-payloads"),
     Step("gate-parity", "python3 scripts/check-gate-parity.py", "check-gate-parity"),
     Step("gate-test", "python3 scripts/test_gate.py"),
+    Step("hooks-test", "python3 scripts/test_hooks.py"),
     Step("coverage", "scripts/coverage-gate.sh", "coverage-check"),
     Step("msrv-build", "cargo +1.85.0 build --workspace --locked"),
     Step("msrv-test", "cargo +1.85.0 test --workspace --locked", "cargo-test"),
@@ -113,7 +114,7 @@ BY_ID = {step.id: step for step in STEPS}
 # fact about this data rather than a convention someone maintains. Ordered
 # cheapest first, which is also roughly the order a failure is most likely.
 FAST = ("fmt", "clippy", "tests", "tool-pins", "tool-pins-test", "exceptions", "commits")
-CHECK = FAST + ("docs", "links", "rulesets", "gate-parity", "gate-test")
+CHECK = FAST + ("docs", "links", "rulesets", "gate-parity", "gate-test", "hooks-test")
 GATE = CHECK + ("coverage", "msrv-build", "msrv-test", "deny", "osv", "zizmor", "codescene")
 SUITES = {"fast": FAST, "check": CHECK, "gate": GATE}
 

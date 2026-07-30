@@ -39,8 +39,6 @@ RECIPE_FILES = ("justfile", "scripts/gate.py")
 INSTALL_ACTION_TOOL = re.compile(r"^\s*tool:\s*([A-Za-z0-9_.-]+)@(\S+)\s*$", re.MULTILINE)
 TOOLCHAIN_INPUT = re.compile(r'^\s*toolchain:\s*"([^"]+)"\s*$', re.MULTILINE)
 CARGO_PLUS = re.compile(r"cargo\s+\+(\S+)")
-CODESCENE_URL = re.compile(r"cs-linux-amd64-([0-9a-f]{40})\.zip")
-CODESCENE_SHA = re.compile(r'^\s*echo\s+"([0-9a-f]{64})\s', re.MULTILINE)
 
 
 class Repo:
@@ -93,24 +91,32 @@ def check_action_input(repo: Repo, name: str, spec: dict) -> list[str]:
     return equality_violation(f"{spec['action']} `version:`", found, spec["version"])
 
 
-def check_download_url(repo: Repo, name: str, spec: dict) -> list[str]:
-    """The download URL's build SHA and the checksum it is verified against."""
-    text = repo.workflow_text()
-    return equality_violation(
-        "the CodeScene download URL", set(CODESCENE_URL.findall(text)), spec["build_sha"]
-    ) + equality_violation(
-        "the CodeScene checksum assertion",
-        set(CODESCENE_SHA.findall(text)),
-        spec["sha256"],
-    )
-
-
 FORMS = {
     "install-action": check_install_action,
     "action-input": check_action_input,
-    "download-url": check_download_url,
     "none": lambda repo, name, spec: [],
 }
+
+
+def check_codescene_sweep(repo: Repo, tools: dict) -> list[str]:
+    """The 10.0 floor was last swept with the CLI version now pinned.
+
+    Code Health is enforced locally rather than by a required check, so
+    nothing in CI would notice the floor going stale. It goes stale in one
+    specific way: CodeScene's rules change between CLI versions, so a bump
+    can drop a file below 10.0 without any change touching that file — which
+    is exactly what the delta the hooks run cannot see. Bumping the pin
+    without re-sweeping is therefore the one move that silently inherits a
+    floor nobody measured.
+    """
+    spec = tools["codescene-cli"]
+    if spec["version"] == spec.get("swept_at"):
+        return []
+    return [
+        f"tools.toml pins CodeScene CLI {spec['version']} but records the "
+        f"10.0 sweep at {spec.get('swept_at')!r} — run `just codescene` to "
+        f"re-establish the floor on the new CLI, then move swept_at with it"
+    ]
 
 
 def check_declared_tools(repo: Repo, tools: dict) -> list[str]:
@@ -218,6 +224,7 @@ def check(root: Path) -> list[str]:
         + check_toolchains(repo, rust)
         + check_cross_file_pins(repo, rust)
         + check_internal_dependency_version(repo)
+        + check_codescene_sweep(repo, tools)
     )
 
 

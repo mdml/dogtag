@@ -15,7 +15,6 @@
 #
 #   install-action  `tool: <name>@<version>` passed to taiki-e/install-action
 #   action-input    a `version:` input on a named, SHA-pinned action
-#   download-url    a versioned download URL plus its checksum assertion
 #   none            not declared in any workflow; local tooling only
 #
 # Anything with a declaring form must actually be declared: a tool that
@@ -49,7 +48,7 @@ action = "zizmorcore/zizmor-action"
 
 [codescene-cli]
 version = "1.0.36"
-form = "download-url"
+form = "none"
 build_sha = "5f703ce1f9c264701f32c795fa7104467f1e4ab4"
 # sha256 of cs-linux-amd64-<build_sha>.zip, computed here on 2026-07-30 and
 # verified at every install. CodeScene publishes no checksums of its own and
@@ -58,6 +57,20 @@ build_sha = "5f703ce1f9c264701f32c795fa7104467f1e4ab4"
 # architecture the installer will fetch — an unrecorded architecture would
 # mean installing an unverified binary.
 sha256 = "b6a1b259c6b53d94d34c85b85bb725b6665973ab2bec9f6c678a371d7a0202ee"
+# `form = "none"` because no workflow declares this tool: Code Health is a
+# maintainer-local invariant, enforced by `just gate`, not a required check.
+# scripts/install-dev-tools.sh reads the three values above at runtime, so
+# there is no second copy for a checker to keep honest — the URL it builds
+# and the checksum it verifies are these fields.
+#
+# `swept_at` is the CLI version the whole-repository 10.0 floor was last
+# measured with, and it must equal `version`. CodeScene's rules change
+# between CLI versions, so a bump can move a file below 10.0 without anyone
+# touching that file; the delta the hooks run cannot see it, because no
+# change touched it. Bumping the CLI therefore means running a full
+# `just codescene` sweep and moving this line in the same commit — which is
+# what re-establishes the baseline rather than inheriting a stale one.
+swept_at = "1.0.36"
 
 [cargo-semver-checks]
 version = "0.49.0"
