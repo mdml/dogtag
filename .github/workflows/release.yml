@@ -9,12 +9,22 @@ on:
 
 permissions: {}
 
+# A release must never be cancelled midway: half a matrix leaves a draft with
+# missing artifacts, which is worse than a slow queue.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
   build:
     name: Build (${{ matrix.target }})
+    # Release artifacts are built only in the canonical repository. A fork
+    # that pushes a v* tag builds nothing, so no fork can produce something
+    # that looks like an official release.
+    if: github.repository == 'mdml/dogtag'
     runs-on: ${{ matrix.runner }}
     permissions:
       contents: read
@@ -43,10 +53,27 @@ jobs:
         with:
           toolchain: "1.97.1"
           targets: ${{ matrix.target }}
+      - uses: taiki-e/install-action@065d6a08a14e61e89fb0a4c10eecdbdef39c7d8e # v2.85.4
+        with:
+          tool: cargo-auditable@0.7.5
+      # The target reaches the shell through the environment rather than
+      # through template expansion: nothing in the release path interpolates
+      # a workflow expression into a command line, so there is no expansion
+      # to audit if a matrix value ever stops being a literal.
+      #
+      # `cargo auditable` embeds the exact linked dependency list in the
+      # binary (a ~370-byte .dep-v0 section), so a shipped artifact can be
+      # audited directly with `cargo audit bin` without trusting a separate
+      # manifest to describe it. It is deterministic — verified byte-identical
+      # across rebuilds — so it does not disturb archive reproducibility.
       - name: Build
-        run: cargo build --release --locked -p dogtag-cli --target ${{ matrix.target }}
+        env:
+          TARGET: ${{ matrix.target }}
+        run: cargo auditable build --release --locked -p dogtag-cli --target "$TARGET"
       - name: Package
-        run: scripts/package.sh ${{ matrix.target }}
+        env:
+          TARGET: ${{ matrix.target }}
+        run: scripts/package.sh "$TARGET"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: dogtag-${{ matrix.target }}
@@ -60,13 +87,14 @@ jobs:
     needs: build
     runs-on: ubuntu-latest
     permissions:
-      contents: write
-      id-token: write
-      attestations: write
+      contents: write # create the draft release and upload its assets
+      id-token: write # OIDC identity for provenance signing
+      attestations: write # record the build-provenance attestation
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: 0 # git-cliff reads the tag range to build the notes
       - name: Verify tag matches workspace version
         run: |
           version="$(sed -n '/^\[workspace\.package\]/,/^\[/s/^version = "\([^"]*\)".*/\1/p' Cargo.toml | head -n 1)"
@@ -96,6 +124,22 @@ jobs:
         uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
         with:
           subject-path: dist/*.tar.gz
+      - uses: taiki-e/install-action@065d6a08a14e61e89fb0a4c10eecdbdef39c7d8e # v2.85.4
+        with:
+          tool: git-cliff@2.13.1
+      # Deterministic notes from the Conventional Commit history, replacing
+      # `--generate-notes` (a flat list of pull-request titles). The commit
+      # types are enforced on the way in, so the grouping here is reading a
+      # guarantee rather than guessing at prose.
+      - name: Build release notes
+        run: |
+          set -euo pipefail
+          git-cliff --config cliff.toml --latest --strip all > NOTES.md
+          if [ ! -s NOTES.md ]; then
+            echo "No user-facing changes since the previous release." > NOTES.md
+          fi
+          echo "--- release notes ---"
+          cat NOTES.md
       - name: Create draft release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -106,5 +150,5 @@ jobs:
             --prerelease \
             --verify-tag \
             --title "dogtag $TAG" \
-            --generate-notes \
+            --notes-file NOTES.md \
             dist/*.tar.gz dist/*.tar.gz.sha256 dist/sha256.sum
