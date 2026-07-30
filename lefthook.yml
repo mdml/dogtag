@@ -1,11 +1,18 @@
 # Git hooks. Install them with `just hooks` (or `lefthook install`); the
 # pinned lefthook version lives in tools.toml.
 #
-# These hooks are a fast local feedback loop, not the enforcement boundary.
-# Every rule they check is checked again in CI over the pull request's whole
-# range, because `--no-verify` exists and hooks are not installed by default
-# on a fresh clone. A hook that catches a mistake before the commit is a
-# convenience; the required check is what makes the rule binding.
+# Most of what these hooks check is checked again in CI over the pull
+# request's whole range, because `--no-verify` exists and hooks are not
+# installed on a fresh clone. For those, a hook is a convenience and the
+# required check is what binds.
+#
+# Code Health is the exception, and the reason the hooks below matter more
+# than hooks usually do: it is enforced by the maintainer's `just gate`, not
+# by any required check, so these deltas are the only automatic Code Health
+# signal a contributor gets. They decline loudly rather than fail when no
+# CodeScene token is configured — an external contributor needs no account —
+# and they never report a pass they did not measure. See
+# docs/adr/2026-07-30-code-health-and-coverage-gates.md.
 
 commit-msg:
   jobs:
@@ -26,8 +33,18 @@ pre-commit:
       run: python3 scripts/gate.py fmt clippy
     - name: code-health
       # Delta only: scoring every file needs a network round trip per file.
-      # Skipped automatically when no CodeScene token is configured, since a
-      # hook that fails on a missing optional credential just gets bypassed.
-      run: ./scripts/codescene-gate.sh --staged
-      skip:
-        - run: test -z "$CS_ACCESS_TOKEN"
+      run: ./scripts/codescene-hook.sh staged
+
+pre-push:
+  jobs:
+    - name: code-health-branch
+      # The whole branch as a reviewer sees it, against origin/main. This is
+      # the last automatic Code Health signal before the change leaves the
+      # machine — there is no CI job behind it — so it runs here rather than
+      # only inside `just gate`, which is easy to forget and impossible to
+      # forget once the push is the thing that triggers it.
+      #
+      # A pre-push hook needs justifying, and this is the justification: it
+      # is a delta, it costs one round trip per changed file, and it is the
+      # only gate in the repository with no remote counterpart at all.
+      run: ./scripts/codescene-hook.sh branch

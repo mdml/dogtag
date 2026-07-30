@@ -26,16 +26,21 @@ from pathlib import Path
 ADR = "docs/adr/2026-07-30-workflow-security-and-repository-rules.md"
 RULESET_DIR = ".github/rulesets"
 
-# The nine CI jobs plus cargo-deny, each of which runs on a pull request and
+# The eight CI jobs plus cargo-deny, each of which runs on a pull request and
 # on a push to main; the OSV context differs because the pull-request scan
 # and the full scan are separate jobs with separate triggers.
+#
+# Code Health is deliberately absent. It is enforced locally by `just gate`
+# against the pinned CodeScene CLI, not by a required check — see the
+# [code health ADR](../docs/adr/2026-07-30-code-health-and-coverage-gates.md).
+# Adding it back here without also restoring the CI job would create a
+# required context nothing reports, which blocks every merge permanently.
 COMMON_CONTEXTS = [
     "Format, lint, test (Linux)",
     "Commit messages",
     "Test (macOS arm64)",
     "MSRV (Rust 1.85)",
     "Coverage thresholds",
-    "CodeScene Code Health",
     "Workflow security (zizmor)",
     "Release build check (x86_64 musl)",
     "Markdown link integrity",

@@ -73,7 +73,6 @@ The rules below applied before this record; the difference is that they are now 
           { "context": "Test (macOS arm64)" },
           { "context": "MSRV (Rust 1.85)" },
           { "context": "Coverage thresholds" },
-          { "context": "CodeScene Code Health" },
           { "context": "Workflow security (zizmor)" },
           { "context": "Release build check (x86_64 musl)" },
           { "context": "Markdown link integrity" },
@@ -107,7 +106,7 @@ Four things in that payload are decisions rather than defaults:
 
   The cost, recorded plainly: a messy branch cannot be tidied at merge time. Local history has to be worth landing before the merge button is pressed, which is more work for the author and is the intended direction of the pressure — the commits are the release notes.
 
-**Eleven contexts** are required on a pull request: nine from [ci.yml](../../.github/workflows/ci.yml) (which include the code-quality gates from the [code health ADR](2026-07-30-code-health-and-coverage-gates.md)), plus `cargo-deny` and the pull-request OSV scan from [security.yml](../../.github/workflows/security.yml). A job that declares a `name` is required under that name; a job that does not is required under its id. The OSV jobs call reusable workflows, whose contexts render as `caller-job-id / callee-job-name`: both upstream workflows define a single job with the id `osv-scan` and no display name (read from the pinned commit `9a49870`, not guessed), so the caller ids `osv-pr` and `osv-full` produce `osv-pr / osv-scan` and `osv-full / osv-scan`.
+**Ten contexts** are required on a pull request: eight from [ci.yml](../../.github/workflows/ci.yml) (which include the coverage and MSRV gates from the [code health ADR](2026-07-30-code-health-and-coverage-gates.md)), plus `cargo-deny` and the pull-request OSV scan from [security.yml](../../.github/workflows/security.yml). Code Health is deliberately not among them — see [the code health ADR](2026-07-30-code-health-and-coverage-gates.md) for why it is enforced locally instead. A job that declares a `name` is required under that name; a job that does not is required under its id. The OSV jobs call reusable workflows, whose contexts render as `caller-job-id / callee-job-name`: both upstream workflows define a single job with the id `osv-scan` and no display name (read from the pinned commit `9a49870`, not guessed), so the caller ids `osv-pr` and `osv-full` produce `osv-pr / osv-scan` and `osv-full / osv-scan`.
 
 **These strings are derived, not observed.** They come from reading the workflow definitions and GitHub's documented rendering rules; no pull request has run on this branch yet, so none of them has been seen in a real check run. Applying the ruleset before that happens risks a permanently-blocking rule from a single wrong string — a required context that never reports cannot be satisfied. The provisioning order below therefore pushes the branch first, reads the rendered names off the actual run, and only then creates the rulesets.
 
@@ -139,7 +138,6 @@ The contexts are also fragile in one specific way worth naming: they are display
           { "context": "Test (macOS arm64)" },
           { "context": "MSRV (Rust 1.85)" },
           { "context": "Coverage thresholds" },
-          { "context": "CodeScene Code Health" },
           { "context": "Workflow security (zizmor)" },
           { "context": "Release build check (x86_64 musl)" },
           { "context": "Markdown link integrity" },
@@ -156,7 +154,7 @@ The contexts are also fragile in one specific way worth naming: they are display
 
 The `required_status_checks` rule is the interesting one: with `do_not_enforce_on_create: false`, a `v*` tag can only be created on a commit whose required checks already passed. That is the mechanical form of "tags come only from green commits", and it works because CI runs on push to `main`, so every `main` commit carries the check contexts by the time anyone tags it.
 
-**Eleven contexts** again, and the tag list differs from the branch list in exactly one place — not cosmetically: it requires `osv-full / osv-scan` where the branch ruleset requires `osv-pr / osv-scan`. The contexts a tag rule can demand are those present on the *tagged commit*, and that commit reached `main` through a push — which runs the full recursive vulnerability scan, not the pull-request diff scan. The same asymmetry works in this repository's favor for Code Health: the push-to-`main` run scores every file rather than the changed ones, so a release tag is gated on a full measurement of both properties rather than an incremental one.
+**Ten contexts** again, and the tag list differs from the branch list in exactly one place — not cosmetically: it requires `osv-full / osv-scan` where the branch ruleset requires `osv-pr / osv-scan`. The contexts a tag rule can demand are those present on the *tagged commit*, and that commit reached `main` through a push — which runs the full recursive vulnerability scan, not the pull-request diff scan. The same asymmetry works in this repository's favor for Code Health: the push-to-`main` run scores every file rather than the changed ones, so a release tag is gated on a full measurement of both properties rather than an incremental one.
 
 **Honest caveat: this half is not empirically confirmed.** Status-checks-gating-tag-creation is documented-implied rather than documented — GitHub's ruleset documentation uses "branch or tag" wording throughout, and the existence of a `do_not_enforce_on_create` parameter only makes sense if creation is otherwise enforced — but it was not tested, because the maintainer's current token lacks the repository-administration scope needed to create a test ruleset. If the API rejects a `required_status_checks` rule on a tag target, the fallback is a creation-restriction rule limiting who may create `v*` tags. The immutability rules stand either way; only the green-commit gate is contingent.
 
@@ -179,14 +177,9 @@ Verified for the published release on 2026-07-30: `gh attestation verify dogtag-
 
 ### Provisioning order
 
-The order is load-bearing, and it is load-bearing twice. The rulesets depend on context names that do not exist until the branch has run, and that run is only authoritative if the secrets it needs were already in place — so the branch ruleset is created once the pull request is green and its eleven names have been read off a real run, which is early enough that the first merge goes *through* the rule rather than around it. The *tag* ruleset then depends on a name no pull request can produce, so it cannot be created until a commit has reached `main` and its own run has finished. Each is read back afterwards rather than assumed from an exit status.
+The order is load-bearing, and it is load-bearing twice. The rulesets depend on context names that do not exist until the branch has run, and that run is only authoritative if the secrets it needs were already in place — so the branch ruleset is created once the pull request is green and its ten names have been read off a real run, which is early enough that the first merge goes *through* the rule rather than around it. The *tag* ruleset then depends on a name no pull request can produce, so it cannot be created until a commit has reached `main` and its own run has finished. Each is read back afterwards rather than assumed from an exit status.
 
-1. **Add the secrets first.** `CS_ACCESS_TOKEN` twice — once for Actions, once for Dependabot, which receives no Actions secrets and would otherwise be unable to pass the Code Health check on its own pin-freshness pull requests. Doing this *before* the first run matters: the Code Health job fails closed when the token is absent, so a run that predates the secret is red for a reason that says nothing about the code.
-
-   ```bash
-   gh secret set CS_ACCESS_TOKEN --repo mdml/dogtag
-   gh secret set CS_ACCESS_TOKEN --repo mdml/dogtag --app dependabot
-   ```
+1. **No secrets to install.** The inventory is empty (below), so provisioning starts at the pull request. Code Health is enforced by the maintainer's local `just gate`, not by a required check, and installing a `CS_ACCESS_TOKEN` for Actions or Dependabot would be provisioning a credential nothing reads.
 
 2. **Push the branch and open a pull request.** This produces the authoritative run. If any job did start before step 1 landed, rerun it rather than reasoning about which failures were spurious: `gh run rerun <run-id> --failed`.
 
@@ -196,7 +189,7 @@ The order is load-bearing, and it is load-bearing twice. The rulesets depend on 
    gh pr checks <n> --json name,state --jq '.[] | "\(.state)  \(.name)"'
    ```
 
-   Expect eleven passing contexts matching [.github/rulesets/main-branch.json](../../.github/rulesets/main-branch.json). Reconcile before creating anything; it costs one command and is the cheapest moment to find a typo.
+   Expect ten passing contexts matching [.github/rulesets/main-branch.json](../../.github/rulesets/main-branch.json). Reconcile before creating anything; it costs one command and is the cheapest moment to find a typo.
 
    **Create the branch ruleset here**, once those names are reconciled and before the merge — everything it requires has now been observed, and applying it first means the very first merge goes through the rule rather than around it:
 
@@ -219,7 +212,7 @@ The order is load-bearing, and it is load-bearing twice. The rulesets depend on 
      --jq '.check_runs[] | "\(.conclusion // "pending")  \(.name)"'
    ```
 
-   Expect every check green and none pending, and expect the names to match [.github/rulesets/release-tags.json](../../.github/rulesets/release-tags.json) — eleven again, differing from the branch list in exactly one place: `osv-full / osv-scan` where the pull request produced `osv-pr / osv-scan`. Reconcile that name here, for the same reason the branch names were reconciled in step 3.
+   Expect every check green and none pending, and expect the names to match [.github/rulesets/release-tags.json](../../.github/rulesets/release-tags.json) — ten again, differing from the branch list in exactly one place: `osv-full / osv-scan` where the pull request produced `osv-pr / osv-scan`. Reconcile that name here, for the same reason the branch names were reconciled in step 3.
 
 5. **Create the tag ruleset**, staged disabled:
 
@@ -248,13 +241,15 @@ The order is load-bearing, and it is load-bearing twice. The rulesets depend on 
                 | .parameters.required_status_checks[].context]}'
    ```
 
-   For each of the two rulesets, confirm `enforcement` is `active`, `bypass_actors` is empty, and the context list is the eleven strings from its payload — the branch one ending `osv-pr / osv-scan`, the tag one ending `osv-full / osv-scan`. For immutable releases, `gh api repos/mdml/dogtag/immutable-releases` should succeed; **that read-back is documented-implied rather than confirmed**, like the setting's own endpoint, so if it does not answer `GET`, confirm it under Settings → General instead and record which method was used.
+   For each of the two rulesets, confirm `enforcement` is `active`, `bypass_actors` is empty, and the context list is the ten strings from its payload — the branch one ending `osv-pr / osv-scan`, the tag one ending `osv-full / osv-scan`. For immutable releases, `gh api repos/mdml/dogtag/immutable-releases` should succeed; **that read-back is documented-implied rather than confirmed**, like the setting's own endpoint, so if it does not answer `GET`, confirm it under Settings → General instead and record which method was used.
 
 The payloads are checked in rather than pasted from a transcript so the thing reviewed is the thing posted; `scripts/check-ruleset-payloads.py` holds them to the copies quoted in this record, and to their context counts, on every run of `just check`. Steps 1, 5, 6 and 7 need a token with repository-administration scope, which the maintainer's current PAT does not carry.
 
 ### Secrets
 
-`CS_ACCESS_TOKEN` (CodeScene) is the repository's only secret: a read-scoped analysis token used by the code-health gate. It is never exposed to fork-controlled execution — the CodeScene job holds no write permissions, and no workflow here uses `pull_request_target`. One secret is a number worth keeping: the inventory of "what could leak" is currently short enough to hold in a sentence, and any addition should be argued against that.
+**The repository has no secrets.** `grep -r 'secrets\.' .github/workflows` returns nothing, and `scripts/test_hooks.py` asserts it stays that way.
+
+It had one — `CS_ACCESS_TOKEN`, for the Code Health job — and losing it is the main thing the [code health ADR](2026-07-30-code-health-and-coverage-gates.md)'s move to local enforcement bought. An empty inventory is a stronger property than a short one: there is no credential to leak to a compromised action, none to scope, none to rotate, and no asymmetry between what a fork's run can do and what the canonical repository's can. Anything that would add the first secret back should be argued against that, and against the fork problem that made this one untenable.
 
 ### Alternatives considered
 
@@ -265,9 +260,9 @@ The payloads are checked in rather than pasted from a transcript so the thing re
 
 ## Consequences
 
-- **The solo maintainer must open a pull request for every change**, including one-line documentation fixes, and wait for the full check suite — which includes the network-dependent CodeScene and scanner jobs. This is deliberate friction with a real, daily, cumulative cost, and it will be tempting to disable long before it is tempting to bypass.
+- **The solo maintainer must open a pull request for every change**, including one-line documentation fixes, and wait for the full check suite — which includes the network-dependent scanner jobs. This is deliberate friction with a real, daily, cumulative cost, and it will be tempting to disable long before it is tempting to bypass.
 - **No bypass means a genuine emergency costs a visible ruleset edit.** Disabling and re-enabling a ruleset is slower than a force-push and leaves a trail. That is the intent; it is still a bad half-hour when it happens.
 - **Required-check contexts are referenced by rendered job name.** Renaming a CI job silently breaks the requirement — the ruleset keeps waiting for a context nothing will ever report, and the PR sits pending rather than failing loudly. This is a real foot-gun with no mechanical guard, and it is worse for the reusable-workflow jobs whose contexts are not readable from the caller's YAML at all. Job renames must include a ruleset update in the same change.
 - **The tag-creation gate depends on CI having run on the exact tagged commit.** Tagging a commit whose checks never ran, or whose check runs have aged out of GitHub's retention, will be refused — including in the case where a release is being cut from an older commit on purpose.
-- **A forked pull request cannot pass the Code Health gate at all.** Secrets are correctly withheld from fork-triggered `pull_request` runs, so the CodeScene CLI cannot authenticate and the job fails with an explanatory error. Passing it unmeasured was considered and rejected: a required check that goes green without checking anything is worse than no check, and it would make the one gate that guards maintainability advisory for exactly the contributions nobody has reviewed yet. The cost is that landing an external contribution takes a deliberate maintainer act — pushing the branch into this repository, where the gate runs for real — and that no fork PR can ever be merged from its own branch. For a beta with no external contributors that is free today, and it is honest rather than convenient when that changes.
+- **A forked pull request can now run every required check.** This is the change the [code health ADR](2026-07-30-code-health-and-coverage-gates.md) bought by moving Code Health out of CI: previously the CodeScene job could not authenticate on a fork run, so an external contribution either failed a required check for a reason that said nothing about the code, or would have had to pass unmeasured. Neither was acceptable, and the fork case has no third option while the gate needs a per-contributor credential. The cost moved rather than vanished — Code Health is now something the maintainer must run locally before merging, and nothing mechanical stops a merge that skipped it.
 - **`online-audits: false` leaves the impostor-commit, known-vulnerable-actions, and typosquat audits unrun.** The pins and Dependabot are the compensating controls, and neither of them detects a SHA that never belonged to the ref it claims.
