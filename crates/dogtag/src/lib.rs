@@ -48,6 +48,7 @@
 //! forthcoming surface, landing milestone by milestone behind the
 //! conformance suite; nothing here speculates ahead of it.
 
+#![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
 /// The SDK version, taken verbatim from the crate's package metadata.
@@ -87,9 +88,10 @@ mod tests {
         let components: Vec<&str> = core.split('.').collect();
         assert_eq!(components.len(), 3, "core must be major.minor.patch: {v}");
         for component in components {
-            component
-                .parse::<u64>()
-                .unwrap_or_else(|_| panic!("non-numeric core component in {v}"));
+            assert!(
+                component.parse::<u64>().is_ok(),
+                "non-numeric core component in {v}"
+            );
         }
         assert!(!prerelease.is_empty(), "empty prerelease part in {v}");
     }

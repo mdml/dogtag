@@ -13,6 +13,9 @@ repository.workspace = true
 homepage.workspace = true
 rust-version.workspace = true
 
+[lints]
+workspace = true
+
 # The harness does NOT depend on the `dogtag` SDK at M1 — every scenario is
 # pending and there is nothing to call. When scenarios become executable the
 # harness consumes only the SDK's public API.

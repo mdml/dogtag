@@ -8,10 +8,18 @@ repository.workspace = true
 homepage.workspace = true
 rust-version.workspace = true
 
+[lints]
+workspace = true
+
 [[bin]]
 name = "dogtag"
 path = "src/main.rs"
+# The documented surface is the SDK, not the executable that consumes it.
+# Without this, `cargo doc --workspace` emits a filename-collision warning:
+# the `dogtag` binary and the `dogtag` library both claim doc/dogtag/
+# (rust-lang/cargo#6313), and one silently overwrites the other.
+doc = false
 
 [dependencies]
-dogtag = { path = "../dogtag" }
+dogtag = { workspace = true }
 clap = { workspace = true }

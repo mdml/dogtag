@@ -15,6 +15,19 @@ homepage = "https://dogtag.dev"
 rust-version = "1.85"
 
 [workspace.dependencies]
+# The SDK carries a version alongside its path so the CLI's dependency is not
+# a wildcard, which crates.io rejects outright. Cargo only catches drift from
+# [workspace.package] when the requirement becomes unsatisfiable (a 0.2.0
+# bump); a semver-compatible bump to 0.1.1 would still match this caret
+# silently, so scripts/check-tool-pins.py asserts the two are equal.
+dogtag = { path = "crates/dogtag", version = "0.1.0-beta.0" }
 clap = { version = "4.6.4", features = ["derive"] }
 serde = { version = "1.0.229", features = ["derive"] }
 toml = "1.1.4"
+
+# Workspace-wide unsafe prohibition. The crate roots also carry
+# `#![forbid(unsafe_code)]`; the lints table extends the ban mechanically to
+# every target (tests, future benches) without relying on an attribute per
+# file.
+[workspace.lints.rust]
+unsafe_code = "forbid"
