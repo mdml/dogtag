@@ -1,0 +1,29 @@
+# Coverage ratchet baseline. CI fails if measured coverage falls below these
+# values or below the hard thresholds (95% line / 90% branch global; 100%
+# line for every file under the kernel paths). Raising values is routine;
+# lowering them requires an ADR (see docs/adr/). The toolchain pin exists
+# because branch coverage requires nightly instrumentation.
+toolchain = "nightly-2026-07-30"
+
+[global]
+# Measured on the pinned toolchain: 714/721 lines (99.0291%) and 86/88
+# branches (97.7273%). Recorded floored to two decimals, so the ratchet
+# compares against a number a clean run reproduces rather than one that
+# rounds up past it.
+#
+# Branch coverage moved down from 98.07 when tools/commit-lint joined the
+# workspace — a larger denominator, not an erosion of what was already
+# covered (line coverage rose over the same change). Lowering this number is
+# the one move the ratchet does not allow silently; it is recorded in
+# docs/adr/2026-07-30-commit-convention-and-release-notes.md.
+line = 99.02
+branch = 97.72
+
+[thresholds]
+line = 95.0
+branch = 90.0
+
+[kernel]
+# Public semantic-kernel/domain/configuration modules: 100% line coverage.
+paths = ["crates/dogtag/src/"]
+line = 100.0
