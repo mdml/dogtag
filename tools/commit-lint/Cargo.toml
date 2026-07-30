@@ -1,0 +1,20 @@
+[package]
+name = "commit-lint"
+description = "Conventional Commits validator for this repository's history"
+publish = false
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
+
+[lints]
+workspace = true
+
+[[bin]]
+name = "commit-lint"
+path = "src/main.rs"
+doc = false
+
+[dependencies]
