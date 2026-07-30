@@ -50,7 +50,7 @@ These are contractual, not aspirational — each one is enforced by a tool, and 
 
 Conventional Commit subjects, present tense, one coherent change per commit. The permitted types are `feat`, `fix`, `docs`, `test`, `refactor`, `perf`, `build`, `ci`, `chore`, and `revert`; scopes are optional; a breaking change is marked with `!` before the colon, a `BREAKING CHANGE:` footer, or both.
 
-This is enforced, not merely asked for. `just hooks` installs a `commit-msg` hook that checks the message as you write it, and the `Commit messages` CI job re-checks every commit a pull request introduces — so a bypassed hook still cannot merge. `just commits [RANGE]` runs the same check by hand. Release notes are generated from these subjects (see the [commit convention ADR](docs/adr/2026-07-30-commit-convention-and-release-notes.md)), so a careless subject becomes user-visible text; `just notes` previews what the next tag would publish.
+This is enforced, not merely asked for. `just hooks` installs a `commit-msg` hook that checks the message as you write it, and the `Commit messages` CI job re-checks every commit a pull request introduces — so a bypassed hook still cannot merge. `just commits [RANGE]` runs the same check by hand. **Pull requests merge by rebase only**, so the commits CI validated are exactly the commits that land on `main`; squash merging would synthesize a subject from the pull-request title that no gate ever saw. Tidy your branch before merging, not during. Release notes are generated from these subjects (see the [commit convention ADR](docs/adr/2026-07-30-commit-convention-and-release-notes.md)), so a careless subject becomes user-visible text; `just notes` previews what the next tag would publish.
 
 ## Decision records — which one to write
 
