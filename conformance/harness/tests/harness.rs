@@ -3,10 +3,14 @@
 //! cannot exist in the schema.
 
 use std::collections::BTreeSet;
+use std::fs;
+use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicU32, Ordering};
 
 use dogtag_conformance::{
-    CorpusStatus, Milestone, Outcome, Profile, REQUIRED_PROFILES, Scenario, ScenarioStatus,
-    load_profiles, load_scenarios, parse_profile, parse_scenario, pending_matrix, report,
+    CorpusStatus, HarnessError, Milestone, Outcome, Profile, REQUIRED_PROFILES, Scenario,
+    ScenarioStatus, load_profiles, load_profiles_from, load_scenarios, load_scenarios_from,
+    parse_profile, parse_scenario, pending_matrix, report,
 };
 
 /// A minimal scenario document that must parse; the waiver-rejection tests
@@ -214,6 +218,123 @@ fn runnable_pair_without_execution_path_is_refused() {
         message.contains("graduated-scenario") && message.contains("built-profile"),
         "the refusal names the pair: {message}"
     );
+}
+
+/// A throwaway directory under the system temp dir, removed on drop.
+/// Standard library only, per the dependency policy — no `tempfile`.
+struct TempTree(PathBuf);
+
+impl TempTree {
+    fn new(label: &str) -> Self {
+        static COUNTER: AtomicU32 = AtomicU32::new(0);
+        let path = std::env::temp_dir().join(format!(
+            "dogtag-conformance-{label}-{}-{}",
+            std::process::id(),
+            COUNTER.fetch_add(1, Ordering::Relaxed)
+        ));
+        fs::create_dir_all(&path).expect("temp tree created");
+        TempTree(path)
+    }
+
+    fn path(&self) -> &Path {
+        &self.0
+    }
+}
+
+impl Drop for TempTree {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.0);
+    }
+}
+
+fn write_profile_dir(profiles_dir: &Path, name: &str, corpus: &str) -> PathBuf {
+    let dir = profiles_dir.join(name);
+    fs::create_dir_all(&dir).expect("profile dir created");
+    fs::write(
+        dir.join("PROFILE.toml"),
+        format!(
+            "name = \"{name}\"\npersona = \"a strictness-test persona\"\n\
+             distinguishing_axes = [\"one axis\"]\ncorpus = \"{corpus}\"\n\
+             corpus_milestone = \"M2\"\n"
+        ),
+    )
+    .expect("PROFILE.toml written");
+    fs::write(dir.join("PROFILE.md"), "# strictness-test profile\n").expect("PROFILE.md written");
+    dir
+}
+
+fn expect_invalid<T: std::fmt::Debug>(result: Result<T, HarnessError>, needle: &str) {
+    match result {
+        Err(HarnessError::Invalid(message)) => assert!(
+            message.contains(needle),
+            "error message should mention `{needle}`: {message}"
+        ),
+        other => panic!("expected HarnessError::Invalid mentioning `{needle}`, got {other:?}"),
+    }
+}
+
+/// The scenarios directory holds only scenario `*.toml` files: a stray file
+/// (or subdirectory) is a load error, not something silently skipped.
+#[test]
+fn stray_entry_in_scenarios_dir_is_a_load_error() {
+    let tree = TempTree::new("scenarios-stray");
+    fs::write(tree.path().join("minimal-scenario.toml"), MINIMAL_SCENARIO)
+        .expect("scenario written");
+    fs::write(tree.path().join("NOTES.md"), "stray\n").expect("stray file written");
+    expect_invalid(load_scenarios_from(tree.path()), "NOTES.md");
+
+    let subdir_tree = TempTree::new("scenarios-subdir");
+    fs::create_dir_all(subdir_tree.path().join("drafts")).expect("stray subdir created");
+    expect_invalid(load_scenarios_from(subdir_tree.path()), "drafts");
+}
+
+/// The profiles directory holds only profile subdirectories.
+#[test]
+fn stray_file_in_profiles_dir_is_a_load_error() {
+    let tree = TempTree::new("profiles-stray");
+    write_profile_dir(tree.path(), "minimal", "scheduled");
+    fs::write(tree.path().join("README.md"), "stray\n").expect("stray file written");
+    expect_invalid(load_profiles_from(tree.path()), "README.md");
+}
+
+/// A profile directory holds only PROFILE.toml, PROFILE.md, and (once
+/// built) a corpus/ directory.
+#[test]
+fn stray_entry_in_a_profile_dir_is_a_load_error() {
+    let tree = TempTree::new("profile-stray");
+    let dir = write_profile_dir(tree.path(), "minimal", "scheduled");
+    fs::write(dir.join("extra.txt"), "stray\n").expect("stray file written");
+    expect_invalid(load_profiles_from(tree.path()), "extra.txt");
+}
+
+/// The declared corpus status must match the disk: `built` without a
+/// corpus/ directory is a lie, and the loader rejects it.
+#[test]
+fn built_corpus_without_corpus_dir_is_a_load_error() {
+    let tree = TempTree::new("corpus-built-missing");
+    write_profile_dir(tree.path(), "minimal", "built");
+    expect_invalid(load_profiles_from(tree.path()), "built");
+}
+
+/// The symmetric direction: a corpus/ directory on disk with the status
+/// still `scheduled` is also a mismatch.
+#[test]
+fn scheduled_corpus_with_corpus_dir_is_a_load_error() {
+    let tree = TempTree::new("corpus-scheduled-present");
+    let dir = write_profile_dir(tree.path(), "minimal", "scheduled");
+    fs::create_dir_all(dir.join("corpus")).expect("corpus dir created");
+    expect_invalid(load_profiles_from(tree.path()), "scheduled");
+}
+
+/// And the consistent pairing loads: `built` with a corpus/ directory.
+#[test]
+fn built_corpus_with_corpus_dir_loads() {
+    let tree = TempTree::new("corpus-built-present");
+    let dir = write_profile_dir(tree.path(), "minimal", "built");
+    fs::create_dir_all(dir.join("corpus")).expect("corpus dir created");
+    let profiles = load_profiles_from(tree.path()).expect("consistent profile loads");
+    assert_eq!(profiles.len(), 1);
+    assert_eq!(profiles[0].corpus, CorpusStatus::Built);
 }
 
 /// Prints the human-readable pending matrix. Run with

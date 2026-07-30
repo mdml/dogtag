@@ -7,8 +7,8 @@ default:
 # Format check + clippy (warnings as errors) + full test suite — the CI gate
 check:
     cargo fmt --all --check
-    cargo clippy --all-targets --workspace -- -D warnings
-    cargo test --workspace
+    cargo clippy --all-targets --workspace --locked -- -D warnings
+    cargo test --workspace --locked
 
 # Format all Rust code
 fmt:

@@ -53,12 +53,17 @@ install -m 0755 "$binary" "$stage/dogtag"
 install -m 0644 LICENSE "$stage/LICENSE"
 install -m 0644 README.md "$stage/README.md"
 
-# Deterministic-ish member ordering where GNU tar is available; BSD tar
-# (macOS) has no --sort, so fall back to a fixed explicit member list there.
+# Byte-reproducible archive: fixed mtimes on every staged file, a fixed
+# explicit member ordering, and gzip -n so no timestamp is embedded in the
+# gzip header — rebuilding the same binary yields the same bytes. GNU tar
+# additionally normalizes ownership to 0:0; BSD tar (macOS) has no such
+# flags, so they are guarded.
+touch -t 202607300000 "$stage/dogtag" "$stage/LICENSE" "$stage/README.md"
 if tar --version 2>/dev/null | grep -q 'GNU tar'; then
-  tar --sort=name -czf "dist/$archive" -C "$stage" dogtag LICENSE README.md
+  tar --owner=0 --group=0 --numeric-owner -cf - -C "$stage" dogtag LICENSE README.md \
+    | gzip -n > "dist/$archive"
 else
-  tar -czf "dist/$archive" -C "$stage" dogtag LICENSE README.md
+  tar -cf - -C "$stage" dogtag LICENSE README.md | gzip -n > "dist/$archive"
 fi
 
 (

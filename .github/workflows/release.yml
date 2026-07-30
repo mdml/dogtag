@@ -1,11 +1,11 @@
 name: Release
 
-# Pushing a tag `v*` builds release artifacts for all supported targets and
+# Pushing a tag `v[0-9]*` builds release artifacts for all supported targets and
 # assembles a DRAFT prerelease. Publishing the draft is always a human act.
 
 on:
   push:
-    tags: ["v*"]
+    tags: ["v[0-9]*"]
 
 permissions: {}
 
@@ -32,6 +32,8 @@ jobs:
             runner: macos-15-intel
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Install musl tools
         if: contains(matrix.target, 'musl')
         run: |
@@ -63,6 +65,8 @@ jobs:
       attestations: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
       - name: Verify tag matches workspace version
         run: |
           version="$(sed -n '/^\[workspace\.package\]/,/^\[/s/^version = "\([^"]*\)".*/\1/p' Cargo.toml | head -n 1)"

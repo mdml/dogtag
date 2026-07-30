@@ -4,8 +4,11 @@
 //! profile in `conformance/profiles/`. There is no waiver mechanism: a
 //! scenario expressible against only one profile fails the harness and is
 //! triaged as either an incomplete configuration model or a personal
-//! convention mistaken for an invariant. The rule is enforced structurally —
-//! see [`Scenario`] — not by review discipline.
+//! convention mistaken for an invariant. The mechanical channels for a
+//! waiver — schema fields, stray files, a filtered cross product — are
+//! enforced structurally (see [`Scenario`] and the strict directory
+//! loaders); keeping the prose contracts profile-agnostic still rests on
+//! review discipline until execution wiring closes the loop.
 //!
 //! At M1 every scenario is `pending` and every profile corpus is `scheduled`,
 //! so the harness produces the complete scenarios × profiles matrix of
@@ -20,7 +23,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
@@ -209,16 +212,31 @@ pub fn parse_profile(toml_text: &str) -> Result<Profile, toml::de::Error> {
 
 /// Load and validate every scenario in `conformance/scenarios/`, sorted by id.
 ///
-/// Validates: every `*.toml` parses under the strict schema; `id` equals the
-/// file stem; ids are kebab-case and unique; `title` and `contract` are
-/// non-empty.
+/// Validates: the directory contains *only* scenario `*.toml` files (any
+/// other entry is a load error — a stray file is where an out-of-band
+/// convention would hide); every file parses under the strict schema; `id`
+/// equals the file stem; ids are kebab-case and unique; `title` and
+/// `contract` are non-empty.
 pub fn load_scenarios() -> Result<Vec<Scenario>, HarnessError> {
-    let dir = scenarios_dir();
-    let mut paths: Vec<PathBuf> = fs::read_dir(&dir)
-        .map_err(|e| HarnessError::Io(dir.clone(), e))?
-        .filter_map(|entry| entry.ok().map(|e| e.path()))
-        .filter(|p| p.extension().is_some_and(|ext| ext == "toml"))
-        .collect();
+    load_scenarios_from(&scenarios_dir())
+}
+
+/// [`load_scenarios`] against an explicit directory, so tests can exercise
+/// the strict loading rules on synthetic trees.
+pub fn load_scenarios_from(dir: &Path) -> Result<Vec<Scenario>, HarnessError> {
+    let mut paths: Vec<PathBuf> = Vec::new();
+    for entry in fs::read_dir(dir).map_err(|e| HarnessError::Io(dir.to_path_buf(), e))? {
+        let entry = entry.map_err(|e| HarnessError::Io(dir.to_path_buf(), e))?;
+        let path = entry.path();
+        if !path.is_file() || path.extension().is_none_or(|ext| ext != "toml") {
+            return Err(HarnessError::Invalid(format!(
+                "unexpected entry `{}` in {}: the scenarios directory holds only scenario *.toml files",
+                path.display(),
+                dir.display()
+            )));
+        }
+        paths.push(path);
+    }
     paths.sort();
 
     let mut seen = BTreeSet::new();
@@ -268,22 +286,59 @@ pub fn load_scenarios() -> Result<Vec<Scenario>, HarnessError> {
 
 /// Load and validate every profile in `conformance/profiles/`, sorted by name.
 ///
-/// Validates: every subdirectory carries a `PROFILE.toml` that parses under
-/// the strict schema; `name` equals the directory name and is kebab-case;
-/// `persona` and `corpus_milestone` are non-empty; `distinguishing_axes` is
-/// non-empty. Roster completeness is asserted by tests against
+/// Validates: the directory contains *only* profile subdirectories (a stray
+/// file is a load error); each profile directory contains *only*
+/// `PROFILE.toml`, `PROFILE.md`, and — once built — a `corpus/` directory;
+/// every `PROFILE.toml` parses under the strict schema; `name` equals the
+/// directory name and is kebab-case; `persona` and `corpus_milestone` are
+/// non-empty; `distinguishing_axes` is non-empty; the declared `corpus`
+/// status matches the disk (`built` requires `corpus/` to exist, `scheduled`
+/// requires it not to). Roster completeness is asserted by tests against
 /// [`REQUIRED_PROFILES`].
 pub fn load_profiles() -> Result<Vec<Profile>, HarnessError> {
-    let dir = profiles_dir();
-    let mut subdirs: Vec<PathBuf> = fs::read_dir(&dir)
-        .map_err(|e| HarnessError::Io(dir.clone(), e))?
-        .filter_map(|entry| entry.ok().map(|e| e.path()))
-        .filter(|p| p.is_dir())
-        .collect();
+    load_profiles_from(&profiles_dir())
+}
+
+/// [`load_profiles`] against an explicit directory, so tests can exercise
+/// the strict loading rules on synthetic trees.
+pub fn load_profiles_from(dir: &Path) -> Result<Vec<Profile>, HarnessError> {
+    let mut subdirs: Vec<PathBuf> = Vec::new();
+    for entry in fs::read_dir(dir).map_err(|e| HarnessError::Io(dir.to_path_buf(), e))? {
+        let entry = entry.map_err(|e| HarnessError::Io(dir.to_path_buf(), e))?;
+        let path = entry.path();
+        if !path.is_dir() {
+            return Err(HarnessError::Invalid(format!(
+                "unexpected entry `{}` in {}: the profiles directory holds only profile subdirectories",
+                path.display(),
+                dir.display()
+            )));
+        }
+        subdirs.push(path);
+    }
     subdirs.sort();
 
     let mut profiles = Vec::with_capacity(subdirs.len());
     for subdir in subdirs {
+        for entry in fs::read_dir(&subdir).map_err(|e| HarnessError::Io(subdir.clone(), e))? {
+            let entry = entry.map_err(|e| HarnessError::Io(subdir.clone(), e))?;
+            let entry_path = entry.path();
+            let entry_name = entry_path
+                .file_name()
+                .and_then(|s| s.to_str())
+                .unwrap_or_default();
+            let allowed = (entry_path.is_file()
+                && (entry_name == "PROFILE.toml" || entry_name == "PROFILE.md"))
+                || (entry_path.is_dir() && entry_name == "corpus");
+            if !allowed {
+                return Err(HarnessError::Invalid(format!(
+                    "unexpected entry `{}` in {}: a profile directory holds only PROFILE.toml, \
+                     PROFILE.md, and (once built) a corpus/ directory",
+                    entry_path.display(),
+                    subdir.display()
+                )));
+            }
+        }
+
         let path = subdir.join("PROFILE.toml");
         let text = fs::read_to_string(&path).map_err(|e| HarnessError::Io(path.clone(), e))?;
         let profile = parse_profile(&text).map_err(|e| HarnessError::Parse(path.clone(), e))?;
@@ -321,6 +376,24 @@ pub fn load_profiles() -> Result<Vec<Profile>, HarnessError> {
                 "profile `{}` has an empty corpus_milestone",
                 profile.name
             )));
+        }
+        let corpus_dir = subdir.join("corpus");
+        match profile.corpus {
+            CorpusStatus::Built if !corpus_dir.is_dir() => {
+                return Err(HarnessError::Invalid(format!(
+                    "profile `{}` declares corpus = \"built\" but {} does not exist",
+                    profile.name,
+                    corpus_dir.display()
+                )));
+            }
+            CorpusStatus::Scheduled if corpus_dir.is_dir() => {
+                return Err(HarnessError::Invalid(format!(
+                    "profile `{}` declares corpus = \"scheduled\" but {} exists",
+                    profile.name,
+                    corpus_dir.display()
+                )));
+            }
+            _ => {}
         }
         profiles.push(profile);
     }
