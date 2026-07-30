@@ -9,7 +9,7 @@ This repository starts life by extraction: the product documentation set (six do
 
 ## Decision
 
-- **The six product documents live at the repository root**: `README.md`, `PRODUCT.md`, `ABSTRACTIONS.md`, `ARCHITECTURE.md`, `BETA.md`, `STRATEGY.md`. The README is the repo front page; the other five are its immediate siblings, cross-linked with plain relative links.
+- **The six product documents live at the repository root**: `README.md`, `PRODUCT.md`, `ABSTRACTIONS.md`, `ARCHITECTURE.md`, `BETA.md`, `STRATEGY.md`. The README is the repo front page; the other five are its immediate siblings, cross-linked with plain relative links. At M1 this root set *is* the documentation source; standing up dogtag.dev to front it (site plus hosted install script) is deliberately deferred to a later milestone.
 - **Two decision trails under `docs/`**: `docs/decisions/` holds the product decision records (PDRs — timeless product stances, written for any PKM), `docs/adr/` holds this repository's own build decisions. Each has a README stating its conventions.
 - **Code by role**: `crates/dogtag` (the SDK — the product kernel) and `crates/dogtag-cli` (a consumer of the SDK's public API) under `crates/`; the conformance harness, scenarios, and fixture-profile specs under `conformance/`; the reserved TypeScript scaffold under `bindings/typescript/`; shared shell logic under `scripts/`; workflows under `.github/workflows/`.
 - **Operational files at the root**: `LICENSE`, `AGENTS.md` (canonical repo instructions, with `CLAUDE.md` as a pointer), `justfile`, `install.sh`.

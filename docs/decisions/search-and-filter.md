@@ -45,7 +45,7 @@ The Intent and the "facets + search + sort + group, never a builder" stance are 
 - **TUI** — the navigation surface this decision most shapes: faceted narrowing, searchable facet picker, sort/group, full-text — measured instant at full corpus scale; type-to-filter narrows (implicit AND, prefix on the active token) per the two-intents split.
 - **MCP** — faceting as tool parameters over the same substrate (`search` / `list` / `tags`), programmatic and remote. The no-builder invariant holds shape here too: the tools stay facet- and search-shaped, not a SQL passthrough.
 - **CLI / SDK** — the search box (broad-match ranked search) and name resolution as the scriptable entry points.
-- **Tolaria (GUI fallback)** — the cross-surface confirmation: faceted sidebar, saved views, full-text — the same model in GUI chrome, evidence that the model, not the chrome, is what matters.
+- **GUI editor (fallback)** — the cross-surface confirmation: faceted sidebar, saved views, full-text — the same model in GUI chrome, evidence that the model, not the chrome, is what matters.
 
 ## Notes
 

@@ -25,7 +25,7 @@ Recipes live in the [justfile](justfile); `just` alone lists them.
 - `just conformance` — run the conformance harness and print the scenario × profile matrix.
 - `just dist` — release-build the CLI and package a host-target archive into `dist/`, using the same script as the release pipeline.
 - `just install-local` — rehearse `install.sh` end-to-end against the locally packaged `dist/`.
-- `just links` — offline check of internal Markdown links (needs `lychee`; prints install advice otherwise).
+- `just links` — offline check that relative Markdown links resolve, via the dependency-free `scripts/check-links.sh` (the same script the CI links job runs).
 
 ## Commits
 

@@ -50,7 +50,7 @@ The type system is substrate-enforced and UI-independent; surfaces consume it di
 - **CLI / SDK (authoring — where type is enforced).** Note creation stamps template + required frontmatter + the discriminator; the lint fails any note whose `type:` is missing or malformed; completion offers the valid class/subtype enums; the CLI prints the live schema.
 - **TUI (consumption).** Type drives faceted browse, grouping, and the type-sectioned index ([search-and-filter](search-and-filter.md)); displays the type, doesn't author it.
 - **MCP.** Type is a filter and a return field — `list`/`search` scope by class and subtype; the same taxonomy with programmatic and remote reach.
-- **Tolaria (GUI fallback).** Reads the discriminator to bind each note to its class-level fields and views.
+- **GUI editor (fallback).** Reads the discriminator to bind each note to its class-level fields and views.
 
 ## Notes
 

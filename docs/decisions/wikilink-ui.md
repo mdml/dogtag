@@ -39,7 +39,7 @@ The bundle and the capability set are substrate; each surface picks its renderin
 - **TUI (reading).** Renders links as prose, not source (brackets stripped, alias honored); today's bare-link display is a humanized slug — the degraded fallback, with the title-in-the-index column the named substrate gap; type and status already color list rows from the same vocabulary the bundle would carry; backlinks as a pane.
 - **CLI / SDK (authoring).** Editor completion is the candidate query in practice — matching basenames and frontmatter aliases, inserting the `[[slug|Alias]]` form (markdown-oxide in the incumbent tooling); the link lints (body and frontmatter) are the committed-corpus arm of unresolved handling.
 - **MCP.** The bundle's fields are return fields — an agent reading a note gets targets with names, types, and states, and `backlinks` is already a first-class tool; the same contract, programmatic.
-- **Tolaria (GUI fallback).** The precedent for name-set display (H1 as display identity) and for presentational richness from structured links (labeled typed inverses).
+- **GUI editor (fallback).** The incumbent editor is the precedent for name-set display (H1 as display identity) and for presentational richness from structured links (labeled typed inverses).
 
 ## Notes
 

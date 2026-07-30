@@ -1,6 +1,6 @@
 # Dogtag — product
 
-> **Status: beta product draft, started 2026-07-03; spin-off activated 2026-07-29.** The product case for **Dogtag-the-tool** — the shareable SDK a stranger can install, with the maintainers' incumbent vault demoted to one configuration of it. Working doc for maintainers and agents: blunt, dogtag context assumed. The `>` blocks are drafting prompts — answer them, then delete them. Companions: [README.md](README.md), [ABSTRACTIONS.md](ABSTRACTIONS.md), [ARCHITECTURE.md](ARCHITECTURE.md), [BETA.md](BETA.md), and [STRATEGY.md](STRATEGY.md). **Target artifact:** a standalone shareable doc set for beta users, collaborators, SDK consumers, and build partners. The decisions pass closed in the maintainers' private planning record; extraction and release sequencing lives in [BETA.md](BETA.md) and the product repository's ADR trail (`docs/adr/`).
+> **Status: beta product draft, started 2026-07-03; spin-off activated 2026-07-29.** The product case for **Dogtag-the-tool** — the shareable SDK a stranger can install, with the maintainers' incumbent vault demoted to one configuration of it. Working doc for maintainers and agents, published as it stands: the `>` blocks mark product questions the maintainers have deliberately not yet answered — they are the open edges of the case, kept visible rather than polished away. Companions: [README.md](README.md), [ABSTRACTIONS.md](ABSTRACTIONS.md), [ARCHITECTURE.md](ARCHITECTURE.md), [BETA.md](BETA.md), and [STRATEGY.md](STRATEGY.md). **Target artifact:** a standalone shareable doc set for beta users, collaborators, SDK consumers, and build partners. The decisions pass closed in the maintainers' private planning record; extraction and release sequencing lives in [BETA.md](BETA.md) and the product repository's ADR trail (`docs/adr/`).
 
 ## Thesis
 
@@ -16,7 +16,7 @@ The labor agents provide comes in three flavors. They draft notes, fixing typos,
 
 At the same time, it's not as simple as pointing an agent at a folder and asking for a knowledge base (in Dogtag, like Obsidian, a "vault"). Agents have limited context and memory, so can't keep the structure in their heads. They need a contract to maintain and enforce.
 
-The root problem with existing tools is where the operations layer lives — the templates, validation, structure semantics, and indexes that turn text files into a knowledge base. Database-like tools (Notion, Roam, Craft) expose both the data layer (text, binary files) and the operations layer only through a minimal API. Markdown tools (Obsidian, Tolaria) use the file system for the data layer, but keep operations in the app: templates are app config, validation is a plugin or absent, and link/type semantics execute only in the app's runtime. Either way, the operations layer is only fully available via the GUI.
+The root problem with existing tools is where the operations layer lives — the templates, validation, structure semantics, and indexes that turn text files into a knowledge base. Database-like tools (Notion, Roam, Craft) expose both the data layer (text, binary files) and the operations layer only through a minimal API. Markdown tools (Obsidian, [Tolaria](https://github.com/refactoringhq/tolaria)) use the file system for the data layer, but keep operations in the app: templates are app config, validation is a plugin or absent, and link/type semantics execute only in the app's runtime. Either way, the operations layer is only fully available via the GUI.
 
 The new agentic AI era has led to a massive increase of interest in Markdown-based knowledge management, but the use cases are limited by coupling the data and operations layers. Drafting with an agent requires a follow-up pass to insert wikilinks and structure properly; ingestion and synthesis are out of reach. Deployment is blocked the same way: a wiki site, an MCP endpoint, or simply sharing a vault over Git all need the operations layer without the GUI. To compensate, users write scripts or write documentation to configure the apps — that is, when they don't just skip building a knowledge base at all.
 
@@ -32,7 +32,7 @@ For Dogtag, the knowledge base contract is the product. The categorization, temp
 | Exec team | meetings, decisions, and documents scattered across tools | org memory: a decision log and a browsable wiki that someone (an agent) actually maintains |
 | Decision maker | a high-stakes, multi-party project and no appetite for tooling | a maintained record of who said what, when, and what was decided — set up *for* them, not *by* them |
 
-Two examples anchor the decision-maker row: an owner's representative on a construction project, tracking commitments across meetings, emails, and change orders; and an adult child coordinating an aging parent's doctor's appointments and prescriptions. In both, the beneficiary is not the installer — someone technical stands the vault up, and the agent does the upkeep.
+Two examples anchor the decision-maker row: an estate executor tracking obligations across lawyers, banks, and beneficiaries; and an adult child coordinating an aging parent's doctor's appointments and prescriptions. In both, the beneficiary is not the installer — someone technical stands the vault up, and the agent does the upkeep.
 
 The floor, in comfort and spend: *guided* terminal use (install an agentic CLI, paste the commands the agent suggests, report back — the agent operates the tool) and any agentic-CLI subscription (nothing is Claude-specific — but without *some* subscription the agent labor that is the product doesn't exist). The decision-maker row bends the comfort floor further: setup needs a technical sponsor, and from then on their surface is conversation. Permanently not served: the AI-averse, for whom an agent writing into their notes is the premise failing, not a feature missing; and anyone unwilling to pay for the agent labor. Everything else — phone-first capture, team multi-writer conveniences — is staging, not exclusion; the Roadmap carries the order.
 
@@ -46,7 +46,7 @@ The floor, in comfort and spend: *guided* terminal use (install an agentic CLI, 
 
 The first hour — install, init or import, customize the schema, connect a remote — is the [README's Getting started](README.md#getting-started); it belongs to the doc a stranger reads first. The tour here picks up at steady state.
 
-Day to day, the agent is the primary operator — capture, triage, ingestion, and synthesis all run through it — and the human touches the vault directly in exactly two places: the shipped minimal TUI for browse and search, and their own editor for writing, with the on-disk dialect configured per machine for that editor (Obsidian and Tolaria at launch) — so teammates sharing a vault can each keep their favored editor. The MCP server is the surface for software: other agents, remote clients, future phone capture. Scheduled labor is the user's to compose — Dogtag ships the verbs a schedule would call, and your agent can build the routine around them; the schedulability is the product, the scheduler is not.
+Day to day, the agent is the primary operator — capture, triage, ingestion, and synthesis all run through it — and the human touches the vault directly in exactly two places: the shipped minimal TUI for browse and search, and their own editor for writing, with the on-disk dialect configured per machine for that editor (Obsidian and [Tolaria](https://github.com/refactoringhq/tolaria) at launch) — so teammates sharing a vault can each keep their favored editor. The MCP server is the surface for software: other agents, remote clients, future phone capture. Scheduled labor is the user's to compose — Dogtag ships the verbs a schedule would call, and your agent can build the routine around them; the schedulability is the product, the scheduler is not.
 
 Just as deliberate is what's absent. No query builder — faceted browse and search over the authored structure replace it. No sync service — git is the store. No bundled scheduler, no embedded editor, no plugin system: the contract makes all of these cheap to build yourself, and keeping them out keeps the product small enough to trust.
 
@@ -76,15 +76,15 @@ How it's built is [ARCHITECTURE.md](ARCHITECTURE.md); the concepts it's built fr
 
 ## Roadmap
 
-> - Smallest shareable artifact that tests the thesis — a template repo? one guided friend-onboarding? Two beta users, a build partner, and a distribution partner are already identified (names stay out of the shared doc).
+> - Smallest shareable artifact that tests the thesis — a template repo? one guided friend-onboarding?
 > - Staging: which personas v1 serves (the maintainers → technical friends → set-up-for-someone-else vaults), and what graduates later (starter kits + schema interview, phone-first capture, team multi-writer conveniences).
-> - Stage gates: what must be true to start extraction (all eight PDRs written? schema stable N days?), to onboard the first beta user, to go public?
+> - Stage gates: what must be true to onboard the first beta user, to go public? (The extraction gate itself is resolved: the PDR set closed and the product repository exists.)
 > - Extraction deliverable is a pair: this spec + an executable conformance suite (the round-trip properties and golden vaults from Architecture's ship-daily pillar). The suite is the machine-readable spec — what a coding agent builds against in a loop, and what makes a one-shot agent build plausible; the prose stays for humans.
 > - What signal would kill the spin-off — and is "stays a private tool forever" an acceptable terminal state?
 
 ## Open questions
 
-> - Park what's genuinely undecided, dated: the name (dogtag-the-repo vs. dogtag-the-tool)? support-burden tolerance? relationship to Tolaria?
+> - Park what's genuinely undecided, dated: the name (dogtag-the-repo vs. dogtag-the-tool)? support-burden tolerance?
 > - Distribution asset resolved 2026-07-29: `dogtag.dev` is already owned for the install script, SDK docs, compatibility guidance, and product site; an existing logo is the beta's starting brand asset.
 > - License resolved 2026-07-30: **Apache-2.0** from a public repository, deliberately foreclosing the paid branch before E1/E2 produce evidence — an SDK whose premise is that others embed it isn't served by a license its audience must think about. If a paid question returns, it returns as something built beside the SDK, not as a retraction of it. Rationale and rejected alternatives are recorded in the maintainers' private planning record.
 > - Platform floor: macOS + Linux at v1 is the assumption; when (whether) Windows.

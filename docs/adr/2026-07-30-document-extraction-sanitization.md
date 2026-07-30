@@ -29,4 +29,5 @@ The documents were moved in one sanitization pass governed by these rules:
 - The documents keep honest dates and decision history while carrying no private content; a dedicated privacy review pass verifies the result mechanically (pattern searches for the removed categories) before release.
 - A few corroborating claims now stand without their receipts. Readers must take them on the record's word; that trade was accepted deliberately in favor of participant and infrastructure privacy.
 - Future edits to the six documents and PDRs happen here, under these same rules — anything drafted privately first must pass the same transformation before it lands.
+- The same gate binds future fixture work: a derived fixture contract (the `dense` profile's, mechanically derived from a private corpus's schema) publishes that corpus's type names, property vocabulary, and lifecycle words, and therefore requires its own dedicated privacy pass — renaming or pruning personal vocabulary — before it lands.
 - This ADR is itself written under rule 6: it describes the transformation without reproducing anything the transformation removed.

@@ -13,18 +13,18 @@ The beta promises a small, auditable supply chain: a single static binary users 
 - **Pin via manifest + lockfile + `--locked`.** Manifests state the exact current version with cargo's default caret semantics (e.g. `clap = "4.6.4"`); `Cargo.lock` is committed; CI and release builds pass `--locked`. Together these give byte-for-byte dependency reproducibility while keeping the manifests conventional for the day the crates publish.
 - **GitHub Actions pinned to full commit SHAs**, each with a `# vX.Y.Z` comment naming the release the SHA corresponds to. No floating tags. Workflows use only the built-in `GITHUB_TOKEN`, with least-privilege `permissions` blocks.
 - **Toolchain pinned exactly** (`1.97.1` in `rust-toolchain.toml`), so local, CI, and release builds compile with the same compiler.
-- **Review cadence.** Pins are bumped deliberately — reviewed at each milestone, or immediately on a security advisory — in commits that touch only the pins. No auto-update bots at this stage; the update stream would drown a solo-maintained beta in noise, and unreviewed automated bumps are themselves a supply-chain vector.
+- **Update stream: Dependabot, human-merged.** `.github/dependabot.yml` enables Dependabot for the `github-actions` and `cargo` ecosystems on a weekly schedule. It only opens PRs; every bump lands through a human-reviewed PR, and nothing merges automatically — automation proposes, a maintainer disposes. Pins are also bumped deliberately outside that stream — at each milestone review, or immediately on a security advisory — in commits that touch only the pins. Dependabot is not an alert channel: the maintainers still watch advisories (RustSec, GitHub advisories) directly, because a weekly PR cadence is too slow for an active exploit.
 
 ### Alternatives considered
 
 - **Exact `=` requirements in the manifests.** Rejected: redundant with the committed lockfile plus `--locked`, and hostile to downstream resolution once the crates publish — `=` pins in a published library force unification conflicts on consumers.
 - **Floating action tags (`actions/checkout@v4`).** Rejected: tags are mutable; a moved tag is the standard mechanism of CI supply-chain compromise. The `# vX.Y.Z` comment keeps SHA pins human-readable.
 - **Not committing `Cargo.lock`** (the old library convention). Rejected: the workspace ships a binary and a release pipeline whose reproducibility is the point; current cargo guidance favors committing lockfiles anyway.
-- **Dependabot/Renovate from day one.** Deferred, not refused: once the dependency tree or contributor count grows, automated update PRs with human review may beat milestone-cadence sweeps. Revisit when either happens.
+- **No auto-update bots.** Rejected: pins rot. SHA-pinned actions and exact dependency versions go silently stale, and milestone-cadence sweeps alone would leave known fixes unapplied for weeks at a time. Weekly Dependabot PRs surface the drift while human review keeps unreviewed automated bumps — themselves a supply-chain vector — out of the tree; the small dependency set keeps the PR volume from drowning a solo-maintained beta.
 
 ## Consequences
 
 - Reproducible builds: same compiler, same dependency graph, same action code on every run.
-- Staleness is the accepted cost — security fixes arrive on the review cadence, not automatically. The advisory-triggered exception in the cadence is the mitigation, and it depends on the maintainers actually watching advisories (RustSec, GitHub advisories).
+- Update latency is the accepted cost — fixes land only when a human reviews and merges the weekly Dependabot PRs or makes an advisory-triggered bump, never automatically. The advisory-triggered exception is the fast path, and it depends on the maintainers actually watching advisories (RustSec, GitHub advisories) rather than waiting on the bot.
 - SHA-pinned actions are unreadable without their comments; keeping comment and SHA in sync is a review obligation.
 - Adding any new dependency is a visible, reviewable act — which is exactly the friction intended.

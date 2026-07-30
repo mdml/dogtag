@@ -40,7 +40,7 @@ The graph model, the one-direction invariant, and the derived-inverse contract a
 - **CLI / SDK (authoring).** Predicates are stamped and validated at note creation; entity targets resolve via name lookup; the lint resolves every typed-link value.
 - **TUI (traversal).** Backlinks and neighborhood as a consumption view — the dependency closure and inverse, navigable keyboard-first.
 - **MCP.** `backlinks` as a first-class tool; typed-link fields returned on `show`; the same graph, programmatic and remote.
-- **Tolaria (GUI fallback).** Renders labeled typed inverses from the frontmatter arrays — the capability that motivated the metadata-plane form.
+- **GUI editor (fallback).** Renders labeled typed inverses from the frontmatter arrays — the capability that motivated the metadata-plane form.
 
 ## Notes
 

@@ -11,8 +11,8 @@
 
 ## What the fixture is
 
-A corpus whose shape follows a real decision-records practice: a record taxonomy, closed-write originals, and citation chains. The fixture is built in coordination with its source's author before assisted adoption; attribution is recorded when the corpus lands.
+A corpus whose shape follows a real decision-records practice: a record taxonomy, closed-write originals, and citation chains. The fixture corpus is authored fresh for the profile before assisted adoption begins; any attribution it owes is recorded when the corpus lands.
 
 ## Why it is not built yet
 
-The committed vault-contract format is an M2 decision, and this profile's hypothesis — that a stranger's record-keeping discipline fits the configuration seam without any personal convention entering the kernel — is exactly what assisted adoption (E1) tests. Building it in coordination with its source, immediately before that experiment, is the point; specifying it now keeps every earlier scenario honest about the axes it must survive.
+The committed vault-contract format is an M2 decision, and this profile's hypothesis — that a stranger's record-keeping discipline fits the configuration seam without any personal convention entering the kernel — is exactly what assisted adoption (E1) tests. Building it immediately before that experiment is the point; specifying it now keeps every earlier scenario honest about the axes it must survive.

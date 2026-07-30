@@ -39,7 +39,7 @@ The derivation, the commit standard, and the enforcement are substrate; surfaces
 - **CLI / SDK (the write path).** Already actor-typed and scoped per the commit posture — every agent write lands as its own attributed commit; the trailer standard (actor identity + provenance kind, machine-parseable) is the named follow-on that completes the record.
 - **TUI (reading).** Voice rendering once the attribution index exists — a whose-voice gutter or span tinting, driven by the derived verb; per-note summary in the header meanwhile.
 - **MCP.** Attribution as query and return fields — an agent checks a note's ownership policy and carve-outs *before* writing (refusal is substrate-side regardless), and can scope reads to a voice ("only my owner's prose").
-- **Tolaria (GUI fallback).** The cautionary case twice over: its serializer's whole-file rewrites are exactly the authorship-stealing failure the round-trip contract exists to prevent, and its rendering of in-band markers as literal text is part of why marking-as-presentation is config, not contract.
+- **GUI editor (fallback).** The incumbent fallback editor is the cautionary case twice over: its serializer's whole-file rewrites are exactly the authorship-stealing failure the round-trip contract exists to prevent, and its rendering of in-band markers as literal text is part of why marking-as-presentation is config, not contract.
 
 ## Notes
 

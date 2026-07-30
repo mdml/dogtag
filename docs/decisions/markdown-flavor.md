@@ -40,7 +40,7 @@ The dialect and the round-trip contract are UI-independent; what differs per sur
 - **TUI** — a pure reader: renders the dialect (wikilinks resolved, frontmatter as a clean header, fences folded) and writes nothing, so the contract costs it nothing.
 - **CLI / SDK** — the authoring surfaces. A text editor edits bytes directly and preserves what it doesn't understand *by construction*; the substrate's write verbs write schema-validated frontmatter, which is the "conversion owned by the tool" half of the contract.
 - **MCP** — reads freely; writes only through substrate verbs, never raw file rewrites.
-- **Tolaria (GUI fallback)** — the cautionary case: a parse-and-reserialize editor held to the contract externally (guard-lints, a pinned version) because it can't honor it internally. A conforming GUI would edit through the canonical form + dialect-boundary model instead.
+- **GUI editor (fallback)** — the cautionary case: the incumbent is a parse-and-reserialize editor held to the contract externally (guard-lints, a pinned version) because it can't honor it internally. A conforming GUI would edit through the canonical form + dialect-boundary model instead.
 
 ## Notes
 

@@ -49,9 +49,9 @@ The SDK always makes a shared-contract plan available and rejects invalid or una
 | Owning PDR | Committed vault contract | Installation binding or surface state |
 | --- | --- | --- |
 | [markdown-flavor](markdown-flavor.md) | Canonical dialect inventory | Materialized editor dialect |
-| [note-types](note-types.md) | Type taxonomy, stable role bindings, required properties, edit-policy hooks | Type presentation |
+| [note-types](note-types.md) | Type taxonomy, capability declarations, required properties, edit-policy hooks | Type presentation |
 | [relationships](relationships.md) | Predicate vocabulary, required relationships, optional reification and derived lenses | Relationship presentation |
-| [lifecycle](lifecycle.md) | State and flag labels, stable role bindings, eligible types | State presentation and filters |
+| [lifecycle](lifecycle.md) | State and flag labels, the declared axis and flag bindings, eligible types | State presentation and filters |
 | [search-and-filter](search-and-filter.md) | Indexed fields and ranking, semantic model, saved views | Interaction idiom and local index placement |
 | [wikilink-ui](wikilink-ui.md) | Alias policy, candidate ranking, external-resolution policy | Display name, color, glyphs, modes, and gestures |
 | [inbox-workflow](inbox-workflow.md) | Birth states, composite workflows, named routing slots | Capture bindings, routing integrations, triggers, and cadence |
