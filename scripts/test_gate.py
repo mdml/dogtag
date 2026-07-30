@@ -389,10 +389,21 @@ class CommitRangeTest(unittest.TestCase):
 
 
 class PrerequisiteTest(unittest.TestCase):
-    """A missing prerequisite must name the command that fixes it."""
+    """A missing prerequisite fails its step, and only its step.
+
+    Three behaviours that have to hold together. It must be a **failure**,
+    never a skip: a Code Health gate that reports success without a token
+    measured nothing. It must be scoped to the steps that need it, so an
+    absent token cannot cost eighteen unrelated gates. And it must be
+    resolved per step rather than as a suite-wide preflight, so the run
+    still happens and the report is still complete.
+    """
+
+    def without_token(self):
+        return mock.patch.dict(os.environ, {"CS_ACCESS_TOKEN": ""}, clear=False)
 
     def test_a_missing_token_names_where_to_get_one(self) -> None:
-        with mock.patch.dict(os.environ, {"CS_ACCESS_TOKEN": ""}, clear=False):
+        with self.without_token():
             missing = gate.missing_prereqs({"codescene"})
         self.assertTrue(any("codescene.io/users/me/pat" in m for m in missing), missing)
 
@@ -402,14 +413,75 @@ class PrerequisiteTest(unittest.TestCase):
         self.assertTrue(any("just install-dev-tools" in m for m in missing), missing)
         self.assertTrue(any("github.com/google/osv-scanner" in m for m in missing), missing)
 
-    def test_prerequisites_of_steps_that_were_not_asked_for_are_not_required(self) -> None:
-        with mock.patch.dict(os.environ, {"CS_ACCESS_TOKEN": ""}, clear=False):
+    def test_several_missing_prerequisites_are_all_named(self) -> None:
+        """cs, jq and the token are three separate things to fix."""
+        with self.without_token(), mock.patch.object(gate.shutil, "which", return_value=None):
+            missing = gate.missing_prereqs({"codescene"})
+        self.assertEqual(len(missing), 3, missing)
+        self.assertTrue(any("`cs`" in m for m in missing), missing)
+        self.assertTrue(any("`jq`" in m for m in missing), missing)
+        self.assertTrue(any("CS_ACCESS_TOKEN" in m for m in missing), missing)
+
+    def test_prerequisites_are_resolved_per_step_not_across_the_suite(self) -> None:
+        with self.without_token():
             self.assertEqual(gate.missing_prereqs({"fmt", "clippy", "tests"}), [])
+            self.assertTrue(gate.missing_prereqs({"codescene"}))
 
     def test_every_prerequisite_names_steps_that_exist(self) -> None:
         for prereq in gate.PREREQS:
             for step_id in prereq.steps:
                 self.assertIn(step_id, gate.BY_ID, prereq.label)
+
+    def blocked_step(self, verbose: bool) -> gate.Result:
+        with self.without_token(), mock.patch("sys.stdout"):
+            return gate.run_step(gate.BY_ID["codescene"], scratch(self), verbose)
+
+    def test_a_blocked_step_fails_rather_than_skipping(self) -> None:
+        result = self.blocked_step(False)
+        self.assertEqual(result.status, "fail")
+        self.assertNotEqual(result.code, 0)
+        self.assertIn("CS_ACCESS_TOKEN", result.detail)
+
+    def test_a_blocked_step_never_spawns_anything(self) -> None:
+        self.assertIsNone(self.blocked_step(False).log)
+
+    def test_both_modes_block_the_step_identically(self) -> None:
+        summary, verbose = self.blocked_step(False), self.blocked_step(True)
+        self.assertEqual(
+            (summary.status, summary.detail, summary.code),
+            (verbose.status, verbose.detail, verbose.code),
+        )
+
+    def suite_without_token(self, verbose: bool) -> tuple[list[gate.Result], int]:
+        steps = (gate.BY_ID["fmt"], gate.BY_ID["codescene"], gate.BY_ID["rulesets"])
+        with self.without_token(), mock.patch("sys.stdout"), mock.patch("sys.stderr"):
+            results = gate.run_steps(steps, verbose, scratch(self))
+            return results, gate.finish("gate", results, 0.0, verbose)
+
+    def test_unaffected_steps_still_run_and_the_suite_still_fails(self) -> None:
+        results, code = self.suite_without_token(False)
+        self.assertEqual([r.status for r in results], ["pass", "fail", "pass"])
+        self.assertNotEqual(code, 0, "a blocked step must fail the suite")
+
+    def test_the_suite_result_is_the_same_in_verbose_mode(self) -> None:
+        summary, summary_code = self.suite_without_token(False)
+        verbose, verbose_code = self.suite_without_token(True)
+        self.assertEqual([r.status for r in summary], [r.status for r in verbose])
+        self.assertEqual(summary_code, verbose_code)
+
+    def test_the_actionable_message_reaches_the_summary_and_the_dump(self) -> None:
+        results, _ = self.suite_without_token(False)
+        blocked = results[1]
+        self.assertIn("export a PAT", blocked.detail)
+        dump = capture_stderr(lambda: gate.report_failures(results, False))
+        self.assertIn("export a PAT", dump)
+        self.assertIn("codescene", dump)
+
+    def test_verbose_still_prints_the_reason_it_could_not_run(self) -> None:
+        """There is no streamed body to fall back on, so the dump must say it."""
+        results, _ = self.suite_without_token(True)
+        dump = capture_stderr(lambda: gate.report_failures(results, True))
+        self.assertIn("export a PAT", dump)
 
 
 class TemporaryFileTest(unittest.TestCase):

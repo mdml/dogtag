@@ -132,6 +132,15 @@ AUTHORITY = {
 }
 
 
+# How each kind of prerequisite reads when it is absent, so the message a
+# step fails with is a sentence rather than a label and a hint.
+ABSENT = {
+    "command": "is not on PATH",
+    "toolchain": "is not installed",
+    "env": "is not set",
+}
+
+
 class Prereq(NamedTuple):
     """Something a step cannot run without, and the one command that fixes it."""
 
@@ -141,13 +150,16 @@ class Prereq(NamedTuple):
     value: str
     steps: tuple[str, ...]
 
+    def message(self) -> str:
+        return f"{self.label} {ABSENT[self.kind]}; {self.fix}"
+
 
 INSTALL = "run `just install-dev-tools`"
 PREREQS = (
     Prereq(
         "the `cs` command",
-        "run `just install-dev-tools` (which covers Linux x86_64 only; other "
-        "architectures need a sha256 recorded in tools.toml first)",
+        "run `just install-dev-tools` (Linux x86_64 only; other architectures "
+        "need a sha256 recorded in tools.toml first)",
         "command",
         "cs",
         ("codescene",),
@@ -208,9 +220,16 @@ PROBES: dict[str, Callable[[str], bool]] = {
 
 
 def missing_prereqs(step_ids: set[str]) -> list[str]:
-    """Prerequisites the requested steps need and this machine lacks."""
+    """Prerequisites these steps need and this machine lacks.
+
+    Resolved per step, and never suite-wide. A missing CodeScene token is a
+    reason for the Code Health gate to **fail** — not a reason to skip it,
+    which would report success without measuring, and not a reason to abort
+    the suite, which would throw away eighteen gates that had nothing to do
+    with the token.
+    """
     return [
-        f"{prereq.label} ({', '.join(prereq.steps)}) — {prereq.fix}"
+        prereq.message()
         for prereq in PREREQS
         if step_ids & set(prereq.steps) and not PROBES[prereq.kind](prereq.value)
     ]
@@ -469,8 +488,19 @@ def measure(step: Step, log: Path) -> str:
     return found
 
 
+PREREQ_EXIT = 1
+
+
 def run_invocation(job: Invocation, tmp: Path, verbose: bool) -> Result:
-    """Run one resolved invocation to completion and read its evidence."""
+    """Run one resolved invocation to completion and read its evidence.
+
+    A step whose prerequisites are absent fails here, before anything is
+    spawned, carrying the message that names the fix. Every other step in the
+    run is unaffected and still runs.
+    """
+    missing = missing_prereqs({job.step.id})
+    if missing:
+        return Result(job, "fail", "; ".join(missing), PREREQ_EXIT, None)
     if job.skip:
         return Result(job, "skip", job.skip, 0, None)
     log = tmp / f"{job.step.id}.log"
@@ -514,7 +544,11 @@ def report_failures(results: list[Result], verbose: bool) -> None:
     for result in (r for r in results if r.status == "fail"):
         print(f"\n── {result.step.id} (exit {result.code}) ──", file=sys.stderr)
         print(f"$ {result.invocation.rendered()}", file=sys.stderr)
-        if not verbose:
+        if result.log is None:
+            # A prerequisite failure never ran anything, so the message it
+            # carries is the whole diagnosis.
+            print(result.detail, file=sys.stderr)
+        elif not verbose:
             sys.stderr.write(result.log.read_text(errors="replace"))
 
 
@@ -571,13 +605,6 @@ def print_list() -> None:
     for step in STEPS:
         suites = " ".join(name for name, ids in SUITES.items() if step.id in ids)
         print(f"{step.id:<{width}}  {suites:<16}  {Invocation(step, step.argv, '').rendered()}")
-
-
-def fail_prereqs(missing: list[str]) -> int:
-    print(f"gate: {len(missing)} prerequisite(s) missing:", file=sys.stderr)
-    for item in missing:
-        print(f"  - {item}", file=sys.stderr)
-    return 1
 
 
 def label_for(names: list[str]) -> str:
@@ -659,9 +686,6 @@ def main() -> int:
     problem = step_problem(steps, unknown)
     if problem:
         return usage(problem)
-    missing = missing_prereqs({step.id for step in steps})
-    if missing:
-        return fail_prereqs(missing)
     return run_suite(steps, names, "--verbose" in arguments)
 
 
