@@ -1,0 +1,11 @@
+name = "docs"
+persona = "the dev team"
+distinguishing_axes = [
+  "repository documentation shapes",
+  "folder organization",
+  "markdown-link dialect",
+  "most files carrying no frontmatter",
+  "repeated basenames",
+]
+corpus = "scheduled"
+corpus_milestone = "M4"

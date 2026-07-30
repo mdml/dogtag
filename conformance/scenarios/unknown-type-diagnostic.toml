@@ -1,0 +1,16 @@
+id = "unknown-type-diagnostic"
+title = "An undeclared type discriminator yields a stable diagnostic"
+milestone = "M2"
+status = "pending"
+contract = """
+Given a corpus that conforms except for one note whose type discriminator
+names no type the contract declares.
+
+When the corpus is validated.
+
+Then validation reports one diagnostic with a stable identifier addressed to
+that note, and the corpus still opens and reads: one undeclared discriminator
+is never a corpus-level failure. The declared catch-all type accepts
+unclassified capture; it does not silently absorb an explicit discriminator
+the contract never declared.
+"""

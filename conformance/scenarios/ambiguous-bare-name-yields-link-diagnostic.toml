@@ -1,0 +1,16 @@
+id = "ambiguous-bare-name-yields-link-diagnostic"
+title = "An ambiguous bare-name reference yields a link diagnostic, never a corpus error"
+milestone = "M3"
+status = "pending"
+contract = """
+Given a corpus in which more than one note bears the same name — repeated
+names are legal — and a reference written as that bare name in the profile's
+declared dialect.
+
+When the corpus is read and the reference is resolved.
+
+Then the corpus opens and reads normally, and resolution reports a link
+diagnostic with a stable identifier addressed to the ambiguous reference
+itself. Ambiguity is never reported as a corpus-level error, and resolving it
+never requires renaming any note first.
+"""

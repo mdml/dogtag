@@ -1,0 +1,14 @@
+id = "conforming-corpus-zero-diagnostics"
+title = "A conforming corpus yields zero diagnostics"
+milestone = "M2"
+status = "pending"
+contract = """
+Given a corpus in which every note carries a type the contract declares,
+satisfies every required property of that type, and every declared
+relationship resolves.
+
+When the corpus is validated.
+
+Then validation reports zero diagnostics — in every profile, whatever the
+profile's taxonomy, dialect, folder organization, or lifecycle encoding.
+"""

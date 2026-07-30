@@ -1,0 +1,9 @@
+name = "dense"
+persona = "the PKM enthusiast with an established corpus"
+distinguishing_axes = [
+  "many types, several identity-bearing",
+  "wikilink dialect",
+  "lifecycle where the ordinary state is absence",
+]
+corpus = "scheduled"
+corpus_milestone = "M2"

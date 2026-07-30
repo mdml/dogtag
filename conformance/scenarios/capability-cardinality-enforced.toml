@@ -1,0 +1,18 @@
+id = "capability-cardinality-enforced"
+title = "Capability enumeration and cardinality are enforced when the contract loads"
+milestone = "M2"
+status = "pending"
+contract = """
+Given contracts that assign capabilities to their declared types, where the
+identity-bearing capability admits any number of types (0..n), the catch-all
+capability admits exactly one, and the closed-write capability admits any
+number (0..n).
+
+When each contract is loaded.
+
+Then a contract declaring exactly one catch-all type loads; a contract
+declaring zero catch-all types fails to load with a stable diagnostic
+identifier; and a contract declaring two catch-all types fails to load with a
+stable diagnostic identifier. Enforcement reasons only over the declared
+capabilities, never over any type's name.
+"""

@@ -1,0 +1,13 @@
+id = "path-qualified-link-resolves"
+title = "A path-qualified reference resolves to exactly one note"
+milestone = "M3"
+status = "pending"
+contract = """
+Given a corpus in which more than one note bears the same name, and a
+reference qualified by path that targets one of them.
+
+When the reference is resolved.
+
+Then it resolves to exactly the note at that path. Identity is the path; the
+name is a shorthand.
+"""

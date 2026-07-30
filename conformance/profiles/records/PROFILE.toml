@@ -1,0 +1,9 @@
+name = "records"
+persona = "the decision maker"
+distinguishing_axes = [
+  "a dense domain record taxonomy",
+  "immutable originals under closed-write",
+  "evidence trails",
+]
+corpus = "scheduled"
+corpus_milestone = "pre-E1"

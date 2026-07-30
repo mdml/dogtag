@@ -1,0 +1,14 @@
+id = "show-returns-document-model"
+title = "Show returns the one shared document-model shape"
+milestone = "M3"
+status = "pending"
+contract = """
+Given any note in a conforming corpus.
+
+When the note is shown through the public SDK.
+
+Then the result is the one shared document-model shape — the note's identity
+(its path), its declared type, its properties as declared value kinds, its
+relationships, and its body — and that shape is identical across every
+profile, whatever the profile's taxonomy, dialect, or folder organization.
+"""

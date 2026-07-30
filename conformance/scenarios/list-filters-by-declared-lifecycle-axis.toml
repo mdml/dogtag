@@ -1,0 +1,18 @@
+id = "list-filters-by-declared-lifecycle-axis"
+title = "List filters by the declared lifecycle axis without any vocabulary reaching the core"
+milestone = "M3"
+status = "pending"
+contract = """
+Given a contract that names its lifecycle axis and declares how the ordinary
+state is encoded — including a profile where the ordinary state is a named
+value and a profile where the ordinary state is the absence of a value.
+
+When listing filters for notes in the ordinary state, and again for notes
+outside it.
+
+Then filtering is answered entirely from the declaration: the core reads
+which axis the contract named and what encoding the contract declared for the
+ordinary state, and neither the corpus's vocabulary nor any product-assumed
+lifecycle word reaches the core. The same filter expression works against
+every profile.
+"""

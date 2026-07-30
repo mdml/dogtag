@@ -1,0 +1,19 @@
+# Conformance harness. Never published: it exists to keep the SDK honest,
+# not to be consumed. See ../README.md for the no-waiver rule this crate's
+# structure enforces.
+
+[package]
+name = "dogtag-conformance"
+description = "Dogtag conformance harness: every scenario against every fixture profile, no waivers"
+publish = false
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+# The harness does NOT depend on the `dogtag` SDK at M1 — every scenario is
+# pending and there is nothing to call. When scenarios become executable the
+# harness consumes only the SDK's public API.
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+toml = { workspace = true }
