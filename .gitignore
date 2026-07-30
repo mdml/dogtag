@@ -2,3 +2,6 @@
 /dist
 node_modules/
 .DS_Store
+
+# Python bytecode from the checked-in helper scripts
+__pycache__/

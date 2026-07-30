@@ -1,0 +1,32 @@
+# Git hooks. Install them with `just hooks` (or `lefthook install`); the
+# pinned lefthook version lives in tools.toml.
+#
+# These hooks are a fast local feedback loop, not the enforcement boundary.
+# Every rule they check is checked again in CI over the pull request's whole
+# range, because `--no-verify` exists and hooks are not installed by default
+# on a fresh clone. A hook that catches a mistake before the commit is a
+# convenience; the required check is what makes the rule binding.
+
+commit-msg:
+  jobs:
+    - name: conventional-commit
+      # Built from this workspace, so the hook and the CI check run the same
+      # validator rather than two implementations that can disagree.
+      run: cargo run --quiet --locked -p commit-lint -- {1}
+
+pre-commit:
+  parallel: true
+  jobs:
+    - name: fmt
+      glob: "*.rs"
+      run: cargo fmt --all --check
+    - name: clippy
+      glob: "*.rs"
+      run: cargo clippy --all-targets --workspace --locked -- -D warnings
+    - name: code-health
+      # Delta only: scoring every file needs a network round trip per file.
+      # Skipped automatically when no CodeScene token is configured, since a
+      # hook that fails on a missing optional credential just gets bypassed.
+      run: ./scripts/codescene-gate.sh --staged
+      skip:
+        - run: test -z "$CS_ACCESS_TOKEN"

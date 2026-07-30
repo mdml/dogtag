@@ -4,6 +4,7 @@ members = [
     "crates/dogtag",
     "crates/dogtag-cli",
     "conformance/harness",
+    "tools/commit-lint",
 ]
 
 [workspace.package]
