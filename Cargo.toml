@@ -1,0 +1,19 @@
+[workspace]
+resolver = "3"
+members = [
+    "crates/dogtag",
+    "crates/dogtag-cli",
+]
+
+[workspace.package]
+version = "0.1.0-beta.0"
+edition = "2024"
+license = "Apache-2.0"
+repository = "https://github.com/mdml/dogtag"
+homepage = "https://dogtag.dev"
+rust-version = "1.85"
+
+[workspace.dependencies]
+clap = { version = "4.6.4", features = ["derive"] }
+serde = { version = "1.0.229", features = ["derive"] }
+toml = "1.1.4"

@@ -1,0 +1,11 @@
+[package]
+name = "dogtag"
+description = "PKM SDK for AI agents: the semantic kernel for typed Markdown vaults"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+rust-version.workspace = true
+
+[dependencies]
