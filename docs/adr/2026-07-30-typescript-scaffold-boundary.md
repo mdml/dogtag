@@ -1,6 +1,6 @@
 # TypeScript scaffold boundary
 
-- Status: accepted
+- Status: accepted (amended 2026-07-30 — see [Amendments](#amendments))
 - Date: 2026-07-30
 
 ## Context
@@ -25,3 +25,9 @@ The architecture pillar is one implementation with idiomatic bindings: the TypeS
 - The npm name remains claimable by others until M6 publishes. Accepted risk, same stance as crates.io (see the [workspace and naming ADR](2026-07-30-workspace-and-naming.md)).
 - `"private": true` must be removed as a deliberate act at M6 — publication cannot happen by accident, and the flag's removal is a natural anchor for the M6 publish checklist.
 - The scaffold's version rides along with workspace version bumps, one more file to touch — a small price for one version number everywhere.
+
+## Amendments
+
+The Decision above stands as written; this later record changes part of it, and the original text is left intact so the change is legible.
+
+- **2026-07-30 — the scaffold holds a third file, `bunfig.toml`.** The Decision says "a `package.json` and a `README.md`, nothing else". It now also carries a Bun configuration setting a seven-day package quarantine (`minimumReleaseAge`), because that file has to exist *before* the first `bun install` to have ever applied — configuring it at M6, alongside the first dependency, would leave exactly the first resolution unprotected. It adds no source, no dependency, and no build script, so the boundary the Decision is actually about is unchanged: the scaffold still holds no semantics and is still not installable. Recorded in the [supply chain and vulnerability policy](2026-07-30-supply-chain-and-vulnerability-policy.md).
