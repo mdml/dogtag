@@ -1,0 +1,82 @@
+# git-cliff configuration — the release notes for a draft release.
+#
+# The release workflow generates the draft body from the commits since the
+# previous tag, replacing GitHub's `--generate-notes`, whose output is a flat
+# list of pull-request titles: fine for a repository that merges by PR title,
+# useless for one that has enforced Conventional Commits precisely so the
+# history can be read by machine. Deterministic here means the same range
+# produces the same notes, so a regenerated draft never silently differs.
+#
+# There is deliberately no committed CHANGELOG.md yet. The notes are built at
+# release time from the tag range; adding a changelog file would mean a
+# commit that mutates history's own description on every release, and that
+# decision has not been made.
+
+[changelog]
+header = ""
+# Breaking changes lead, so impact is never something a reader has to infer
+# from a `feat` line. They then appear again under their own type, because
+# the breaking section says what breaks and the type section says what the
+# change was — dropping either loses information.
+#
+# Everything else is grouped by `group` and ordered by the numeric prefix the
+# parsers below assign; `striptags` removes that prefix at render time so the
+# headings read as words.
+body = """
+{% set breaking = commits | filter(attribute="breaking", value=true) %}\
+{% if breaking | length > 0 %}
+## Breaking changes
+{% for commit in breaking %}
+- {% if commit.scope %}**{{ commit.scope }}**: {% endif %}\
+{{ commit.message | upper_first }} ({{ commit.id | truncate(length=7, end="") }})\
+{% if commit.breaking_description and commit.breaking_description != commit.message %} \
+— {{ commit.breaking_description }}\
+{% endif %}\
+{% endfor %}
+{% endif %}\
+{% for group, group_commits in commits | group_by(attribute="group") %}
+## {{ group | striptags | trim | upper_first }}
+{% for commit in group_commits %}
+- {% if commit.scope %}**{{ commit.scope }}**: {% endif %}\
+{{ commit.message | upper_first }} ({{ commit.id | truncate(length=7, end="") }})\
+{% endfor %}
+{% endfor %}
+"""
+trim = true
+footer = ""
+
+[git]
+conventional_commits = true
+# A commit that is not a Conventional Commit is dropped rather than guessed
+# at. That is safe here only because commit-lint makes non-conforming commits
+# unmergeable — the two settings are a pair.
+filter_unconventional = true
+split_commits = false
+protect_breaking_commits = true
+filter_commits = true
+tag_pattern = "v[0-9]*"
+topo_order = false
+sort_commits = "oldest"
+
+# Breaking changes are pulled out of their type group and listed first, so a
+# reader never has to infer impact from a `feat` line.
+commit_parsers = [
+  { message = "^chore\\(release\\)", skip = true },
+  { message = "^chore\\(deps\\)", skip = true },
+  # Grouping is by declared type only. A body-text pattern (matching, say,
+  # "security" anywhere in a message) was rejected: it silently reclassifies
+  # commits on a word, and a reader cannot tell why something landed where it
+  # did. Security communication is the advisory channel, not a notes heading.
+  { message = "^feat", group = "<2>Features" },
+  { message = "^fix", group = "<3>Bug fixes" },
+  { message = "^perf", group = "<4>Performance" },
+  { message = "^docs", group = "<5>Documentation" },
+  { message = "^refactor", group = "<6>Refactoring" },
+  { message = "^revert", group = "<7>Reverts" },
+  # Routine maintenance is excluded: it is real work, but it is not news to
+  # someone deciding whether to install this version.
+  { message = "^test", skip = true },
+  { message = "^ci", skip = true },
+  { message = "^build", skip = true },
+  { message = "^chore", skip = true },
+]
