@@ -48,7 +48,9 @@ jobs:
         env:
           RUSTDOCFLAGS: -D warnings
       - name: Tool pins agree
-        run: python3 scripts/check-tool-pins.py
+        run: |
+          python3 scripts/check-tool-pins.py
+          python3 scripts/test_check_tool_pins.py
       - name: Security-exception registry
         run: python3 scripts/check_security_exceptions.py
 

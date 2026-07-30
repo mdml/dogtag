@@ -1,18 +1,20 @@
 #!/usr/bin/env python3
 """Verify that pinned tool versions agree across the repository.
 
-`tools.toml` is the single source of truth for developer and CI tool
-versions. The workflows spell their versions out literally, because a
-workflow that computes its own pins is unreadable — so something has to keep
-the two from drifting. This does, offline and deterministically:
+`tools.toml` is the single source of truth. The workflows spell their
+versions out literally, because a workflow that computes its own pins is
+unreadable — so something has to keep the two from drifting.
 
-1. Every tool in tools.toml whose `checked_in` names a file must have its
-   version appear in that file.
-2. The Rust toolchain pin must match rust-toolchain.toml, the MSRV must match
-   Cargo.toml's rust-version, and the coverage nightly must match
-   coverage-baseline.toml.
+The checks are *structural*: every version is read out of the declaration
+that actually runs — the `tool:` input handed to an install action, the
+`toolchain:` input on a toolchain action, the URL a step downloads, the
+`cargo +toolchain` a recipe invokes. A comment naming the right version
+therefore proves nothing, and a stale command with an accurate comment
+beside it fails. Comparisons are by equality; a prefix match would accept
+1.85.1 where 1.85.0 was pinned.
 
-Stdlib only (tomllib). Run from anywhere; paths resolve against the repo root.
+Stdlib only (tomllib, re). Usage:
+    check-tool-pins.py [repo-root]
 """
 
 import re
@@ -20,101 +22,161 @@ import sys
 import tomllib
 from pathlib import Path
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
+# Files that declare a pin. Workflows are read for action inputs and run
+# steps; the justfile for the toolchains its recipes invoke.
+WORKFLOWS = (
+    ".github/workflows/ci.yml",
+    ".github/workflows/security.yml",
+    ".github/workflows/release.yml",
+)
+JUSTFILE = "justfile"
+
+# Each pattern anchors to declaration syntax, never to prose.
+INSTALL_ACTION_TOOL = re.compile(r"^\s*tool:\s*([A-Za-z0-9_.-]+)@(\S+)\s*$", re.MULTILINE)
+TOOLCHAIN_INPUT = re.compile(r'^\s*toolchain:\s*"([^"]+)"\s*$', re.MULTILINE)
+CARGO_PLUS = re.compile(r"cargo\s+\+(\S+)")
+CODESCENE_URL = re.compile(r"cs-linux-amd64-([0-9a-f]{40})\.zip")
+CODESCENE_SHA = re.compile(r'^\s*echo\s+"([0-9a-f]{64})\s', re.MULTILINE)
 
 
-def read_text(relative: str) -> str:
-    return (REPO_ROOT / relative).read_text()
+class Repo:
+    """The tree under inspection, so tests can point at a fixture."""
+
+    def __init__(self, root: Path):
+        self.root = root
+
+    def text(self, relative: str) -> str:
+        return (self.root / relative).read_text()
+
+    def workflow_text(self) -> str:
+        return "\n".join(self.text(path) for path in WORKFLOWS)
 
 
-def pinned_values(spec: dict) -> list[str]:
-    """Every literal in a tool's entry that a pinning file must reproduce.
-
-    For most tools that is just the version. The CodeScene CLI is fetched by
-    raw URL keyed on a build SHA and verified against a checksum, so those
-    two strings are the pin — a workflow could name the right version while
-    downloading something else entirely.
-    """
-    keys = ("version", "build_sha", "sha256")
-    return [spec[key] for key in keys if key in spec]
+def declared_tool_versions(text: str, tool: str) -> set[str]:
+    """Versions declared for `tool` in `tool: <name>@<version>` inputs."""
+    return {
+        version for name, version in INSTALL_ACTION_TOOL.findall(text) if name == tool
+    }
 
 
-def missing_from(target: str, values: list[str], label: str) -> list[str]:
-    """Which of `values` the file at `target` fails to mention."""
-    text = read_text(target)
-    return [
-        f"{target} does not reference {label} {value} "
-        f"(tools.toml is the source of truth)"
-        for value in values
-        if value not in text
-    ]
+def declared_action_input(text: str, action: str, version: str) -> set[str]:
+    """Versions given as a `version:` input to a specific pinned action."""
+    pattern = re.compile(
+        re.escape(action) + r"@[0-9a-f]{40}[^\n]*\n(?:[^\n]*\n)*?\s*version:\s*\"?([^\"\n]+)\"?"
+    )
+    return {match.strip() for match in pattern.findall(text)}
 
 
-def check_workflow_references(tools: dict) -> list[str]:
-    """Rule 1: each tool's pinned literals appear in every file that pins it."""
+def equality_violation(label: str, found: set[str], want: str) -> list[str]:
+    """`found` must be exactly the one pinned value, and must be non-empty."""
+    if not found:
+        return [f"{label} is not declared anywhere; tools.toml pins {want}"]
+    if found != {want}:
+        return [f"{label} declares {sorted(found)}, but tools.toml pins {want}"]
+    return []
+
+
+def check_install_action(repo: Repo, name: str, spec: dict) -> list[str]:
+    found = declared_tool_versions(repo.workflow_text(), name)
+    return equality_violation(f"`tool: {name}@…`", found, spec["version"])
+
+
+def check_action_input(repo: Repo, name: str, spec: dict) -> list[str]:
+    found = declared_action_input(repo.workflow_text(), spec["action"], spec["version"])
+    return equality_violation(f"{spec['action']} `version:`", found, spec["version"])
+
+
+def check_download_url(repo: Repo, name: str, spec: dict) -> list[str]:
+    """The download URL's build SHA and the checksum it is verified against."""
+    text = repo.workflow_text()
+    return equality_violation(
+        "the CodeScene download URL", set(CODESCENE_URL.findall(text)), spec["build_sha"]
+    ) + equality_violation(
+        "the CodeScene checksum assertion",
+        set(CODESCENE_SHA.findall(text)),
+        spec["sha256"],
+    )
+
+
+FORMS = {
+    "install-action": check_install_action,
+    "action-input": check_action_input,
+    "download-url": check_download_url,
+    "none": lambda repo, name, spec: [],
+}
+
+
+def check_declared_tools(repo: Repo, tools: dict) -> list[str]:
+    """Every tool is declared exactly as tools.toml pins it."""
     violations = []
     for name, spec in tools.items():
-        checked_in = spec.get("checked_in", [])
-        if not isinstance(checked_in, list):
-            continue  # per-key form, handled with the Rust pins
-        for target in checked_in:
-            violations.extend(missing_from(target, pinned_values(spec), name))
+        if name == "rust":
+            continue
+        form = spec.get("form")
+        if form not in FORMS:
+            violations.append(f"tools.toml: {name} has unknown form {form!r}")
+            continue
+        violations.extend(FORMS[form](repo, name, spec))
     return violations
 
 
-def check_rust_references(rust: dict) -> list[str]:
-    """The Rust pins, each against the files that must carry that one."""
-    violations = []
-    for key, targets in rust.get("checked_in", {}).items():
-        for target in targets:
-            violations.extend(missing_from(target, [rust[key]], f"rust {key}"))
+def check_toolchains(repo: Repo, rust: dict) -> list[str]:
+    """Every toolchain a workflow or recipe invokes is one of the three pinned."""
+    pinned = {rust["toolchain"], rust["msrv"], rust["coverage_nightly"]}
+    declared = set(TOOLCHAIN_INPUT.findall(repo.workflow_text()))
+    recipes = set(CARGO_PLUS.findall(repo.text(JUSTFILE)))
+
+    violations = [
+        f"a workflow declares `toolchain: \"{name}\"`, which tools.toml does "
+        f"not pin (pinned: {sorted(pinned)})"
+        for name in sorted(declared - pinned)
+    ]
+    violations += [
+        f"the justfile invokes `cargo +{name}`, which tools.toml does not pin "
+        f"(pinned: {sorted(pinned)})"
+        for name in sorted(recipes - pinned)
+    ]
+    violations += [
+        f"tools.toml pins the {key} toolchain {rust[key]}, but no workflow "
+        f"declares it"
+        for key in ("toolchain", "msrv", "coverage_nightly")
+        if rust[key] not in declared
+    ]
     return violations
 
 
-def extract(pattern: str, text: str, label: str) -> tuple[str | None, str | None]:
-    """First capture group of `pattern`, or a violation describing its absence."""
+def first_capture(pattern: str, text: str) -> str | None:
     match = re.search(pattern, text, re.MULTILINE)
-    if match is None:
-        return None, f"could not find {label}"
-    return match.group(1), None
+    return match.group(1) if match else None
 
 
-def check_rust_pins(rust: dict) -> list[str]:
-    """Rule 2: the Rust pins agree with the files that also declare them."""
+def check_cross_file_pins(repo: Repo, rust: dict) -> list[str]:
+    """The Rust pins equal what the files declaring them independently say."""
     expected = [
         (
             rust["toolchain"],
-            r'^channel = "([^"]+)"',
-            read_text("rust-toolchain.toml"),
+            first_capture(r'^channel = "([^"]+)"', repo.text("rust-toolchain.toml")),
             "the toolchain channel in rust-toolchain.toml",
         ),
         (
-            rust["msrv"],
-            r'^rust-version = "([^"]+)"',
-            read_text("Cargo.toml"),
+            rust["msrv_manifest"],
+            first_capture(r'^rust-version = "([^"]+)"', repo.text("Cargo.toml")),
             "rust-version in Cargo.toml",
         ),
         (
             rust["coverage_nightly"],
-            r'^toolchain = "([^"]+)"',
-            read_text("coverage-baseline.toml"),
+            first_capture(r'^toolchain = "([^"]+)"', repo.text("coverage-baseline.toml")),
             "the toolchain in coverage-baseline.toml",
         ),
     ]
-
-    violations = []
-    for want, pattern, text, label in expected:
-        found, problem = extract(pattern, text, label)
-        if problem:
-            violations.append(problem)
-        elif not want.startswith(found):
-            violations.append(
-                f"{label} is {found}, but tools.toml pins {want}"
-            )
-    return violations
+    return [
+        f"{label} is {found!r}, but tools.toml pins {want!r}"
+        for want, found, label in expected
+        if found != want
+    ]
 
 
-def check_internal_dependency_version() -> list[str]:
+def check_internal_dependency_version(repo: Repo) -> list[str]:
     """The SDK's own version requirement must equal the workspace version.
 
     Cargo only refuses to resolve a path dependency when the requirement is
@@ -122,7 +184,7 @@ def check_internal_dependency_version() -> list[str]:
     bump — so `0.1.0-beta.0` would silently keep matching at `0.1.1`. Cargo
     cannot catch that; this can.
     """
-    manifest = tomllib.loads(read_text("Cargo.toml"))
+    manifest = tomllib.loads(repo.text("Cargo.toml"))
     declared = manifest["workspace"]["package"]["version"]
     required = manifest["workspace"]["dependencies"]["dogtag"]["version"]
     if declared != required:
@@ -133,22 +195,30 @@ def check_internal_dependency_version() -> list[str]:
     return []
 
 
-def main() -> int:
-    tools = tomllib.loads(read_text("tools.toml"))
-    violations = (
-        check_workflow_references(tools)
-        + check_rust_references(tools["rust"])
-        + check_rust_pins(tools["rust"])
-        + check_internal_dependency_version()
+def check(root: Path) -> list[str]:
+    """Every pin check, against one tree. Returns the violations found."""
+    repo = Repo(root)
+    tools = tomllib.loads(repo.text("tools.toml"))
+    rust = tools["rust"]
+    return (
+        check_declared_tools(repo, tools)
+        + check_toolchains(repo, rust)
+        + check_cross_file_pins(repo, rust)
+        + check_internal_dependency_version(repo)
     )
 
+
+def main() -> int:
+    root = Path(sys.argv[1]) if len(sys.argv) > 1 else Path(__file__).resolve().parent.parent
+    violations = check(root)
     if violations:
         print("check-tool-pins: pinned versions disagree:", file=sys.stderr)
         for violation in violations:
             print(f"  - {violation}", file=sys.stderr)
         return 1
 
-    print(f"check-tool-pins: {len(tools)} pinned tool versions agree.")
+    tools = tomllib.loads(Repo(root).text("tools.toml"))
+    print(f"check-tool-pins: {len(tools)} pinned versions agree with their declarations.")
     return 0
 
 
