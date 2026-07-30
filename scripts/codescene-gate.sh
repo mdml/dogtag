@@ -64,7 +64,7 @@ supported_files() {
 # Score each named file, printing one evidence line per file. Fails unless
 # every score is exactly 10.0 (or null).
 score_files() {
-  local fail=0 scored=0 skipped=0 file review score
+  local fail=0 at_ten=0 no_code=0 skipped=0 file review score
   for file in "$@"; do
     if ! review="$(cs review --output-format json "$file" 2>&1)"; then
       # The CLI rejects file types it does not analyze. That is not a
@@ -79,11 +79,12 @@ score_files() {
       continue
     fi
     score="$(printf '%s' "$review" | jq '.score')"
-    scored=$((scored + 1))
     if [ "$score" = "null" ]; then
       printf 'n/a      %s  (no scorable code)\n' "$file"
+      no_code=$((no_code + 1))
     elif [ "$(printf '%s' "$review" | jq '.score == 10')" = "true" ]; then
       printf '10.0     %s\n' "$file"
+      at_ten=$((at_ten + 1))
     else
       printf '%-8s %s  (must be 10.0)\n' "$score" "$file"
       fail=1
@@ -94,14 +95,27 @@ score_files() {
     echo "codescene-gate: files below Code Health 10.0. Refactor them; never adjust the rules." >&2
     return 1
   fi
-  printf 'codescene-gate: %d file(s) at 10.0 (or holding no scorable code)' "$scored"
+  # Counted apart, because "20 files at 10.0" and "20 files nothing scored"
+  # are very different claims and the old wording could not tell them apart.
+  # Zero files actually scored is a failure for the same reason an empty file
+  # list is: the gate would be reporting a measurement it never made.
+  if [ "$at_ten" -eq 0 ]; then
+    echo "codescene-gate: no file was scored; the sweep measured nothing." >&2
+    return 1
+  fi
+  printf 'codescene-gate: %d file(s) at 10.0, %d with no scorable code' "$at_ten" "$no_code"
   [ "$skipped" -eq 0 ] && printf '.\n' || printf ', %d skipped as unanalyzed.\n' "$skipped"
 }
 
 mode="${1:-}"
 case "$mode" in
   "")
-    mapfile -t files < <(supported_files)
+    # Read with a while loop rather than `mapfile`: mapfile is a bash-4
+    # builtin, and macOS still ships bash 3.2 as /bin/bash.
+    files=()
+    while IFS= read -r file; do
+      files+=("$file")
+    done < <(supported_files)
     [ "${#files[@]}" -gt 0 ] || { echo "codescene-gate: no supported source files found." >&2; exit 1; }
     score_files "${files[@]}"
     ;;
