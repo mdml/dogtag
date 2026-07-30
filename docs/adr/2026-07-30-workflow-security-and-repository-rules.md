@@ -59,7 +59,7 @@ The rules below applied before this record; the difference is that they are now 
         "require_code_owner_review": false,
         "require_last_push_approval": false,
         "required_review_thread_resolution": false,
-        "allowed_merge_methods": ["squash", "rebase"]
+        "allowed_merge_methods": ["rebase"]
       }
     },
     {
@@ -69,6 +69,7 @@ The rules below applied before this record; the difference is that they are now 
         "do_not_enforce_on_create": false,
         "required_status_checks": [
           { "context": "Format, lint, test (Linux)" },
+          { "context": "Commit messages" },
           { "context": "Test (macOS arm64)" },
           { "context": "MSRV (Rust 1.85)" },
           { "context": "Coverage thresholds" },
@@ -94,13 +95,25 @@ Four things in that payload are decisions rather than defaults:
 - **`require_last_push_approval: false`** for the same reason. With it on and zero required reviewers, the last pusher's own commit would need an approval that only the last pusher could give.
 - **`strict_required_status_checks_policy: true`** — branches must be up to date with `main` before merging. On a low-traffic repository the re-run cost is small, and it closes the semantic-conflict gap where two independently-green PRs break `main` together.
 - **`bypass_actors: []`.** The rules bind the admin. An emergency requires visibly disabling the ruleset, which is a deliberate, attributable act — rulesets carry audit-history endpoints that record exactly that.
-- **`allowed_merge_methods: ["squash", "rebase"]`.** The repository currently allows merge commits, which `required_linear_history` would then reject at merge time — the button is offered, the merge fails, and the reason is a rule two screens away. Constraining the methods in the same rule that requires the pull request keeps the two consistent, so the only merges offered are the ones that can succeed.
+- **`allowed_merge_methods: ["rebase"]`.** Two reasons, and the second is the one that matters.
 
-The `required_status_checks` contexts are the rendered job names as of this record — the [ci.yml](../../.github/workflows/ci.yml) jobs (which include the code-quality gates from the [code health ADR](2026-07-30-code-health-and-coverage-gates.md)) plus `cargo-deny` and the pull-request OSV scan from [security.yml](../../.github/workflows/security.yml). A job that declares a `name` is required under that name; a job that does not is required under its id. The OSV jobs call reusable workflows, whose contexts render as `caller-job-id / callee-job-name`: both upstream workflows define a single job with the id `osv-scan` and no display name (read from the pinned commit `9a49870`, not guessed), so the caller ids `osv-pr` and `osv-full` produce `osv-pr / osv-scan` and `osv-full / osv-scan`.
+  The small one: the repository allows merge commits, which `required_linear_history` would reject at merge time — the button is offered, the merge fails, and the reason is a rule two screens away. Constraining the methods in the rule that requires the pull request keeps the two consistent.
 
-Only `osv-pr / osv-scan` is required. `osv-full / osv-scan` is deliberately absent: it is conditioned on push, schedule, and manual dispatch, so it never runs on a pull request, and requiring a check that cannot report would block every merge. This is the general rule for this list — **a required context must be one that always runs on a pull request** — and it is the trap to remember when adding jobs. The list is otherwise open: it grows with the jobs, and the [code health ADR](2026-07-30-code-health-and-coverage-gates.md) already names two that activate later (cargo-semver-checks at the first stable tag, the TypeScript gates when the binding gains source).
+  The load-bearing one: **squash merging would put commits on `main` that no gate ever validated.** The `Commit messages` job checks the commits a pull request *contains*. A squash merge discards those and synthesizes a new one whose subject GitHub derives from the pull-request title, defaulting to `<PR title> (#N)` — a message the validator never saw, landing directly on `main`, from which the release notes are then generated. The invariant "every commit on `main` is a Conventional Commit" would hold for everything except the only commits that actually get there.
 
-Two contexts are also worth naming as fragile: they are display names, so **renaming a CI job silently un-requires it** until the ruleset is updated. The names are chosen to be stable, and a job rename is a ruleset change in the same commit.
+  Rebase-only closes it by construction: the exact commits CI validated are the commits that become `main` history. Nothing is generated, so nothing escapes.
+
+  Retaining squash was considered and rejected as strictly worse. Making it safe needs *two* mechanisms that must agree — a PR-title validator, plus a GitHub `commit_message_pattern` metadata rule to catch a title edited after the check ran — and that pairing is only equivalent to the rebase case if GitHub's squash-subject template is never customized, if the repository never enables the "default to commit title for single-commit PRs" setting (which silently changes where the subject comes from), and if a maintainer never overrides the subject in the merge dialog, which is a free-text box the metadata rule is the sole defense against. Worse, `commit_message_pattern` is an organization-Enterprise rule and is unavailable on this personal repository, so on this repo the pairing cannot be assembled at all: the PR-title check alone leaves the merge-dialog override unguarded. Rebase-only needs no second mechanism and has no such matrix.
+
+  The cost, recorded plainly: a messy branch cannot be tidied at merge time. Local history has to be worth landing before the merge button is pressed, which is more work for the author and is the intended direction of the pressure — the commits are the release notes.
+
+**Eleven contexts** are required on a pull request: nine from [ci.yml](../../.github/workflows/ci.yml) (which include the code-quality gates from the [code health ADR](2026-07-30-code-health-and-coverage-gates.md)), plus `cargo-deny` and the pull-request OSV scan from [security.yml](../../.github/workflows/security.yml). A job that declares a `name` is required under that name; a job that does not is required under its id. The OSV jobs call reusable workflows, whose contexts render as `caller-job-id / callee-job-name`: both upstream workflows define a single job with the id `osv-scan` and no display name (read from the pinned commit `9a49870`, not guessed), so the caller ids `osv-pr` and `osv-full` produce `osv-pr / osv-scan` and `osv-full / osv-scan`.
+
+**These strings are derived, not observed.** They come from reading the workflow definitions and GitHub's documented rendering rules; no pull request has run on this branch yet, so none of them has been seen in a real check run. Applying the ruleset before that happens risks a permanently-blocking rule from a single wrong string — a required context that never reports cannot be satisfied. The provisioning order below therefore pushes the branch first, reads the rendered names off the actual run, and only then creates the rulesets.
+
+Only `osv-pr / osv-scan` is required here. `osv-full / osv-scan` is deliberately absent: it is conditioned on push, schedule, and manual dispatch, so it never runs on a pull request. This is the general rule for the list — **a required context must be one that always runs on a pull request** — and it is the trap to remember when adding jobs. The list is otherwise open: it grows with the jobs, and the [code health ADR](2026-07-30-code-health-and-coverage-gates.md) already names two that activate later (cargo-semver-checks at the first stable tag, the TypeScript gates when the binding gains source).
+
+The contexts are also fragile in one specific way worth naming: they are display names, so **renaming a CI job silently un-requires it** until the ruleset is updated. The names are chosen to be stable, and a job rename is a ruleset change in the same commit.
 
 ### Tag ruleset on `refs/tags/v*`
 
@@ -122,6 +135,7 @@ Two contexts are also worth naming as fragile: they are display names, so **rena
         "do_not_enforce_on_create": false,
         "required_status_checks": [
           { "context": "Format, lint, test (Linux)" },
+          { "context": "Commit messages" },
           { "context": "Test (macOS arm64)" },
           { "context": "MSRV (Rust 1.85)" },
           { "context": "Coverage thresholds" },
@@ -142,11 +156,33 @@ Two contexts are also worth naming as fragile: they are display names, so **rena
 
 The `required_status_checks` rule is the interesting one: with `do_not_enforce_on_create: false`, a `v*` tag can only be created on a commit whose required checks already passed. That is the mechanical form of "tags come only from green commits", and it works because CI runs on push to `main`, so every `main` commit carries the check contexts by the time anyone tags it.
 
-The tag list differs from the branch list in exactly one place, and the difference is not cosmetic: it requires `osv-full / osv-scan` where the branch ruleset requires `osv-pr / osv-scan`. The contexts a tag rule can demand are those present on the *tagged commit*, and that commit reached `main` through a push — which runs the full recursive vulnerability scan, not the pull-request diff scan. The same asymmetry works in this repository's favor for Code Health: the push-to-`main` run scores every file rather than the changed ones, so a release tag is gated on a full measurement of both properties rather than an incremental one.
+**Eleven contexts** again, and the tag list differs from the branch list in exactly one place — not cosmetically: it requires `osv-full / osv-scan` where the branch ruleset requires `osv-pr / osv-scan`. The contexts a tag rule can demand are those present on the *tagged commit*, and that commit reached `main` through a push — which runs the full recursive vulnerability scan, not the pull-request diff scan. The same asymmetry works in this repository's favor for Code Health: the push-to-`main` run scores every file rather than the changed ones, so a release tag is gated on a full measurement of both properties rather than an incremental one.
 
 **Honest caveat: this half is not empirically confirmed.** Status-checks-gating-tag-creation is documented-implied rather than documented — GitHub's ruleset documentation uses "branch or tag" wording throughout, and the existence of a `do_not_enforce_on_create` parameter only makes sense if creation is otherwise enforced — but it was not tested, because the maintainer's current token lacks the repository-administration scope needed to create a test ruleset. If the API rejects a `required_status_checks` rule on a tag target, the fallback is a creation-restriction rule limiting who may create `v*` tags. The immutability rules stand either way; only the green-commit gate is contingent.
 
-GitHub's **Immutable Releases** repository setting complements this at the release-asset level rather than the ref level and should be enabled. It is a setting, not a ruleset, so it is not part of the payload above.
+### Immutable releases
+
+The tag ruleset protects the *ref*; GitHub's **immutable releases** setting protects the *assets*, which is the half a tag rule cannot reach — a published release's uploaded archives can otherwise be deleted or replaced while the tag stays exactly where it was. Both are needed, and the setting is not a ruleset, so it is enabled separately:
+
+```bash
+gh api -X PUT -H 'X-GitHub-Api-Version: 2026-03-10' repos/mdml/dogtag/immutable-releases
+```
+
+**It protects only releases published after it is enabled.** The already-published `v0.1.0-beta.0` release does not become immutable retroactively: its assets stay mutable and its tag stays deletable for as long as it exists. That is worth stating rather than assuming, because the natural reading of "immutable releases are on" is that the release list is now immutable, and for the one release this repository has already shipped, it is not. Nothing here can fix that release retroactively — the guarantee begins with the next one, and the honest description of the current state is "every release from the next one onward".
+
+The corollary for anyone verifying `v0.1.0-beta.0`: its `.sha256` sidecars and the aggregate `sha256.sum` are the integrity evidence for that release, not the setting.
+
+### Provisioning order
+
+The order matters, because two of these steps depend on facts that do not exist until the branch has run:
+
+1. **Push the branch and open a pull request.** No admin rights needed. This is what produces the first real check run.
+2. **Read the rendered context names off that run** — `gh pr checks <n> --json name` — and reconcile them against the two payloads above. The names there are derived from the workflow definitions and GitHub's documented rendering, not observed; a single wrong string becomes a required check that can never report, which blocks every future merge and can only be undone by editing the ruleset. Reconciling first costs one command.
+3. **Add the secrets.** `CS_ACCESS_TOKEN` twice — once for Actions, once for Dependabot, which receives no Actions secrets and would otherwise be unable to pass the Code Health check on its own pin-freshness pull requests.
+4. **Create the rulesets**, branch first, then tag. Staging with `"enforcement": "disabled"` and flipping to `active` after inspection is available for the tag ruleset in particular, whose `required_status_checks` rule on a tag target is documented-implied rather than confirmed.
+5. **Enable immutable releases** (above). Independent of the rest; do it whenever.
+
+Steps 3 through 5 need a token with repository-administration scope, which the maintainer's current PAT does not carry.
 
 ### Secrets
 

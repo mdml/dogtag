@@ -7,7 +7,7 @@
 
 The repository has declared Conventional Commits since its first commit, and its history has followed the convention — but nothing checked it. A convention that lives only in `AGENTS.md` holds exactly as long as everyone reading it remembers, which in a repository maintained largely by agents is not a property to rely on. The cost of drift is not aesthetic: release notes, and eventually version selection, are supposed to be *derived* from the history, and a derivation is only as trustworthy as the data it reads.
 
-The related weakness is on the way out. `gh release create --generate-notes` produces a flat list of pull-request titles. For a repository that merges by squash with an enforced commit format, that discards the structure the format exists to create — a reader gets "Update things (#4)" where the history actually knows the change was a breaking API rename.
+The related weakness is on the way out. `gh release create --generate-notes` produces a flat list of pull-request titles, which discards the structure the commit format exists to create — a reader gets "Update things (#4)" where the history actually knows the change was a breaking API rename.
 
 ## Decision
 
@@ -32,6 +32,8 @@ Placing it in `tools/` rather than `crates/` follows the layout ADR's "code by r
 - **In CI**, the `Commit messages` job validates every commit the pull request introduces, as a required check.
 
 The CI check is the enforcement boundary and the hook is a convenience — a distinction worth stating because it is easy to get backwards. Hooks are not installed on a fresh clone, and `--no-verify` always exists; a rule enforced only by a hook is a rule enforced only against people who were not in a hurry. Both run the same binary built from this workspace, so the local and CI verdicts cannot drift apart.
+
+There is a third thing the pair does not cover on its own, and it decides a repository setting: **the validator checks the commits a pull request contains, so any merge strategy that synthesizes a new commit puts an unvalidated message on `main`.** Squash merging does exactly that, deriving a subject from the pull-request title — which the validator never sees, and from which the release notes are then generated. The [workflow security ADR](2026-07-30-workflow-security-and-repository-rules.md) therefore restricts merges to rebase, so the commits CI validated are the commits that land. Recorded here as well because the reason lives in this decision, not that one: without it, the invariant would hold for every commit except the ones that actually reach `main`.
 
 The CI job derives its range from `github.event.pull_request.base.sha` on a pull request, falling back to `github.event.before` on a push and to the newest commit otherwise. The pull-request case is the one that matters; the others exist so the job is never silently vacuous.
 
