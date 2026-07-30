@@ -1,0 +1,80 @@
+# Pinned developer and CI tool versions — the single source of truth.
+#
+# `scripts/install-dev-tools.sh` installs exactly these versions locally, and
+# `scripts/check-tool-pins.py` (part of `just check`) fails if a workflow
+# references a different one. CI keeps its versions written out literally, so
+# a workflow still reads as a workflow; the check is what keeps the two
+# honest. Bumping a tool means editing this file and the workflow together,
+# in one commit, with the check proving they agree.
+#
+# `checked_in` names the workflow files that must reference the version.
+
+[cargo-llvm-cov]
+version = "0.8.7"
+checked_in = [".github/workflows/ci.yml"]
+# Coverage measurement. Pinned because coverage numbers are only comparable
+# across runs of the same instrumentation.
+
+[cargo-deny]
+version = "0.20.2"
+checked_in = [".github/workflows/security.yml"]
+
+[cargo-semver-checks]
+version = "0.49.0"
+checked_in = []
+# Advisory only until the first non-prerelease tag; no CI job yet, so no
+# workflow references it. See the code-health-and-coverage-gates ADR.
+
+[zizmor]
+version = "1.28.0"
+checked_in = [".github/workflows/ci.yml"]
+
+[git-cliff]
+version = "2.13.1"
+checked_in = [".github/workflows/release.yml"]
+# Generates the draft release notes from the Conventional Commit history.
+
+[lefthook]
+version = "2.1.10"
+checked_in = []
+# Runs the local git hooks. Purely a developer convenience: every rule it
+# checks is re-checked in CI, so CI never installs it.
+
+[cargo-auditable]
+version = "0.7.5"
+checked_in = [".github/workflows/release.yml"]
+# Embeds the linked dependency list in released binaries so a shipped
+# artifact can be audited directly rather than by trusting a side manifest.
+
+[osv-scanner]
+version = "2.4.0"
+checked_in = []
+# CI runs OSV through Google's pinned reusable workflows (which carry their
+# own scanner image); this version is the local `just osv` equivalent.
+
+[codescene-cli]
+version = "1.0.36"
+build_sha = "5f703ce1f9c264701f32c795fa7104467f1e4ab4"
+# sha256 of cs-linux-amd64-<build_sha>.zip, computed here on 2026-07-30 and
+# verified at every install. CodeScene publishes no checksums of its own and
+# keys download URLs by build SHA rather than by version, so the repository
+# records both. Only linux-amd64 is recorded, so that is the only
+# architecture the installer will fetch — an unrecorded architecture would
+# mean installing an unverified binary.
+sha256 = "b6a1b259c6b53d94d34c85b85bb725b6665973ab2bec9f6c678a371d7a0202ee"
+checked_in = [".github/workflows/ci.yml"]
+
+[rust]
+toolchain = "1.97.1"
+msrv = "1.85.0"
+coverage_nightly = "nightly-2026-07-30"
+# The Rust pins appear in different places than the tools above, so each is
+# tracked separately rather than through one shared list. Beyond the files
+# below, the checker also cross-checks the pinned stable against
+# rust-toolchain.toml, the MSRV against Cargo.toml's rust-version, and the
+# nightly against coverage-baseline.toml (branch coverage needs nightly
+# instrumentation).
+[rust.checked_in]
+toolchain = [".github/workflows/ci.yml"]
+msrv = [".github/workflows/ci.yml", "justfile"]
+coverage_nightly = [".github/workflows/ci.yml"]
