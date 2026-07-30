@@ -350,7 +350,108 @@ class RepositoryContractTest(unittest.TestCase):
         self.assert_emits_summary("links")
 
     def test_commit_lint_prints_its_summary(self) -> None:
-        self.assert_emits_summary("commits", "--range", "HEAD~1..HEAD")
+        """`HEAD^!` is HEAD with its parents excluded — exactly one commit.
+
+        Deliberately not `HEAD~1..HEAD`, which names a parent: CI checks out
+        at depth 1, so the parent is not in the object store and git rejects
+        the range outright. This test is about the output contract, so it
+        wants the smallest range that always resolves rather than a deeper
+        checkout to make a larger one work.
+        """
+        self.assert_emits_summary("commits", "--range", "HEAD^!")
+
+
+class ShallowCheckoutTest(unittest.TestCase):
+    """The output-contract range must resolve where CI actually runs it.
+
+    CI checks out at depth 1, so HEAD has no parent in the object store.
+    `HEAD~1..HEAD` names one and git rejects the whole range — which is how
+    a green local run shipped a red `Format, lint, test (Linux)`. A
+    single-commit repository reproduces that shape exactly, hermetically,
+    and without a network clone.
+    """
+
+    def setUp(self) -> None:
+        self.repo = scratch(self) / "one-commit"
+        self.repo.mkdir()
+        (self.repo / "README.md").write_text("probe\n")
+        for argv in (
+            ["git", "init", "-q"],
+            ["git", "config", "user.email", "probe@example.invalid"],
+            ["git", "config", "user.name", "Probe"],
+            ["git", "add", "-A"],
+            ["git", "commit", "-q", "-m", "chore: the only commit"],
+        ):
+            subprocess.run(argv, cwd=self.repo, check=True)
+
+    def commit_lint(self, span: str) -> subprocess.CompletedProcess:
+        """commit-lint over `span`, run inside the parentless repository.
+
+        The working directory has to be the probe repository, because that is
+        where commit-lint runs `git log` — so cargo is pointed at the real
+        workspace manifest explicitly rather than found by walking upwards.
+        """
+        argv = gate.BY_ID["commits"].argv
+        spliced = argv[:2] + ["--manifest-path", str(REPO_ROOT / "Cargo.toml")] + argv[2:]
+        return subprocess.run(
+            spliced + ["--range", span],
+            cwd=self.repo,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+
+    def test_the_contract_range_resolves_without_a_parent_commit(self) -> None:
+        done = self.commit_lint("HEAD^!")
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertIsNotNone(gate.repo_summary(done.stdout, "commit-lint"), done.stdout)
+
+    def test_it_validates_exactly_one_commit_rather_than_an_empty_range(self) -> None:
+        self.assertIn("1 commit(s)", self.commit_lint("HEAD^!").stdout)
+
+    def test_the_range_that_broke_ci_really_does_break_here(self) -> None:
+        """Without this, the fix above could regress and nothing would notice."""
+        done = self.commit_lint("HEAD~1..HEAD")
+        self.assertNotEqual(done.returncode, 0)
+        self.assertIn("HEAD~1..HEAD", done.stderr)
+
+
+class ZizmorScopeTest(unittest.TestCase):
+    """The local audit must cover what the CI action covers.
+
+    Mechanism may differ — the action takes inputs, the CLI takes flags —
+    but audited scope may not. It did once: the local gate was scoped to
+    `.github/workflows`, so `.github/dependabot.yml` was never read locally
+    and a `dependabot-cooldown` finding passed every local gate before
+    failing the required check.
+    """
+
+    def command(self) -> str:
+        return gate.BY_ID["zizmor"].command
+
+    def test_the_audit_is_scoped_to_the_repository_root(self) -> None:
+        self.assertTrue(self.command().endswith(" ."), self.command())
+
+    def test_the_audit_is_not_narrowed_to_the_workflows_directory(self) -> None:
+        self.assertNotIn(".github/workflows", self.command())
+
+    def test_dependabot_config_is_inside_the_audited_scope(self) -> None:
+        """The file whose finding CI caught and the local gate missed."""
+        self.assertTrue((REPO_ROOT / ".github" / "dependabot.yml").is_file())
+
+    @unittest.skipUnless(
+        shutil.which("zizmor"), "zizmor is not installed; `just gate` runs this for real"
+    )
+    def test_zizmor_really_reads_the_dependabot_config_at_this_scope(self) -> None:
+        """Structure is not enough — the tool has to actually collect it."""
+        done = subprocess.run(
+            gate.BY_ID["zizmor"].argv,
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        self.assertIn("dependabot.yml", done.stdout + done.stderr)
 
 
 class ScopeTest(unittest.TestCase):

@@ -88,8 +88,11 @@ DIVERGENCES = {
     "zizmor": (
         "CI runs the pinned zizmor action, which takes its settings as "
         "inputs rather than flags; the local command mirrors those inputs "
-        "but scopes the audit to .github/workflows, where the action "
-        "defaults to the whole repository"
+        "as flags and audits the same scope — the repository root, which is "
+        "what the action defaults to. The mechanism may differ; the audited "
+        "scope may not. It did once: the local run was scoped to "
+        ".github/workflows, so it never read .github/dependabot.yml and a "
+        "finding there passed every local gate before failing CI"
     ),
 }
 
