@@ -82,11 +82,24 @@ Every step runs; every step gets a line. Stopping early would leave a summary th
 
 That status is translated the way a shell reports it: `subprocess` returns a negative number for a signal death, and `sys.exit` of a negative number is truncated to eight bits, so an untranslated SIGTERM would surface as 241 rather than 143. It is clamped so a failed step can never yield 0.
 
-### A missing prerequisite fails before the work, naming the fix
+### A missing prerequisite fails its step, and only its step
 
-`gate` needs the network, pinned tools and `CS_ACCESS_TOKEN`; those are accepted costs. What is not acceptable is discovering a missing one at the end. The runner probes only the prerequisites the *requested* steps need, and fails with one block naming each and the single command that fixes it (`just install-dev-tools`, or the PAT URL).
+`gate` needs the network, pinned tools and `CS_ACCESS_TOKEN`. When one of them is absent, three things have to be true at once, and only one arrangement gives all three.
 
-The cost is real and is accepted rather than hidden: a contributor without a CodeScene token gets nothing from `just gate`, where before they would have got every other gate and one failure at the end. They still get `just check` in full, which needs nothing beyond the pinned stable toolchain and `python3`, and any narrow recipe. The alternative — rendering `codescene skip` and exiting 0 — was rejected because a suite that reports success without measuring Code Health is the precise shape of gate this contract exists to forbid.
+**It is a failure, not a skip.** A Code Health gate that goes green because nobody had a token measured nothing, and a required check that passes without checking is worse than no check — the same reasoning `ci.yml` already applies to forked pull requests, where the job fails closed rather than passing unmeasured.
+
+**It is scoped to the steps that need it.** Prerequisites are resolved per step, against that step's own list, immediately before it would have run. An absent CodeScene token blocks `codescene` and nothing else; the other eighteen gates have no opinion about it.
+
+**The run still happens.** There is no suite-wide preflight. Aborting before the first step would throw away eighteen gates' worth of real verification to report a problem with the nineteenth, and would leave a contributor without a token unable to get any signal at all from `just gate`. Instead the suite runs to the end, the blocked step fails with one line naming what is absent and the single command that fixes it, and the suite exits nonzero:
+
+```
+codescene       fail — CS_ACCESS_TOKEN is not set; export a PAT from https://codescene.io/users/me/pat
+gate            fail — 18/19 steps, 4.7s · CI and the repository rulesets remain authoritative
+```
+
+A blocked step spawns nothing, so it has no captured output; the message it carries *is* the diagnosis, and the failure dump prints it in both modes rather than falling back to a log that does not exist. A narrow `just codescene` has only the one step, so it fails immediately — the same rule, arriving sooner.
+
+The earlier design aborted the whole suite up front. It was rejected once the behaviour was written out plainly: it converted a partial result into no result, for a credential that gates one of nineteen checks.
 
 ### CI keeps its own step lists
 
