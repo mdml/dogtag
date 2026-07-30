@@ -53,6 +53,13 @@ jobs:
           python3 scripts/test_check_tool_pins.py
       - name: Ruleset payloads match their record
         run: python3 scripts/check-ruleset-payloads.py
+      # The local gate table declares each gate as the command CI runs. This
+      # is what keeps that claim true: a flag added here and not there would
+      # otherwise leave `just gate` green while measuring something narrower.
+      - name: Local gate table matches CI
+        run: |
+          python3 scripts/check-gate-parity.py
+          python3 scripts/test_gate.py
       - name: Security-exception registry
         run: python3 scripts/check_security_exceptions.py
 
