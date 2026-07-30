@@ -20,19 +20,33 @@ A fourth rule guards the future surfaces: **bindings hold no semantics.** `bindi
 
 Recipes live in the [justfile](justfile); `just` alone lists them. `just install-dev-tools` installs the pinned Rust toolchains and cargo tools, and prints instructions for the two it cannot install safely on its own (osv-scanner, whose packaging is platform-specific, and lefthook). It assumes `jq` and `python3` are already present.
 
-- `just check` — format check, clippy with warnings as errors, full test suite, docs with warnings as errors, and the offline policy checks. Deterministic and offline; **run it before handing off work.**
-- `just gate` — everything CI enforces that can run locally: `check` plus coverage, MSRV, `cargo-deny`, OSV, zizmor, and Code Health. Needs the network and a CodeScene token, and takes minutes rather than seconds. CI remains authoritative.
-- `just fmt` / `just test` / `just build` — the individual steps.
-- `just conformance` — run the conformance harness and print the scenario × profile matrix.
-- `just coverage` — measure coverage and enforce the thresholds and ratchet baseline.
-- `just msrv` — build and test against the declared MSRV floor.
-- `just deny` / `just osv` / `just zizmor` — Rust advisories, licenses, bans and sources; cross-ecosystem vulnerability scan; workflow security lint.
-- `just codescene` — Code Health of every supported file. Narrower and faster: `just codescene-staged` before a commit, `just codescene-branch [BASE]` for the whole branch, `just codescene-files <paths>` for specific files.
+Four commands carry the day-to-day work, as a ladder. Each is a strict superset of the one above it, so climbing a rung adds checks and never re-runs the ones below differently.
+
+| Command | When | What it costs |
+| --- | --- | --- |
+| `just fast` | while implementing | 0.9s warm, offline. **Not a merge signal** |
+| `just check` | before handing work off | 1.9s warm, offline and deterministic |
+| `just gate` | before opening or updating a pull request | 32s warm (27 of them Code Health); needs the network, the pinned tools, and `CS_ACCESS_TOKEN` |
+| `just gate-verbose` | when you want the evidence | identical run, every gate's full output |
+
+- `just fast` — format check, clippy with warnings as errors, the test suite, commit-message validation, and the cheap policy checks (tool pins, security exceptions).
+- `just check` — `fast` plus docs with warnings as errors, link integrity, and the remaining deterministic offline checks (ruleset payloads, gate-table parity, the runner's own tests).
+- `just gate` — `check` plus coverage, MSRV, `cargo-deny`, OSV, zizmor, and Code Health. CI and the repository rulesets remain authoritative; a green `gate` is evidence, not permission.
+- `just gate-verbose` — the same gates, the same thresholds, the same exit codes, with each gate's output printed as it runs. Verbosity changes **rendering only**; [scripts/test_gate.py](scripts/test_gate.py) is what holds that claim up.
+
+Every gate in those suites is declared once, in [scripts/gate.py](scripts/gate.py), as the exact command CI runs — `just gates` prints that table, and `scripts/check-gate-parity.py` fails `just check` if a command drifts from its workflow, if a step loses an environment variable CI sets, if a required status check loses its local counterpart, or if a repository script starts running in CI with nothing local behind it. Two required checks deliberately have no local counterpart (`Test (macOS arm64)`, and the musl release build, which `just dist` rehearses); the parity checker records why.
+
+Narrower recipes, for when the ladder is more than you need. The expensive ones each have a `-verbose` twin:
+
+- `just fmt` (writes) / `just build` / `just conformance` — individual steps that are not gates.
+- `just test` / `just coverage` / `just msrv` / `just deny` / `just osv` / `just zizmor` / `just links` / `just codescene`, each with a `-verbose` twin.
+- `just codescene-staged` before a commit, `just codescene-branch [BASE]` for the whole branch, `just codescene-files <paths>` for specific files. These are deltas and already print their findings in full, so they need no verbose twin.
 - `just semver` — API-compatibility check against the last release tag. Advisory until the first non-prerelease tag; see the ADR for why a blocking gate would be meaningless before then.
-- `just commits [RANGE]` / `just hooks` / `just notes` — validate commit messages, install the git hooks, preview the next release's notes.
+- `just commits [RANGE]` / `just hooks` / `just notes` — validate an explicit commit range, install the git hooks, preview the next release's notes.
 - `just dist` — release-build the CLI and package a host-target archive into `dist/`, using the same script as the release pipeline.
 - `just install-local` — rehearse `install.sh` end-to-end against the locally packaged `dist/`.
-- `just links` — offline check that relative Markdown links resolve, via the dependency-free `scripts/check-links.sh` (the same script the CI links job runs).
+
+Three honest limits. The commit check — in `just fast` and by default in `just commits` — resolves `origin/main..HEAD`, while CI validates exactly the commits a pull request introduces, so a stale `origin/main` moves the range under you; it reports `skip`, never `pass`, when that range is empty. `just gate` cannot run the macOS suite or the musl release build; those pass only in CI. And `just commits <range>` and the `commit-msg` hook invoke the validator directly rather than through the gate table, so they are the two commands parity does not cover. The [gate ergonomics ADR](docs/adr/2026-07-30-gate-ergonomics-and-the-command-ladder.md) records the four places local and CI deliberately differ, and what the parity checker cannot see.
 
 ## Quality and security gates
 
