@@ -162,27 +162,54 @@ The `required_status_checks` rule is the interesting one: with `do_not_enforce_o
 
 ### Immutable releases
 
-The tag ruleset protects the *ref*; GitHub's **immutable releases** setting protects the *assets*, which is the half a tag rule cannot reach — a published release's uploaded archives can otherwise be deleted or replaced while the tag stays exactly where it was. Both are needed, and the setting is not a ruleset, so it is enabled separately:
+The two mechanisms cover different objects, and the difference decides what `v0.1.0-beta.0` does and does not get. The tag ruleset protects the *ref*; GitHub's **immutable releases** setting protects the *assets* — a published release's uploaded archives can otherwise be deleted or replaced while the tag stays exactly where it was. Both are wanted, and the setting is not a ruleset, so it is enabled separately:
 
 ```bash
 gh api -X PUT -H 'X-GitHub-Api-Version: 2026-03-10' repos/mdml/dogtag/immutable-releases
 ```
 
-**It protects only releases published after it is enabled.** The already-published `v0.1.0-beta.0` release does not become immutable retroactively: its assets stay mutable and its tag stays deletable for as long as it exists. That is worth stating rather than assuming, because the natural reading of "immutable releases are on" is that the release list is now immutable, and for the one release this repository has already shipped, it is not. Nothing here can fix that release retroactively — the guarantee begins with the next one, and the honest description of the current state is "every release from the next one onward".
+**The asset guarantee is not retroactive; the tag guarantee is.** Immutable releases applies to releases published after it is enabled, so `v0.1.0-beta.0`'s uploaded archives remain replaceable by anyone with write access. Its *tag*, though, is a ref like any other: the `refs/tags/v*` ruleset matches it the moment the ruleset is created, and its `update`, `deletion`, and `non_fast_forward` rules then bind that existing tag exactly as they bind future ones. So after provisioning, the already-published release is in a mixed state — the commit it points at is pinned, the bytes hanging off it are not — and saying "immutable releases are on" would describe only the half that is not true of it.
 
-The corollary for anyone verifying `v0.1.0-beta.0`: its `.sha256` sidecars and the aggregate `sha256.sum` are the integrity evidence for that release, not the setting.
+What actually protects the existing release's bytes is the attestation, and the distinction matters because the two artifacts look similar and are not:
+
+- The `.sha256` sidecars and the aggregate `sha256.sum` are stored **beside the assets, on the same release, with the same write permissions**. They detect ordinary corruption — a truncated download, a bit flip, a CDN serving something stale — which is what `install.sh` uses them for. They are not evidence against deliberate replacement: whoever can replace an asset can replace its sidecar in the same breath, and the pair will agree.
+- The **Sigstore-backed build provenance** is recorded independently of the release: in Sigstore's transparency log and GitHub's attestation store, signed through the workflow's OIDC identity rather than by anyone holding repository credentials. It binds the artifact's digest to the workflow, the commit, and the ref that produced it. Replacing an asset does not produce a matching attestation, and one cannot be minted after the fact without that workflow identity — which is precisely the property a mutable sidecar lacks.
+
+Verified for the published release on 2026-07-30: `gh attestation verify dogtag-x86_64-unknown-linux-musl.tar.gz --repo mdml/dogtag` succeeds against `https://github.com/mdml/dogtag/.github/workflows/release.yml@refs/tags/v0.1.0-beta.0`, source digest `55985cb`, issuer `token.actions.githubusercontent.com`. That command — not the sidecar — is the answer to "is this the artifact the release workflow built".
 
 ### Provisioning order
 
-The order matters, because two of these steps depend on facts that do not exist until the branch has run:
+The order is load-bearing: the rulesets depend on context names that do not exist until the branch has run, and that run is only authoritative if the secrets it needs were already in place.
 
-1. **Push the branch and open a pull request.** No admin rights needed. This is what produces the first real check run.
-2. **Read the rendered context names off that run** — `gh pr checks <n> --json name` — and reconcile them against the two payloads above. The names there are derived from the workflow definitions and GitHub's documented rendering, not observed; a single wrong string becomes a required check that can never report, which blocks every future merge and can only be undone by editing the ruleset. Reconciling first costs one command.
-3. **Add the secrets.** `CS_ACCESS_TOKEN` twice — once for Actions, once for Dependabot, which receives no Actions secrets and would otherwise be unable to pass the Code Health check on its own pin-freshness pull requests.
-4. **Create the rulesets**, branch first, then tag. Staging with `"enforcement": "disabled"` and flipping to `active` after inspection is available for the tag ruleset in particular, whose `required_status_checks` rule on a tag target is documented-implied rather than confirmed.
-5. **Enable immutable releases** (above). Independent of the rest; do it whenever.
+1. **Add the secrets first.** `CS_ACCESS_TOKEN` twice — once for Actions, once for Dependabot, which receives no Actions secrets and would otherwise be unable to pass the Code Health check on its own pin-freshness pull requests. Doing this *before* the first run matters: the Code Health job fails closed when the token is absent, so a run that predates the secret is red for a reason that says nothing about the code.
 
-Steps 3 through 5 need a token with repository-administration scope, which the maintainer's current PAT does not carry.
+   ```bash
+   gh secret set CS_ACCESS_TOKEN --repo mdml/dogtag
+   gh secret set CS_ACCESS_TOKEN --repo mdml/dogtag --app dependabot
+   ```
+
+2. **Push the branch and open a pull request.** This produces the authoritative run. If any job did start before step 1 landed, rerun it rather than reasoning about which failures were spurious: `gh run rerun <run-id> --failed`.
+
+3. **Require the pull request to be fully green**, every check, before going further. Two distinct things depend on it. The context names in the payloads are *derived* from the workflow definitions and GitHub's documented rendering rules, not observed, and a single wrong string becomes a required check that can never report — blocking every future merge until someone edits the ruleset. And a required check that has never passed once is a rule adopted on faith. Read the rendered names off the green run and reconcile them against the payloads:
+
+   ```bash
+   gh pr checks <n> --json name,state --jq '.[] | "\(.state)  \(.name)"'
+   ```
+
+   Expect eleven passing contexts matching [.github/rulesets/main-branch.json](../../.github/rulesets/main-branch.json). Reconcile before creating anything; it costs one command and is the cheapest moment to find a typo.
+
+4. **Create the rulesets** from the checked-in payloads, branch first, then tag:
+
+   ```bash
+   gh api -X POST repos/mdml/dogtag/rulesets --input .github/rulesets/main-branch.json
+   gh api -X POST repos/mdml/dogtag/rulesets --input .github/rulesets/release-tags.json
+   ```
+
+   The tag ruleset is the one worth staging with `"enforcement": "disabled"` and flipping to `active` after inspection, since its `required_status_checks` rule on a tag target is documented-implied rather than confirmed. Rollback for either is `gh api -X DELETE repos/mdml/dogtag/rulesets/<id>`, with `gh api repos/mdml/dogtag/rulesets` listing the ids.
+
+5. **Enable immutable releases** (above). Independent of the rest.
+
+The payloads are checked in rather than pasted from a transcript so the thing reviewed is the thing posted; `scripts/check-ruleset-payloads.py` holds them to the copies quoted in this record, and to their context counts, on every run of `just check`. Steps 1, 4, and 5 need a token with repository-administration scope, which the maintainer's current PAT does not carry.
 
 ### Secrets
 

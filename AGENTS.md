@@ -44,7 +44,7 @@ These are contractual, not aspirational — each one is enforced by a tool, and 
 - **Everything is pinned.** Dependencies, toolchains, actions (full commit SHAs), and tools. Tool versions live in [tools.toml](tools.toml) and `just check` fails if a workflow drifts from it. Dependency updates are proposed by Dependabot and merged by a human — never automatically.
 - **Security suppressions are data, and they expire.** Any ignore in any security tool needs an entry in [docs/security/exceptions.toml](docs/security/exceptions.toml) carrying a rationale, an owner, an expiry date, and a link to its record. Unregistered suppressions and stale entries both fail CI. Comments in a tool config are not an exception process.
 - **The package quarantine holds.** New TypeScript dependencies must be seven days old; the standing exclusion list stays empty, and an urgent security release is a one-off, recorded override rather than a permanent hole.
-- **Tags come only from green commits, and published releases are immutable.** A bad release is never edited or deleted — the fix ships forward under a new version, with a security advisory when users must act. This one is enforced by repository rulesets rather than by anything in the tree, so it holds exactly once an admin has applied them.
+- **Tags come only from green commits, and published releases are immutable.** A bad release is never edited or deleted — the fix ships forward under a new version, with a security advisory when users must act. This one is enforced by repository rulesets rather than by anything in the tree: the payloads are checked in at [.github/rulesets/](.github/rulesets/), and the rules hold exactly once an admin has applied them.
 
 ## Commits
 
