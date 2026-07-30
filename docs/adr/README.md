@@ -11,12 +11,13 @@ One file per decision, named `YYYY-MM-DD-slug.md` — the date the decision was 
 ```markdown
 # <Title>
 
-- Status: proposed | accepted | superseded by [<slug>](<YYYY-MM-DD-slug.md>)
+- Status: proposed | accepted | accepted (amended YYYY-MM-DD — see [Amendments](#amendments)) | superseded by [<slug>](<YYYY-MM-DD-slug.md>)
 - Date: YYYY-MM-DD
 
 ## Context
 ## Decision
 ## Consequences
+## Amendments   (only once something has amended it)
 ```
 
 ## Conventions
@@ -25,3 +26,4 @@ One file per decision, named `YYYY-MM-DD-slug.md` — the date the decision was 
 - **Alternatives considered.** Every ADR names what was rejected and why, inside the Decision section. Most of an ADR's future value lives there.
 - **Consequences include the bad ones.** Accepted risks and trade-offs go in Consequences, not in a drawer.
 - **Supersede, don't delete.** When a decision changes, write a new ADR and flip the old one's Status to `superseded by …` with a link. Never rewrite an accepted ADR's Decision after the fact; history stays legible.
+- **Amend when a later record changes only part of a decision.** Superseding is for a decision that has been replaced; amending is for one that mostly stands but has a clause a later record contradicts — where flipping the whole thing to `superseded` would throw away still-current reasoning, and silently editing the Decision would erase what was actually decided. Add an `## Amendments` section at the end listing dated entries, each naming what changed and linking the record that changed it, and mark the Status line. The original Decision text stays exactly as written; a reader must be able to see both what was decided and what later moved.

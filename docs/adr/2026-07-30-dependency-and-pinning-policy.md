@@ -1,6 +1,6 @@
 # Dependency and pinning policy
 
-- Status: accepted
+- Status: accepted (amended 2026-07-30 — see [Amendments](#amendments))
 - Date: 2026-07-30
 
 ## Context
@@ -28,3 +28,10 @@ The beta promises a small, auditable supply chain: a single static binary users 
 - Update latency is the accepted cost — fixes land only when a human reviews and merges the weekly Dependabot PRs or makes an advisory-triggered bump, never automatically. The advisory-triggered exception is the fast path, and it depends on the maintainers actually watching advisories (RustSec, GitHub advisories) rather than waiting on the bot.
 - SHA-pinned actions are unreadable without their comments; keeping comment and SHA in sync is a review obligation.
 - Adding any new dependency is a visible, reviewable act — which is exactly the friction intended.
+
+## Amendments
+
+The Decision above stands as written; these later records change parts of it, and the original text is left intact so the change is legible.
+
+- **2026-07-30 — workflows no longer use only `GITHUB_TOKEN`.** The Decision's least-privilege bullet says workflows use only the built-in token. The Code Health gate introduced by [code health and coverage gates](2026-07-30-code-health-and-coverage-gates.md) needs `CS_ACCESS_TOKEN`, a read-scoped CodeScene analysis token and the repository's first and only secret. The least-privilege intent is unchanged — [workflow security and repository rules](2026-07-30-workflow-security-and-repository-rules.md) records how the secret is kept away from fork-controlled execution.
+- **2026-07-30 — one action pin does not carry a `# vX.Y.Z` comment.** `dtolnay/rust-toolchain` is pinned to a commit on its rolling `master` branch, which publishes no version tags, so its comment names the branch and date (`# master 2026-07-16`) instead. The rule is otherwise unchanged, and is now mechanically enforced by zizmor rather than by review.
