@@ -5,6 +5,8 @@
 //! carries no version string of its own — everything it reports comes from
 //! [`dogtag::version`].
 
+#![forbid(unsafe_code)]
+
 use clap::{Parser, Subcommand};
 
 /// dogtag — a PKM SDK for AI agents.
