@@ -319,10 +319,10 @@ class RepositoryContractTest(unittest.TestCase):
 
     This is the half an env-var handshake could not prove: it runs each
     checker and reads its actual output, so a reworded summary fails here
-    instead of silently emptying the metric column. The three not covered
-    need a nightly toolchain, a CodeScene token, and a commit range that
-    exists — `coverage-check`, `codescene-gate`, and commit-lint outside a
-    branch — so `just gate` is what exercises those.
+    instead of silently emptying the metric column. `coverage-check` and
+    `codescene-gate` are not covered here — they need a nightly toolchain
+    and a CodeScene token, so `just gate` exercises those — and commit-lint
+    is covered in ShallowCheckoutTest for the reason recorded below.
     """
 
     def assert_emits_summary(self, step_id: str, *extra: str) -> None:
@@ -349,26 +349,30 @@ class RepositoryContractTest(unittest.TestCase):
     def test_links_prints_its_summary(self) -> None:
         self.assert_emits_summary("links")
 
-    def test_commit_lint_prints_its_summary(self) -> None:
-        """`HEAD^!` is HEAD with its parents excluded — exactly one commit.
-
-        Deliberately not `HEAD~1..HEAD`, which names a parent: CI checks out
-        at depth 1, so the parent is not in the object store and git rejects
-        the range outright. This test is about the output contract, so it
-        wants the smallest range that always resolves rather than a deeper
-        checkout to make a larger one work.
-        """
-        self.assert_emits_summary("commits", "--range", "HEAD^!")
+    # commit-lint's summary line is asserted by ShallowCheckoutTest instead,
+    # against a repository that test builds. It cannot be asserted against
+    # the ambient checkout: on a pull_request event `actions/checkout` lands
+    # GitHub's synthetic merge commit, whose subject is `Merge <sha> into
+    # <sha>` and is deliberately not a Conventional Commit — and because the
+    # checkout is shallow, its parents are grafted away, so `--no-merges`
+    # does not recognise it as a merge either. An output-contract test must
+    # not depend on which commit happens to be checked out.
 
 
 class ShallowCheckoutTest(unittest.TestCase):
-    """The output-contract range must resolve where CI actually runs it.
+    """commit-lint's output contract, over a commit the test controls.
 
-    CI checks out at depth 1, so HEAD has no parent in the object store.
-    `HEAD~1..HEAD` names one and git rejects the whole range — which is how
-    a green local run shipped a red `Format, lint, test (Linux)`. A
-    single-commit repository reproduces that shape exactly, hermetically,
-    and without a network clone.
+    Two things make the ambient checkout the wrong place to assert this.
+    CI checks out at depth 1, so HEAD has no parent and `HEAD~1..HEAD` is
+    rejected outright — which is how a green local run shipped a red
+    `Format, lint, test (Linux)`. And on a pull_request event HEAD is
+    GitHub's synthetic merge commit, whose subject is not a Conventional
+    Commit by design, so validating it fails for a reason that says nothing
+    about the checker's output.
+
+    A one-commit repository reproduces the parentless shape exactly, is
+    hermetic, needs no network, and validates a subject this test wrote —
+    so the only thing it can fail on is the contract it exists to check.
     """
 
     def setUp(self) -> None:
