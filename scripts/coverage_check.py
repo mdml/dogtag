@@ -11,9 +11,13 @@ per-file .data[0].files[] summaries) and the committed baseline
    means branch coverage did not run (e.g. a stable toolchain).
 3. Every file under a [kernel] path: line percent == kernel.line (100%).
 
-Prints the per-file table and global totals either way, so CI logs and
-local runs show the same evidence. Exits nonzero listing every violated
-rule precisely; exits 0 with a one-line summary otherwise.
+Prints the per-file table and global totals either way, so CI logs and a
+verbose local run show the same evidence — `scripts/gate.py` captures this
+output and renders one line unless asked for more, which is why
+`just coverage-verbose` and `just gate-verbose` are the local invocations
+that show the table. Exits nonzero listing every violated rule precisely;
+exits 0 with a one-line summary otherwise. That summary line is also the
+metric the gate runner reads, so its shape is a contract, not a nicety.
 
 Stdlib only (json, tomllib). Usage:
     coverage_check.py <coverage.json> <coverage-baseline.toml>
@@ -118,6 +122,17 @@ def kernel_files_below_bar(
     ]
 
 
+def worst_kernel_line(
+    rows: list[tuple[str, float, float]], paths: list[str]
+) -> float:
+    """The lowest line percentage any kernel file reached."""
+    return min(
+        line
+        for path, line, _branch in rows
+        if any(path.startswith(prefix) for prefix in paths)
+    )
+
+
 def check_kernel(
     rows: list[tuple[str, float, float]], baseline: dict
 ) -> list[str]:
@@ -151,10 +166,13 @@ def main() -> int:
             print(f"  - {violation}", file=sys.stderr)
         return 1
 
+    # The measured worst kernel file, not the configured bar: printing the
+    # bar back would report the rule as though it were the result, and read
+    # identically whether the kernel was at 100% or had no files at all.
     print(
         f"\ncoverage-check: OK — line {totals['lines']['percent']:.2f}%, "
-        f"branch {totals['branches']['percent']:.2f}%, kernel files at "
-        f"{baseline['kernel']['line']:.0f}%."
+        f"branch {totals['branches']['percent']:.2f}%, worst kernel file "
+        f"{worst_kernel_line(rows, baseline['kernel']['paths']):.2f}%."
     )
     return 0
 
