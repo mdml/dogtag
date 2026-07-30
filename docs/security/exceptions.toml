@@ -1,0 +1,17 @@
+# Security-exception registry. Every suppression in any security tool config
+# (deny.toml [advisories].ignore, any osv-scanner.toml ignore, any
+# bunfig.toml minimumReleaseAgeExcludes entry, any one-off quarantine
+# override) MUST have an entry here, and every entry expires.
+# scripts/check_security_exceptions.py enforces both directions in CI.
+#
+# Schema — one [[exception]] table per suppression:
+#
+# [[exception]]
+# id = "RUSTSEC-2026-NNNN"        # advisory/crate/package identifier
+# tool = "cargo-deny"              # cargo-deny | osv-scanner | bun
+# rationale = "why this is safe enough for now"
+# owner = "mdml"
+# expires = 2026-09-30             # TOML date; CI fails after this date
+# record = "docs/adr/YYYY-MM-DD-slug.md"  # ADR or security-exception record
+# oneoff = true                    # bun only: a one-off --minimum-release-age
+#                                  # override with no standing config trace
