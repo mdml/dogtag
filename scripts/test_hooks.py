@@ -19,7 +19,9 @@ Stdlib only (unittest). Run directly, or via `just check`.
 
 import os
 import re
+import shutil
 import subprocess
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -92,9 +94,19 @@ class FailClosedTest(unittest.TestCase):
     """The gate itself must keep refusing, or `just gate` stops being a gate."""
 
     def test_the_underlying_gate_still_refuses_to_run_token_less(self) -> None:
+        """It must refuse; *which* prerequisite it names depends on the host.
+
+        On a CI runner the `cs` CLI is not installed either, so the gate
+        stops at that check first. Either way it declines and says why —
+        asserting the specific message would be asserting the machine.
+        """
         done = run([GATE], token=None)
         self.assertNotEqual(done.returncode, 0)
-        self.assertIn("CS_ACCESS_TOKEN", done.stderr)
+        self.assertIn("codescene-gate:", done.stderr)
+
+    @unittest.skipUnless(shutil.which("cs"), "the `cs` CLI is not installed")
+    def test_with_the_cli_present_it_names_the_missing_token(self) -> None:
+        self.assertIn("CS_ACCESS_TOKEN", run([GATE], token=None).stderr)
 
     def test_only_the_wrapper_may_decline(self) -> None:
         """The wrapper's leniency must not have leaked into the gate script."""
@@ -113,12 +125,37 @@ class UsageTest(unittest.TestCase):
 
 
 class BaseResolutionTest(unittest.TestCase):
-    """The branch delta must measure against the ref the merge will use."""
+    """The branch delta must measure against the ref the merge will use.
+
+    Built as throwaway repositories with exactly the refs under test rather
+    than asked of whatever repository happens to be checked out: a CI
+    runner's checkout of a pull-request merge ref has no `origin/main`
+    remote-tracking branch at all, so asserting against the ambient tree
+    would be asserting the machine.
+    """
+
+    def repo(self, *refs: str) -> Path:
+        """A one-commit repository carrying exactly the named refs."""
+        root = Path(tempfile.mkdtemp(prefix="test-hooks-"))
+        self.addCleanup(shutil.rmtree, root, ignore_errors=True)
+        for argv in (
+            ["git", "init", "-q", "--initial-branch=work"],
+            ["git", "config", "user.email", "probe@example.invalid"],
+            ["git", "config", "user.name", "Probe"],
+            ["git", "commit", "-q", "--allow-empty", "-m", "chore: base"],
+        ):
+            subprocess.run(argv, cwd=root, check=True)
+        head = subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=root, capture_output=True, text=True, check=True
+        ).stdout.strip()
+        for ref in refs:
+            subprocess.run(["git", "update-ref", ref, head], cwd=root, check=True)
+        return root
 
     def resolved(self, cwd: Path) -> str:
         """What resolve_base() picks, asked of the script's own logic."""
         script = (REPO_ROOT / HOOK).read_text()
-        body = script[script.index("resolve_base()") : script.index("case \"$mode\"")]
+        body = script[script.index("resolve_base()") : script.index('case "$mode"')]
         done = subprocess.run(
             ["bash", "-c", f"{body}\nresolve_base"],
             cwd=cwd,
@@ -129,22 +166,35 @@ class BaseResolutionTest(unittest.TestCase):
         return done.stdout.strip()
 
     def test_origin_main_is_preferred_because_it_is_the_merge_target(self) -> None:
-        self.assertEqual(self.resolved(REPO_ROOT), "origin/main")
+        both = self.repo("refs/remotes/origin/main", "refs/heads/main")
+        self.assertEqual(self.resolved(both), "origin/main")
+
+    def test_a_local_main_covers_a_clone_with_no_fetched_remote(self) -> None:
+        self.assertEqual(self.resolved(self.repo("refs/heads/main")), "main")
+
+    def test_neither_ref_resolves_to_nothing_rather_than_to_a_guess(self) -> None:
+        self.assertEqual(self.resolved(self.repo()), "")
 
     def test_a_base_that_resolves_to_nothing_is_an_error_not_a_silent_pass(self) -> None:
-        """A delta against the wrong base is indistinguishable from a clean one."""
-        empty = REPO_ROOT / "target" / "hook-base-probe"
-        empty.mkdir(parents=True, exist_ok=True)
-        subprocess.run(["git", "init", "-q"], cwd=empty, check=True)
+        """A delta against the wrong base is indistinguishable from a clean one.
+
+        The hook `cd`s to its own repository root on entry, so it has to be
+        copied into the throwaway repository to be exercised against it —
+        passing a working directory would not reach it.
+        """
+        root = self.repo()
+        (root / "scripts").mkdir()
+        copied = root / HOOK
+        shutil.copy(REPO_ROOT / HOOK, copied)
         done = subprocess.run(
-            [str(REPO_ROOT / HOOK), "branch"],
-            cwd=empty,
+            [str(copied), "branch"],
             env={**os.environ, "CS_ACCESS_TOKEN": "unused-here"},
             capture_output=True,
             text=True,
             check=False,
         )
         self.assertNotEqual(done.returncode, 0)
+        self.assertIn("cannot delta", done.stderr)
 
 
 class WorkflowCleanlinessTest(unittest.TestCase):
