@@ -1,6 +1,6 @@
 # Repository layout
 
-- Status: accepted
+- Status: accepted (amended 2026-07-30 — see [Amendments](#amendments))
 - Date: 2026-07-30
 
 ## Context
@@ -25,3 +25,7 @@ This repository starts life by extraction: the product documentation set (six do
 - The repository root is document-heavy for a code repo. That is deliberate — the docs are the product's front matter — but it means new top-level files need a reason to exist there.
 - Future surfaces have obvious homes: a new crate goes under `crates/`, a new binding under `bindings/`, and neither disturbs the root.
 - Because the six docs cross-link relatively at the root, moving any of them later is a breaking change to the doc set's link graph and would need its own ADR.
+
+## Amendments
+
+- **2026-07-30 — the product documents moved into `docs/`, and the two decision trails were regrouped.** The first Decision bullet no longer holds: `README.md` remains the repository front page, but `PRODUCT.md`, `ABSTRACTIONS.md`, `ARCHITECTURE.md`, `BETA.md`, and `STRATEGY.md` became `docs/product.md`, `docs/abstractions.md`, `docs/architecture.md`, `docs/beta.md`, and `docs/strategy.md`. The second bullet's two trails survive as a pair but moved and were renamed: `docs/decisions/` and `docs/adr/` became `docs/decisions/product/` and `docs/decisions/engineering/`. The fourth bullet gained `security-exceptions.toml`, which moved to the root from `docs/security/exceptions.toml` as configuration rather than documentation. Code by role is unchanged. The record that changed this — and that supplies the ADR the Consequences section above required before any of the documents could move — is [documentation architecture and roadmap ownership](2026-07-30-documentation-architecture.md), which also answers this record's rejection of a `docs/` subtree on the grounds that the rejection protected a reading order rather than a path.
