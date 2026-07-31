@@ -7,7 +7,7 @@ Every scenario runs against every fixture profile. **There are no waivers.** A s
 ```
 conformance/
   harness/       # crate `dogtag-conformance` (publish = false): loads, validates, cross-products
-  scenarios/     # one TOML per golden scenario — the M0 set of eleven plus the M2 packet's seven
+  scenarios/     # one TOML per golden scenario; the harness asserts the exact count
   profiles/      # one directory per fixture profile: PROFILE.toml (parsed) + PROFILE.md (spec)
     dense/  starter/  docs/  records/
 ```
@@ -17,8 +17,8 @@ conformance/
 A scenario is a contract first and a test second:
 
 ```toml
-id = "missing-required-property-diagnostic"   # kebab-case, equals the filename stem
-title = "A missing required property yields a stable diagnostic"
+id = "capability-cardinality-enforced"        # kebab-case, equals the filename stem
+title = "Capability enumeration and cardinality are enforced when the contract loads"
 milestone = "M2"                              # when it becomes executable (M2 | M3 so far)
 status = "pending"                            # pending | executable — all pending at M1
 contract = """
@@ -28,7 +28,7 @@ Given/when/then prose in profile-agnostic terms.
 
 Contract prose binds behavior to **declared capabilities and declared axes** — "the declared catch-all type", "the declared lifecycle axis" — never to any corpus's vocabulary. No scenario may mention a type name, a lifecycle word, or a dialect assumption; vocabulary lives in profiles, and only declarations reach the core.
 
-Which milestone a scenario carries follows what it operates on: a scenario that opens and diagnoses a vault and its committed contract is M2, and one that validates the corpus's notes is M3. Four scenarios written at M0 moved from M2 to M3 on that test when the M2 packet closed, and seven M2 scenarios were added alongside them — a metadata correction, not a waiver, since every scenario still runs against every profile.
+Which milestone a scenario carries follows what it operates on: a scenario that opens and diagnoses a vault and its committed contract is M2, and one that validates the corpus's notes is M3. Four scenarios written at M0 moved from M2 to M3 on that test when the M2 packet closed, and eight M2 scenarios were added alongside them — a metadata correction, not a waiver, since every scenario still runs against every profile.
 
 ### Non-conforming inputs are derived, never authored
 
@@ -36,15 +36,21 @@ A scenario that needs a broken contract — no catch-all type, two of them, an u
 
 That is not a convenience. A hand-authored broken contract has to be written in *some* corpus's vocabulary, which makes it a profile-specific fixture wearing a shared-sounding name — the exact shape this suite exists to catch. Deriving the input runs one assertion against every profile's vocabulary by construction, and no broken contract is checked in anywhere.
 
+**A transformation must prove it changed something.** Each derived case asserts three things: the untransformed contract loads clean, the transformed bytes differ from the original, and the expected diagnostic identifier appears. Without the middle assertion, a transformation that fails to find its target — because one profile spells a table where another spells an array of tables — silently tests nothing.
+
+Two input shapes are **not** contract transformations, and the rule says so rather than implying a coverage it does not have. The machine-local installation record has no per-profile source, so its cases run one identical input; and the discovery scenarios need a synthetic directory tree, where the profile contributes a contract the sentinel test never parses. Those are one case each, not four.
+
 ### The no-waiver rule is structural
 
-The scenario schema has **no field that could name a profile**. Deserialization uses serde's `deny_unknown_fields`, so an added `profiles = ["dense"]`, `skip`, `waive`, or `only` key fails parsing instead of creating an exemption — the place where a personal invariant would hide does not exist in the format. The profile schema is locked the same way in the other direction: a profile has no field with which to exempt itself from scenarios. Harness tests assert both rejections (`waiver_shaped_fields_fail_scenario_parsing`, `waiver_shaped_fields_fail_profile_parsing`); if either test ever fails, someone widened the schema, and that is the exact change this suite exists to forbid. Rejected alternatives — declared-and-reviewed exemptions, a two-tier shared/profile-specific split — both make single-profile scenarios routine, and an exemption list is exactly where a personal invariant hides.
+The scenario schema has **no field that could name a profile**. Deserialization uses serde's `deny_unknown_fields`, so an added `profiles = ["dense"]`, `skip`, `waive`, or `only` key fails parsing instead of creating an exemption — the place where a personal invariant would hide does not exist in the format. The profile schema is locked the same way in the other direction: a profile has no field with which to name a scenario. Harness tests assert both rejections (`waiver_shaped_fields_fail_scenario_parsing`, `waiver_shaped_fields_fail_profile_parsing`); if either test ever fails, someone widened the schema, and that is the exact change this suite exists to forbid.
+
+One channel is **not** closed structurally, and pretending otherwise would be worse than naming it: `corpus = "scheduled"` removes a profile from every scenario at once. The loader checks only that the declared status matches the disk, so deleting a corpus directory and reverting the status is a mechanically valid way to make a failing profile stop failing. The rule that closes it is written rather than typed — **a corpus that has been `built` never returns to `scheduled`** — and the harness is expected to enforce it. Rejected alternatives — declared-and-reviewed exemptions, a two-tier shared/profile-specific split — both make single-profile scenarios routine, and an exemption list is exactly where a personal invariant hides.
 
 ## Profiles
 
 Four profiles, each standing for one persona and together spreading across every axis the configuration seam claims to absorb — type taxonomy, capability assignment, property requirements, predicate vocabulary, lifecycle encoding, name resolution, and dialect. The roster is exact: the harness fails if a profile is missing or a fifth appears unspecified. See each profile's `PROFILE.md` for its full specification.
 
-| Profile | Stands for | Corpus built |
+| Profile | Stands for | Contract built |
 | --- | --- | --- |
 | `dense` | the PKM enthusiast with an established corpus | M2 |
 | `starter` | a fresh install | M2 |
@@ -75,4 +81,6 @@ The harness crate depends on `serde` and `toml` only. It does **not** depend on 
 
 ## Graduating a scenario
 
-A scenario graduates by flipping `status = "pending"` to `"executable"` at its milestone, alongside the execution wiring in the harness. Graduation is all-or-nothing: an executable scenario runs against **every** profile, and the harness refuses to produce a report at all — rather than quietly marking pairs pending — if a runnable pair exists without an execution path. There is no partial graduation, no per-profile rollout, and no mechanism to exclude a profile that fails.
+A scenario graduates by flipping `status = "pending"` to `"executable"` at its milestone, alongside the execution wiring in the harness. Graduation is all-or-nothing: an executable scenario runs against **every profile whose corpus is built**, and the harness refuses to produce a report at all — rather than quietly marking pairs pending — if a runnable pair exists without an execution path. There is no partial graduation, no per-profile rollout, and no mechanism to exclude a profile that fails.
+
+The corpus axis is the honest qualifier on that sentence. A pair whose corpus is still `scheduled` reports pending *on the corpus*, and the printed matrix must say so rather than rendering it identically to a scenario nobody has written — otherwise a run against two of four profiles reads as a complete matrix. Two things follow. A milestone's real cross-profile evidence is the profiles whose corpora exist at that milestone, not the width of the table. And **a scenario whose Given describes notes may not graduate against a corpus that holds none**: the loader checks only that `corpus/` is a directory, so a note scenario run against a contract-only corpus would satisfy "every note …" vacuously over the empty set and report green.

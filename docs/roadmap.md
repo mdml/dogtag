@@ -6,11 +6,12 @@
 
 The next installed prerelease, `0.1.0-beta.1`, opens a real vault, explains its resolved contract, and takes over the vault's daily configuration health check.
 
-- [x] **Decision packet closed 2026-07-31.** The committed contract is `.dogtag/contract.toml` (TOML, integer `contract_version`, fatal unknown keys); the local installation record is `~/.config/dogtag/installation.toml`, read and never written at M2. Six records carry it, beginning with [the vault contract and installation record](decisions/engineering/2026-07-31-vault-contract-and-installation-record.md).
+- [x] **Decision packet closed 2026-07-31.** The committed contract is `.dogtag/contract.toml` (TOML, integer `contract_version`, fatal version-scoped unknown keys); the local installation record is `~/.config/dogtag/installation.toml`, read and never written at M2. Six records carry it, beginning with [the vault contract and installation record](decisions/engineering/2026-07-31-vault-contract-and-installation-record.md).
 - [ ] Implement vault-root discovery and configuration resolution, with per-leaf provenance across the committed contract, the local record, and format defaults.
 - [ ] Author the `dense` and `starter` fixture contracts — `dense` from numeric shape alone, with all vocabulary authored, per [the fixture and privacy record](decisions/engineering/2026-07-31-m2-fixtures-and-the-privacy-gate.md).
 - [ ] Validate capabilities, the lifecycle declaration, and compatibility with structured diagnostics carrying shared identifiers, and ship `dogtag doctor` and `dogtag contract explain`.
 - [ ] Graduate the M2 conformance scenarios against both fixtures, and raise the coverage baseline with the kernel code that lands.
+- [ ] Add SBOM generation to the release path: M2 moves the TOML and JSON crates into the shipped binary, which fires the trigger [the supply-chain policy](decisions/engineering/2026-07-30-supply-chain-and-vulnerability-policy.md) already set.
 - [ ] Publish and install `0.1.0-beta.1` from the public release, then complete the cutover: seven days of parallel running before the incumbent configuration check is retired.
 
 **Blocked on infrastructure.** GitHub Actions is not assigning runners for this repository, so required checks cannot execute. Work proceeds locally under `just gate`; nothing pushes, merges, tags, or publishes until required checks run and pass. See [the release and cutover record](decisions/engineering/2026-07-31-m2-release-and-cutover.md).

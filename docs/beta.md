@@ -21,7 +21,7 @@ The beta proves the complete product lifecycle with a deliberately small operati
 - A public Rust core SDK, licensed Apache-2.0.
 - A CLI implemented entirely through the public SDK.
 - A TypeScript binding backed by the same core.
-- Vault discovery and layered, validated configuration: one committed vault contract, one local installation record.
+- Vault discovery and validated configuration, each setting owned by exactly one scope: one committed vault contract, one local installation record.
 - Structured diagnostics and machine-readable results.
 - `version`, `doctor`, `check`, `list`, `show`, lexical `search`, and `contract explain` — the last rendering the resolved contract as agent-readable instructions so they cannot drift from it.
 - One plan/validate/apply mutation, initially `capture`.
@@ -75,7 +75,7 @@ The beta ships in nine milestones, each an installable vertical slice published 
 
 - **M0 — beta contract and extraction packet.** Shipped: the decisions this document carries.
 - **M1 — clean repository and empty release.** The product repository, Rust workspace, CLI and TypeScript scaffolds, conformance harness, release automation, and the doc set; `dogtag version` published and installed as `0.1.0-beta.0`.
-- **M2 — open and diagnose.** Vault-root discovery, configuration loading, capability validation, compatibility checks, structured diagnostics, `dogtag doctor`, and `dogtag contract explain`. The committed vault-contract format is decided here; the `dense` and `starter` fixture corpora land with it. Cutover: the daily vault health check.
+- **M2 — open and diagnose.** Vault-root discovery, configuration loading, capability validation, compatibility checks, structured diagnostics, `dogtag doctor`, and `dogtag contract explain`. The committed vault-contract format is decided here; the `dense` and `starter` fixture contracts land with it, and their notes follow at M3 with the document model that defines them. Cutover: the vault *configuration* health check — `doctor` opens no note at this rung, so corpus linting moves at M3.
 - **M3 — read and validate.** The public document model plus `check`, `list`, and `show`, against the shared conformance scenarios written at M0. Cutover: reading and listing notes.
 - **M4 — lexical retrieval.** Basic search and entity lookup over the common model; the `docs` fixture profile is built here, where a folder-organized markdown-link corpus stresses retrieval hardest. Cutover: search.
 - **M5 — safe mutation.** Plan/validate/apply transaction with one `capture` operation: explicit file scope, actor/provenance, preview, post-write validation, structured result, recovery. Cutover: one capture path.
@@ -90,7 +90,7 @@ Four profiles, each standing for one audience in [product.md](product.md)'s pers
 | Profile | Stands for | Distinguishing axes | Corpus lands |
 | --- | --- | --- | --- |
 | `dense` | the PKM enthusiast with an established corpus | many types, several identity-bearing, wikilink dialect, lifecycle where the ordinary state is absence | M2 |
-| `starter` | a fresh install | the initialization profile's own defaults, lifecycle where the ordinary state is a named value | M2 |
+| `starter` | a fresh install | the normative initialization profile's own defaults, lifecycle where the ordinary state is a named value | M2 |
 | `docs` | the dev team | repository documentation shapes, folder organization, markdown-link dialect, most files carrying no frontmatter, repeated basenames | M4 |
 | `records` | the decision maker | a dense domain record taxonomy, immutable originals under closed-write, evidence trails | before assisted adoption (E1) |
 

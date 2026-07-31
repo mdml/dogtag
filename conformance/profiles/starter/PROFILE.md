@@ -16,7 +16,7 @@ That inverts the profile's original wording, which described the fixture as init
 
 ## What it must cover
 
-Exactly one catch-all, at least one identity-bearing type, a lifecycle axis whose ordinary state is an explicit named value, and otherwise the smallest contract that is genuinely useful. It loads with zero diagnostics — doubly load-bearing here, since this fixture is the standing test that the product's own defaults satisfy the product's own rules.
+Exactly one catch-all, at least one identity-bearing type, a lifecycle axis whose ordinary state is an explicit named value, and otherwise the smallest contract that is genuinely useful. It loads with zero diagnostics at any severity — doubly load-bearing here, since this fixture is the standing test that the product's own defaults satisfy the product's own rules.
 
 ## Why it is not built yet
 

@@ -13,9 +13,11 @@ Two earlier decisions constrain the shape. `doctor` must report discovery and in
 
 ### `dogtag doctor`
 
-`dogtag doctor [--vault <name-or-path>] [--format text|json]`.
+`dogtag doctor [--vault <name-or-path>] [--format text|json] [--strict]`.
 
-**It reads the vault root, `.dogtag/contract.toml`, and the installation record — and nothing else.** No file under the vault root is opened. It reports the resolved root and how it was resolved, contract presence, parse, and version classification, capability enumeration and cardinality, the lifecycle declaration's consistency, the declared dialect, and the installation record's presence, validity, and registered vaults. It writes nothing, anywhere.
+**It opens exactly two files: `.dogtag/contract.toml` and the installation record.** No note is read and no directory under the vault root is enumerated. It reports the resolved root and how it was resolved, contract presence, parse, and version classification, capability enumeration and cardinality, the lifecycle declaration's consistency, the declared dialect, and the installation record's presence and validity. It writes nothing, anywhere. `--strict` promotes warnings for exit purposes only, which is what lets the scheduled cutover check detect a wrong-vault resolution from its exit code alone.
+
+**It reports the registry entry for the resolved vault, not the whole registry.** The full inventory sits behind an explicit flag. A registry enumerates every vault a user has registered, by user-chosen name and absolute path — and dogtag is agent-facing by design, so `doctor --format json` would otherwise pull a complete vault inventory, and the home-directory layout with it, into an agent's context and its provider's logs in answer to a question about one vault. The same output is what gets pasted into a bug report during the seven-day parallel run.
 
 Not enumerating notes is where the M2/M3 line actually lives. The moment `doctor` counts notes it needs a traversal policy — what counts as a note, which directories are skipped, how a derived index directory and the version layer's own directory are treated, whether symlinks are followed — and every one of those is an M3 decision that would get frozen by a guess made to populate a progress counter.
 
@@ -25,7 +27,7 @@ The consequence worth stating plainly: **what moves onto installed dogtag at M2 
 
 `dogtag contract explain [--vault <name-or-path>] [--format markdown|json] [--provenance]`.
 
-- **`markdown` is the default** and is the generated agent contract — the rendering `architecture.md` requires not to drift from the resolved contract. It reads well enough for a human that no third rendering is needed.
+- **`markdown` is the default** and is the generated agent contract — the rendering `architecture.md` requires not to drift from the resolved contract. It reads well enough for a human that no third rendering is needed. Its preamble names the resolved vault root, so an agent consuming piped output receives the provenance along with the instructions; printing the root to a terminal protects only a human who is watching.
 - **`json`** is the complete resolved model, always carrying per-leaf provenance.
 - **`--provenance`** annotates the Markdown with each value's source and location. It is opt-in because the Markdown's job is instructing an agent, and a source annotation on every line makes it materially worse at that.
 
@@ -44,9 +46,13 @@ This is the same boundary as *"the CLI consumes only the public API,"* applied t
 **Discovery and contract resolution are separate operations.**
 
 ```
-discover(start: &Path)            -> Result<VaultRoot, Diagnostic>
+discover(start)                   -> Discovered { root, diagnostics }
+root_at(path)                     -> Result<VaultRoot, Diagnostic>
+resolve_registered(name, record)  -> Result<VaultRoot, Diagnostic>
 open(root, installation)          -> Opened { root, installation, contract: Result<…>, diagnostics }
 ```
+
+The three entry points and the opaque `VaultRoot` are [the discovery record](2026-07-31-vault-discovery-and-selection.md)'s; the split matters here because `--vault <path>` must be verified rather than searched, and because discovery emits diagnostics on success.
 
 `Opened` always carries the root, the installation record's state, and the diagnostic list; the resolved contract is a `Result` inside it. Semantic operations take a resolved contract and cannot be reached without one.
 

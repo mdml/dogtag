@@ -1,7 +1,7 @@
 name = "starter"
 persona = "a fresh install"
 distinguishing_axes = [
-  "the initialization profile's own defaults, unmodified",
+  "the normative initialization profile's own defaults",
   "lifecycle where the ordinary state is a named value",
 ]
 corpus = "scheduled"

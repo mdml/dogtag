@@ -30,7 +30,22 @@ Symlinks *inside* a vault — a note that is a link, a link escaping the root �
 
 ### Nested vaults
 
-**Nearest root wins.** When an ancestor directory also holds a contract, `doctor` reports it as a warning-severity diagnostic. Nesting is legal — a vendored vault, a vault checked out inside another — so it is deterministic and visible rather than refused.
+**Nearest root wins, and the walk always continues to the filesystem root.** When an ancestor directory also holds a contract, the resolved root is still the nearest one, and discovery emits a warning-severity diagnostic naming the ancestor. Nesting is legal — a vendored vault, a vault checked out inside another — so it is deterministic and visible rather than refused.
+
+Completing the walk after the sentinel is found is what makes that warning possible at all, and it is stated here because the alternative is worse: if `doctor` performed a second private walk to find the ancestor, there would be two discovery implementations, and every other consumer would silently lose the warning.
+
+### Trust
+
+A discovered contract is trusted exactly as far as the directory tree it was found in. With no boundary on the walk, that tree is not always the user's.
+
+The accidental case is mild — running inside an unrelated repository nested under a vault finds the vault, which the resolved-root line makes visible. The adversarial case is not, and it is live at M2 rather than deferred to the mutation milestone. `contract explain` renders the contract as **instructions an agent follows**; every string value in a valid contract is free text. So a `.dogtag/contract.toml` planted in any ancestor of where dogtag runs — in an extracted archive or cloned repository whose top level carries one, in a world-writable directory on a shared host, on a network mount — becomes attacker-authored text presented to an agent as the vault's rules. Fatal unknown keys bound the structure an attacker can inject; they bound nothing about the content.
+
+Nothing here is a write or an exfiltration at M2: `doctor` is read-only and opens no note. The blast radius is whatever the consuming agent is permitted to do. Two mitigations, both cheap and neither requiring a boundary:
+
+- **A warning-severity diagnostic when the resolved root is outside the user's home directory or is group- or world-writable.** It costs one `stat`, changes no resolution rule, and preserves the one-rule-no-exceptions property.
+- **`contract explain`'s Markdown names the resolved root in its preamble**, so an agent consuming the rendering receives the provenance with the instructions. Printing the root to a terminal protects a human reading it; it does nothing for an agent reading piped output.
+
+The walk also crosses mount boundaries by design, so a hanging network mount above the working directory stalls discovery — an availability cost on exactly the network-hosted vault this record declines to exclude.
 
 ### Selection
 
@@ -43,13 +58,21 @@ Vault selection is the CLI's, and resolves in one order: **`--vault`, then `DOGT
 
 The no-fallback rule is what makes this deterministic. *Path-if-it-exists-else-name* would resolve `--vault work` differently depending on whether a `work` directory happens to sit in the current directory, so the same command would select different vaults from different places. *Name-first-else-path* would let registering a vault named `docs` silently change what `--vault docs` means in every existing script on the machine — a machine-local file reinterpreting an invocation, which the settings PDR forbids. With no fallback, the argument's own syntax fixes its meaning, and registering a vault can never change what an existing invocation resolves to.
 
-Two supporting rules follow. Registry names are kebab-case and contain no path separators, and **duplicate names are a load error on the installation record** rather than a silently-resolved ambiguity. A registered name whose path is absent or is not a vault root is an error citing the registry entry as related evidence — never a fall-through to discovery.
+Two supporting rules follow. Registry names are kebab-case and contain no path separators, and **duplicate names are a load error on the installation record** rather than a silently-resolved ambiguity — which is also what forecloses shadowing an existing name by appending an entry, not merely a determinism nicety. A registered name whose path is absent or is not a vault root is an error citing the registry entry as related evidence — never a fall-through to discovery. Registry paths are absolute, with no tilde or environment expansion, so a registry entry cannot resolve differently from different directories.
 
 **Registration never implies selection.** There is no default vault and no "current vault" state, so multiple registered vaults cannot produce ambiguity: the registry answers only questions that name an entry.
 
 ### The SDK/CLI boundary
 
-**The SDK's discovery entry point is a pure function of an explicit starting path.** It reads no environment variable, consults no current directory, and holds no process-global vault state. The CLI resolves argv, environment, and the current directory into an explicit path, and resolves registry names into paths, before calling in.
+**Every SDK entry point here is a pure function of explicit arguments.** None reads an environment variable, consults the current directory, or holds process-global vault state. The CLI resolves argv, environment, and the current directory into explicit arguments before calling in.
+
+Three entry points, not one, because one cannot express the decisions above:
+
+- **`discover(start)`** walks upward and returns the resolved root **together with the diagnostics discovery itself produced** — the symlink-resolution note and the nested-vault warning both arise on a *successful* discovery, so a bare success value has nowhere to carry them.
+- **`root_at(path)`** verifies that an exact path is a vault root, without walking. This is what `--vault <path>` calls; without it the CLI would either walk (violating explicit-means-exact) or perform the sentinel check itself (putting kernel knowledge in a consumer).
+- **`resolve_registered(name, record)`** maps a registry name to a path against an explicitly supplied installation record. Registry resolution lives in the SDK rather than the CLI because its failures — an unknown name, an entry whose path is not a vault root, duplicate names — are `installation.*` diagnostics, and only the SDK may mint an identifier outside the `ext.` namespace. Taking the record as an argument keeps the no-ambient-state rule intact: the CLI still decides *which* record, using `XDG_CONFIG_HOME`.
+
+**`VaultRoot` is an opaque type, not an alias for a path.** It renders as a path and is compared as one, but callers do not reconstruct it from the rendered string. That costs nothing now and preserves the option of carrying a held directory handle later — the difference between re-resolving a write target from a string and writing through the handle that was verified, which is the gap between canonicalization and use that only matters once there are writes. Retrofitting it after `VaultRoot` is public API would be a breaking change.
 
 This is what keeps *"the SDK is the kernel"* true for the one operation most tempted toward ambient state, and it is what makes discovery testable exhaustively against synthetic trees rather than against whatever directory a test happens to run in.
 
@@ -72,5 +95,6 @@ This is what keeps *"the SDK is the kernel"* true for the one operation most tem
 - **From inside an unrelated repository nested under a vault, discovery finds the vault.** That is the accepted cost of having no boundary; the mitigation is that every command prints the root it resolved, which makes the surprise a one-line read rather than a mystery.
 - **A user who organizes vaults through symlinks sees paths they did not type.** The info diagnostic explains it once per invocation, which is noise for anyone who set it up deliberately.
 - **`--vault work` cannot mean the directory `./work`.** It must be written `./work`. The error for an unregistered bare name has to teach this, because the mistake is easy and the correction is not guessable.
-- **Discovery is exhaustively testable**, since it takes an explicit path. Every branch — nested, incomplete, absent, symlinked, competing — is reachable against a synthetic tree, which matters directly for the 100% kernel coverage floor.
+- **Discovery is exhaustively testable**, since it takes an explicit path. Every branch — nested, incomplete, absent, symlinked, competing — is reachable against a synthetic tree, which matters directly for the 100% kernel coverage floor. The no-vault-found case is the exception that needs care: because the walk has no boundary, "a directory with no vault above it" is a property of the *machine*, not of a fixture. The conformance harness therefore needs a root it controls, the way `XDG_CONFIG_HOME` already gives it a hermetic installation record; otherwise that scenario's outcome depends on whose checkout it runs in, which is one developer's directory layout reaching a conformance result.
+- **The adversarial cases above are acknowledged rather than closed.** The two mitigations reduce a planted contract to something visible, not to something impossible, and no boundary rule would close it either — this record's whole argument is that every candidate boundary is worse. Anyone extending discovery should treat the trust sentence as the constraint, not the walk.
 - **The registry gains a real job at M2** (name resolution) beyond being reported, which means the installation record's parse and validation rules are load-bearing from the first release that reads it.

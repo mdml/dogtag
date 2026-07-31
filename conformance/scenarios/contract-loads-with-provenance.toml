@@ -4,12 +4,15 @@ milestone = "M2"
 status = "pending"
 contract = """
 Given a vault whose committed contract declares its types, properties,
-relationships, capabilities, lifecycle axis, and write policy.
+relationships, capabilities, lifecycle declaration, and write policy, and a
+machine-local installation record alongside it.
 
-When the contract is loaded.
+When the configuration is loaded.
 
-Then loading succeeds, the resolved contract exposes every declared setting,
-and each resolved setting carries its provenance — which source supplied it:
-the committed contract, an initialization default, or the local installation
-record — so a caller can ask where any effective setting came from.
+Then loading succeeds, the resolved configuration exposes every declared
+setting, and each resolved value carries its provenance — which source
+supplied it: the committed contract, the machine-local installation record for
+the settings that record owns, or the format default fixed by the version the
+contract declares — so a caller can ask where any effective value came from,
+and can tell a value the author chose from one nobody stated.
 """

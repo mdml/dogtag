@@ -36,8 +36,8 @@ fn all_scenario_files_parse_with_unique_kebab_case_ids() {
     let scenarios = load_scenarios().expect("every scenario file parses and validates");
     assert_eq!(
         scenarios.len(),
-        18,
-        "the M0 golden set of eleven plus the M2 packet's seven"
+        19,
+        "every scenario file on disk is loaded; this count moves with the set"
     );
 
     // load_scenarios already enforces id == filename stem, kebab-case, and

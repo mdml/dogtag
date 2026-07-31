@@ -4,13 +4,15 @@ milestone = "M2"
 status = "pending"
 contract = """
 Given a vault whose root holds the committed contract, and beneath it a
-directory carrying the marker of a vault root but no committed contract.
+directory that carries the configuration location a vault root uses but does
+not hold the committed contract inside it.
 
-When discovery runs from the incomplete directory.
+When discovery runs from that incomplete directory.
 
-Then discovery halts there with a diagnostic naming that directory, rather
-than continuing upward to the enclosing vault. A partially configured vault
-is reported as damaged, never resolved silently to a different corpus: an
-operation that reports success against a corpus the caller did not name is
-the failure this rule exists to prevent.
+Then discovery halts there with a stable diagnostic identifier naming that
+directory, rather than continuing upward to the enclosing vault. A partially
+configured vault is reported as damaged, never resolved silently to a
+different corpus: an operation that reports success against a corpus the
+caller did not name is the failure this rule exists to prevent. The
+identifier differs from the one reporting that no vault exists at all.
 """
