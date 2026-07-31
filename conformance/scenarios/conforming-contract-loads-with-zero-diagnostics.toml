@@ -1,0 +1,20 @@
+id = "conforming-contract-loads-with-zero-diagnostics"
+title = "A conforming committed contract loads with zero diagnostics"
+milestone = "M2"
+status = "pending"
+contract = """
+Given a vault whose committed contract satisfies every rule the format states:
+its declared version is supported, it carries no key the version does not
+define, its capability assignments respect the declared cardinalities, its
+declarations name each other consistently, and it declares whether the corpus
+has a lifecycle axis.
+
+When the vault is opened and diagnosed.
+
+Then the report carries zero diagnostics at any severity — not merely no
+errors — in every profile, whatever the corpus's taxonomy, dialect, folder
+organization, or lifecycle encoding. A contract that loads while emitting
+advice is not a conforming contract, and a fixture that a corpus can be
+initialized from must reach this bar or the product ships defaults its own
+rules complain about.
+"""

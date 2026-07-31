@@ -13,11 +13,13 @@
 
 A committed vault contract at M2, and roughly forty hand-authored fictional notes on top of it at M3, when the document model those notes must be written in is decided.
 
-**The contract's shape is derived; its vocabulary is not.** Only counts and axis facts cross from the established private corpus this profile is modelled on — how many types, how many carry each capability, how many predicates and how many are required, which property kinds appear, the lifecycle encoding, the dialect. Every name in this fixture is authored fiction: no type name, property name, predicate, lifecycle value, or tag is copied. Nothing lexical crosses the boundary, so nothing personal can reach this public repository even in principle, and the privacy gate reduces to confirming that the artifact which crossed carries no strings at all. The reasoning, and the rejected alternative of scrubbing a derived vocabulary, are in [the M2 fixture and privacy record](../../../docs/decisions/engineering/2026-07-31-m2-fixtures-and-the-privacy-gate.md).
+**The contract's shape is derived; its vocabulary is not.** Only approximate counts and axis facts cross from the established private corpus this profile is modelled on — roughly how many types, how many carry each capability, how many predicates and how many are required, which property kinds appear, the lifecycle encoding, the dialect. They cross as approximations rather than as a transcription: an exact census is a corpus statistic, which the extraction rules remove, and a stable fingerprint linking this fixture to its source for anyone who sees both. Every name in this fixture is authored fiction: no type name, property name, predicate, lifecycle value, or tag is copied. Because no vocabulary crosses, leakage is accidental rather than routine — not impossible, since whoever counts a schema has read it, which is why the gate also reads the authored names back against the source once before the commit. The reasoning, and the rejected alternative of scrubbing a derived vocabulary, are in [the M2 fixture and privacy record](../../../docs/decisions/engineering/2026-07-31-m2-fixtures-and-the-privacy-gate.md).
 
 ## What it must cover
 
-At least two identity-bearing types, exactly one catch-all, at least one closed-write; every one of the contract's property value kinds used at least once; at least two relationship predicates, at least one of them required and at least one constraining its permitted targets; a lifecycle axis whose ordinary state is absence; the wikilink dialect. The contract loads with zero diagnostics.
+At least two identity-bearing types, exactly one catch-all, at least one closed-write; at least two relationship predicates, at least one of them required; a lifecycle axis whose ordinary state is absence; the wikilink dialect. The contract loads with zero diagnostics at any severity.
+
+The floor deliberately does not require every property value kind to be used: a kind nobody reaches for should be visible as unused, and mandating coverage would make this fixture, rather than a real corpus, the reason a kind stays in the lattice.
 
 ## Why it is not built yet
 

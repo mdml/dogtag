@@ -4,8 +4,8 @@ milestone = "M2"
 status = "pending"
 contract = """
 Given a vault root supplied explicitly rather than discovered, and separately
-a directory that holds no committed contract anywhere between itself and the
-filesystem root.
+a starting directory within a tree the run controls entirely, holding no
+committed contract at any level.
 
 When the explicit root is a vault root; when the explicit root is a directory
 nested inside a vault; and when discovery runs from the directory with no
@@ -14,7 +14,10 @@ vault above it.
 Then an explicit root that is a vault root is used as given. An explicit root
 that is not itself a vault root is refused — it is never searched upward,
 because an explicitly supplied path means exactly that path. A start with no
-vault above it fails with a diagnostic naming the directory searched from and
-what was sought, under an identifier distinct from the one reporting a vault
-that exists but cannot be used.
+vault above it fails with a stable diagnostic identifier naming the directory
+searched from and what was sought, distinct from the identifier reporting a
+vault that exists but cannot be used. Because the search has no boundary, the
+tree the search runs in must be one the run controls; a result that depends
+on what sits above a developer's working directory is not a conformance
+result.
 """

@@ -29,20 +29,26 @@ Three levels: **`error`** — the operation cannot produce a trustworthy result;
 
 ### Locations and evidence
 
-- **In-vault paths are vault-relative**; out-of-vault paths — the installation record — are absolute. Structured output always uses forward slashes.
+- **In-vault paths are vault-relative.** The installation record is reported as `$XDG_CONFIG_HOME/dogtag/installation.toml` rather than expanded, so no diagnostic emits the account name. Structured output always uses forward slashes.
 - **Spans carry 1-based line, 1-based column measured in Unicode scalar values, and a byte offset**, with an optional end position for real spans.
 - **Every diagnostic may carry related evidence**: a list of `{ location, message }` pairs.
 
-Vault-relative paths are forced by determinism rather than chosen for ergonomics. Absolute paths in structured output would make a conformance golden machine-specific, so a fixture's expected output would differ between a working copy and CI, and there would be no golden file to write at all. Related evidence is likewise forced: *"this contract declares two catch-all types"* is unusable without pointing at both.
+Vault-relative paths are forced by determinism rather than chosen for ergonomics. Absolute paths in structured output would make a conformance golden machine-specific, so a fixture's expected output would differ between a working copy and CI, and there would be no golden file to write at all. The rule does double duty as a privacy control, which is worth saying so that nobody relaxes it later believing only goldens are at stake. Related evidence is likewise forced: *"this contract declares two catch-all types"* is unusable without pointing at both.
+
+**Diagnostic messages may quote a corpus's own vocabulary** — type names, property names, lifecycle values — because a diagnostic that will not name what is wrong is not worth emitting. That deserves stating plainly next to the [fixture privacy gate](2026-07-31-m2-fixtures-and-the-privacy-gate.md), which treats exactly that vocabulary as material not to publish: the two are consistent only because one governs a committed artifact and the other governs transient output. The practical consequence lands during the cutover's seven-day parallel run, when output gets pasted into issues and agent transcripts: **diagnostic output from a private vault is private.** Where a location alone identifies the problem, a message should prefer the location to the name.
 
 ### Ordering, rendering, and exit codes
 
-- **Deterministic total order**: by path, then line, then column, then byte offset, then identifier. Diagnostics with no location sort first, ordered by identifier. Never discovery order, which varies with the filesystem.
+- **Deterministic total order**: by path, then line, then column, then byte offset, then identifier. Diagnostics with no location sort first, ordered by identifier; vault-relative paths sort before the installation record, so the two path kinds never interleave ambiguously. Never discovery order, which varies with the filesystem.
 - **Human rendering** is `severity[identifier]: message`, a location line, related-evidence lines, and an optional `help:` line. Colour only when the stream is a terminal and `NO_COLOR` is unset.
 - **Structured output is a single JSON document** carrying its own schema version, on a separate clock from `contract_version`.
-- **Exit codes are `0`, `1`, and `2` only**: clean, error-severity diagnostics reported, and usage error respectively. Warnings exit `0`.
+- **Exit codes are `0`, `1`, and `2`**: clean, error-severity diagnostics reported, and usage error respectively. Warnings exit `0` unless `--strict` is given, which promotes them for exit purposes only.
+- **Severity is the sole determinant of `0` versus `1`.** `2` is reserved for argument-parsing failures that produce no diagnostic at all. So an unregistered `--vault work` — which is an `installation.*` diagnostic — exits `1`, not `2`, even though it arrives as a bad argument.
+- Any other exit code means an unmodelled internal failure and must be treated as failure. A Rust panic exits `101`, so a caller matching on `{0, 1, 2}` needs a default arm; claiming three codes without saying this would leave the one case this record predicts unhandled.
 
-Three codes rather than four is a deliberate forcing function. **Every foreseeable failure is a diagnostic with an identifier** — an unreadable contract, a permission denial, malformed TOML — rather than a bare nonzero exit. A distinct internal-failure code would become the home for every error nobody wanted to model, and the point of an envelope is that there is nowhere else to put things.
+Three modelled codes rather than four is a deliberate forcing function. **Every foreseeable failure is a diagnostic with an identifier** — an unreadable contract, a permission denial, malformed TOML — rather than a bare nonzero exit. A distinct internal-failure code would become the home for every error nobody wanted to model, and the point of an envelope is that there is nowhere else to put things.
+
+`--strict` exists because M2's own cutover is an unattended scheduled check whose only automatic signal is the exit code, and because a nested vault resolves a *different corpus* at warning severity. Without `--strict` that check reports healthy while inspecting the wrong vault. Deferring the flag would have meant deferring it past the one workflow that asked for it.
 
 ### Compatibility
 
@@ -50,10 +56,16 @@ Three codes rather than four is a deliberate forcing function. **Every foreseeab
 
 | Found | Classification | Behavior |
 | --- | --- | --- |
-| below the floor | `below-supported-floor` | refuse; the diagnostic names migration and the version-pinning recourse |
-| in range, not the maximum | `supported` | load fully, plus an `info` diagnostic that a newer format exists |
-| the maximum | `current` | load fully |
-| above the range | `too-new` | refuse with `compat.contract-too-new` |
+| below the floor | `below-supported-floor` | refuse: `compat.contract-below-supported-floor` names migration and the version-pinning recourse |
+| in range, not the maximum | `supported` | load fully, plus `compat.newer-format-available` at `info` |
+| the maximum | `current` | load fully, no diagnostic |
+| above the range | `too-new` | refuse: `compat.contract-too-new` |
+
+**The floor does not rise during the beta.** It may rise only in a release *after* migration tooling ships, and never in the same release that introduces the version it excludes. Without that policy the design contradicts the promise it was built to satisfy: a user on an excluded version is told to pin an older build — that is, *not to upgrade* — which negates both halves of "upgrade to a fix without manual vault repair" simultaneously, and fails the ship test's requirement that an older beta upgrade to the final candidate. Pinning is also bounded rather than indefinite, because [the supply-chain policy](2026-07-30-supply-chain-and-vulnerability-policy.md) fixes security response as forward-only: a pinned install forfeits later fixes.
+
+The consequence of a floor that cannot rise is that the supported range grows monotonically and the SDK carries every historical version's parse rules and default tables. That cost is real and is accepted; there is no shedding mechanism that does not break the promise.
+
+**`dogtag migrate` is scheduled at no milestone.** `architecture.md` commits to it as the schema-change escape hatch and the settings PDR lists it as a CLI surface, but no rung of the ladder delivers it. That is recorded here as an open question, in the same terms as `init`, rather than resolved inside an M2 packet.
 
 A range rather than a single supported version is forced by M0 rather than chosen: with self-mutating upgrades deferred and manual vault repair ruled out, a newer tool **must** keep loading an older contract. The other direction is forced by the format: with unknown keys fatal, an older tool physically cannot best-effort a newer contract, so refusal is the only honest answer.
 
@@ -81,9 +93,10 @@ A range rather than a single supported version is forced by M0 rather than chose
 
 ## Consequences
 
-- **Identifiers are now a public API surface with no deprecation mechanism.** The M2 set is small, which is the moment to get the areas right; a mistake in an area name is permanent or breaking.
+- **Identifiers are now a public API surface with no deprecation mechanism**, and the first implementation freezes the whole M2 set. Rejecting a separate registry document was right — a second home for a list the enum already holds would only drift — but it leaves no review step for a permanent namespace, so **the identifier enum is called out for review in its own right when it lands**, not carried along with the code that raises each one.
+- **The JSON output is a report containing the envelope, not the envelope alone**, and its field names and initial schema version are fixed by the implementation rather than by this record. That is the largest thing left underspecified here: `doctor`'s section names and its representation of *not evaluated* are what the cutover's seven-day triage will diff, so they need to be settled in the first implementation commit rather than accreted.
 - **The `ext.` prefix is asserted but unexercised**, since no consumer has written a linter yet. The constructor's rejection is testable; the ergonomics are not, until someone builds one.
 - **Every failure must be modelled as a diagnostic.** That is the intended pressure, and it means an unmodelled failure surfaces as a panic rather than as a tidy exit code — which is worse in the moment and better over time.
-- **The compatibility machinery is almost entirely theory at M2**, with one supported version. What ships is the classification, the diagnostics, and the tests; the first real bump is when it is proven.
+- **The compatibility machinery is almost entirely theory at M2**, with one supported version. What ships is the classification, the diagnostics, and the tests; the first real bump is when it is proven. Two of the four classifications are reachable from a real fixture — `current`, and `below-supported-floor` via `contract_version = 0` — and `too-new` via `2`. Only `supported`-but-not-current is unreachable at M2, which is why the conformance scenario asserts the three that are and leaves the fourth to the milestone whose range has two versions in it.
 - **`classify` is public API purely for testability.** That is a real cost — a function on the public surface whose injectable parameter exists for the test suite — accepted because the alternative is either an untestable gate or a blocked coverage ratchet.
 - **The JSON schema version is a third version to maintain**, alongside the crate version and `contract_version`. Three clocks is one more than anyone wants; the alternative was coupling output stability to format stability, which is worse.

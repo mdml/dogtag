@@ -15,13 +15,19 @@ The `dense` and `starter` fixture corpora land at M2, because the committed cont
 
 **Only the shape crosses the private/public boundary, expressed as counts and axis facts. Every name in the public fixture is authored fiction.**
 
-What crosses: how many types, how many carry each capability, how many predicates and how many are required, which property kinds are used and how often, the lifecycle encoding, the dialect. What does not cross: any string. Type names, property names, predicate names, lifecycle values, and tag vocabularies are written for the fixture.
+**The derivation produces exactly one intermediate artifact**: a short file of integers and format constants — roughly how many types, how many carry each capability, how many predicates and how many are required, which property kinds appear, which lifecycle encoding, which dialect. It is written **outside any repository working tree** and deleted once the fixture is authored. What does not cross: any corpus vocabulary. Type names, property names, predicate names, lifecycle values, and tag vocabularies are written for the fixture.
 
-**The privacy gate is therefore: does the artifact that crossed the boundary contain any string? If not, the gate is satisfied.** It runs **before the commit**, not before the push, because once history is public a file's removal does not remove it from history, and this repository fixes forward and never rewrites.
+**The counts cross as approximations, not as a transcription.** This matters more than it first appears. Rule 5 of [the extraction record](2026-07-30-document-extraction-sanitization.md) deletes *corpus statistics* as archaeology, and the product decision trail independently forbids corpus-specific numbers — and an exact census (thirty-one types, four identity-bearing, twelve predicates) is a stable, distinctive fingerprint that links the fixture to the private vault for anyone who ever sees both, while disclosing that corpus's scale, which is otherwise absent from the public tree. An order of magnitude serves `dense`'s purpose completely: what makes it stress the kernel is that it is *realistically dense*, not that it matches one vault's arithmetic. The coverage floor below is already written as a floor for this reason.
 
-This changes the gate's nature rather than merely tightening it. A vocabulary-scrubbing pass is judgement-based, unbounded, and never provably complete — and it cannot be mechanized in the open, because a scanner would need a deny-list of the private vocabulary and that deny-list is itself the secret. Numeric derivation makes lexical leakage structurally impossible instead of reviewed-away, and reduces the human check to something a reader can complete in one look. `dense` loses nothing it exists for: density and capability distribution are what make it stress the kernel at realistic scale, and both are numbers.
+**The gate is therefore: open the intermediate artifact and confirm it holds only integers and format constants, with no corpus vocabulary anywhere in it.** It is performed by whoever authors the fixture, the fixture's commit message records that it was performed, and it runs **before the commit** — not before the push, because once history is public a file's removal does not remove it from history, and this repository fixes forward and never rewrites.
 
-**Coverage floor for `dense`:** at least two identity-bearing types, exactly one catch-all, at least one closed-write, every one of the eight property kinds used at least once, at least two predicates with at least one `required` and at least one carrying `targets`, a lifecycle axis whose ordinary state is absence, and the wikilink dialect. It loads with zero diagnostics.
+This changes the gate's nature rather than merely tightening it. A vocabulary-scrubbing pass is judgement-based, unbounded, and never provably complete — and it cannot be mechanized in the open, because a scanner would need a deny-list of the private vocabulary and that deny-list is itself the secret. Numeric derivation makes lexical leakage **accidental rather than routine**, and reduces the human check to something a reader can complete in one look.
+
+It does not make leakage impossible, and the earlier claim that it did was too strong. Whoever counts the private schema has read its vocabulary, and priming is real: a distinctive predicate or lifecycle word can resurface in "invented" naming. So one step survives from the rejected alternative — **before the commit, the authored vocabulary is read once against the private source, by the only party who can, confirming no name coincides.** Ideally the fixture is authored from the numeric artifact alone, by someone or something that never saw the source.
+
+**Coverage floor for `dense`:** at least two identity-bearing types, exactly one catch-all, at least one closed-write, at least two predicates with at least one `required`, a lifecycle axis whose ordinary state is absence, and the wikilink dialect. It loads with zero diagnostics.
+
+The floor deliberately does **not** require every property kind to be used. Mandating that would make the fixture, rather than a real corpus, the reason a kind stays in the lattice — and a kind nobody reaches for should be visible as unused, which is the only evidence that the lattice can shrink.
 
 ### `starter` is authored as the normative initialization profile
 
@@ -31,7 +37,13 @@ This keeps M2's scope intact — no vault-creating write at the milestone whose 
 
 **Coverage floor for `starter`:** exactly one catch-all, at least one identity-bearing type, a lifecycle axis whose ordinary state is a named value, and otherwise minimal. It loads with zero diagnostics — doubly load-bearing, since `starter` is the standing test that the product's own defaults satisfy the product's own rules.
 
-**`init`'s absence from every milestone of `beta.md` is recorded here as an open question**, not resolved. A fresh install currently has no documented way to create a vault. It does not block M2 under this decision, and amending the beta scope contract is not this packet's to do.
+**Three commitments are scheduled at no milestone, and are recorded here as open questions rather than resolved.** All three are the same shape: an obligation another document makes, with no rung of the ladder delivering it.
+
+- **`init`.** `README.md` documents `dogtag init` and `dogtag import`; no milestone of `beta.md` schedules either. So the only route to a working vault at M2 is hand-authoring `.dogtag/contract.toml`, whose sole specification is an engineering record — and `beta.md`'s own promise to *"discover, configure, inspect, and validate a vault"* has nothing behind "configure" at the milestone that owns configuration.
+- **`dogtag migrate`.** `architecture.md` commits to it as the schema-change escape hatch and the settings PDR lists it as a CLI surface. No milestone delivers it, which is why [the compatibility record](2026-07-31-diagnostics-and-compatibility.md) has to freeze the supported floor for the whole beta.
+- **Generating the vault's agent contract on disk.** `architecture.md` makes it a beta obligation and `README.md`'s sketch shows the generated file in the vault. `contract explain` renders it to standard output at M2; nothing writes it, at any milestone.
+
+None of the three blocks M2, and amending the beta scope contract is not this packet's to do. They are listed together because they are one gap, not three: the beta ladder has no rung that *creates or maintains* vault configuration, only rungs that read it.
 
 ### The M2 corpora contain a vault, not notes
 
@@ -41,9 +53,17 @@ No M2 scenario reads a note, so `corpus = "built"` at M2 means the fixture vault
 
 A third `CorpusStatus` between `scheduled` and `built` was rejected: any status short of built is a place a profile can sit indefinitely while the matrix reports something other than a skip, which is what a waiver looks like from the inside.
 
+That leaves one obligation the schema cannot carry, so it is stated as a rule instead: **a scenario whose Given describes notes may not graduate against a corpus that holds none.** The loader checks only that `corpus/` is a directory, so an M3 note scenario run against a contract-only corpus would find zero notes, satisfy "every note carries a declared type" vacuously over the empty set, and report green. Graduating the note scenarios and authoring the notes are one act, not two.
+
+**`corpus = "scheduled"` is itself the profile-side exemption channel**, which `conformance/README.md` previously denied existed. Setting it removes a profile from every scenario at once, and the loader's only check is disk consistency — so deleting a corpus directory and flipping the status back is a mechanically valid way to make a failing profile stop failing. Nothing in the harness ratchets. The rule is therefore written down: **a corpus that has been `built` never returns to `scheduled`**, and the harness should enforce it rather than trusting that nobody would.
+
 ### Negative cases are derived, never authored
 
-**The harness produces every negative case by copying a profile's own contract into a temporary directory and transforming it** — removing the catch-all, duplicating it, rewriting `contract_version`, deleting `[lifecycle]`, adding a contract-owned key to an installation record.
+**The harness produces every negative case by copying a profile's own contract into a temporary directory and transforming it** — removing the catch-all, duplicating it, rewriting `contract_version`, deleting `[lifecycle]`.
+
+**A transformation must prove it changed something.** Every derived case asserts three things, not one: the untransformed contract loads clean, the transformed bytes differ from the original, and the expected diagnostic identifier appears. Without the middle assertion a transformation that fails to find its target — because one profile spells a table where another spells an array of tables — produces a copy identical to the original and the case passes or fails for reasons unrelated to what it tests.
+
+**Two kinds of input are not contract transformations, and saying so is part of the rule.** The installation-record cases have no per-profile source to derive from, since one machine-local record serves every profile; running them once per profile runs one identical input four times. The three discovery scenarios need a synthetic *tree* — a nested directory, a symlink, a second configuration directory with no contract inside — where the profile contributes a contract that discovery never parses, because the sentinel is a path test. Those cases are honestly one case each, and pretending the cross product multiplies them is the kind of overclaim this suite exists to prevent.
 
 This is what makes a negative case profile-agnostic by construction rather than by review. A hand-authored broken contract has to be written in *some* vocabulary, which makes it a profile-specific fixture wearing a shared-sounding name — the exact shape the no-waiver rule exists to catch. Derivation runs the same assertion against four vocabularies with no broken contract checked in anywhere. Putting the cases inline in Rust tests was rejected for a different reason: they would not be conformance scenarios at all, would never appear in the matrix, and the printed cross product would stop describing what is actually verified.
 

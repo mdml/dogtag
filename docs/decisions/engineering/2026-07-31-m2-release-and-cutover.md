@@ -21,19 +21,25 @@ Spending the minor axis on milestone numbering (`0.2.0-beta.0`) was rejected: th
 
 M2 is done when all of the following hold:
 
-1. The M2 conformance scenarios are `executable` and green against the `dense` and `starter` fixtures, and the printed matrix shows the complete cross product with no cell unaccounted for.
+1. The M2 conformance scenarios are `executable` and green against the `dense` and `starter` fixtures, and the printed matrix distinguishes a pair that *ran* from one skipped because its corpus is unbuilt. The first draft of this criterion said only that the matrix shows the complete cross product with no cell unaccounted for — which is satisfied today by a matrix rendering `docs` and `records` identically to a scenario nobody has written, and would let half-coverage read as full. The distinction the harness already computes must reach the rendering before this criterion means anything.
 2. `just gate` passes locally in full, including Code Health 10.0 on every supported file, the coverage ratchet, MSRV, `cargo-deny`, OSV, and zizmor.
 3. The coverage baseline in `coverage-baseline.toml` is **raised in the same commit** that adds kernel code, and every file under the kernel paths holds 100% line coverage. M2 is where `crates/dogtag/src/` stops being a version string, so this is the first milestone at which the kernel floor genuinely binds.
-4. Every required GitHub check has executed and passed on the merge commit.
+4. Every required GitHub check has executed and passed on the merge commit — and the repository rulesets in [the workflow-security record](2026-07-30-workflow-security-and-repository-rules.md) have actually been applied. That record states it decides the rules but that applying them needs administrative scope the maintainer's token does not carry, so until they exist this criterion is self-attested discipline rather than a mechanism. **Provisioning them is a precondition of the tag, not a parallel task.**
 5. The tag `v0.1.0-beta.1` is pushed only from a commit whose required checks passed, and the draft release it produces is inspected and published by a human.
-6. Installation is verified **from the public release**, not from a checkout: `install.sh` on macOS and on Linux, the per-asset `sha256` sidecar verified, the SLSA provenance attestation verified with `gh attestation verify`, and proof of life through `dogtag version` and `dogtag doctor` against a fixture vault. Running from the product checkout is development, not dogfooding.
+6. Installation is verified **from the public release**, not from a checkout, in a sequence that binds the attested bytes to the installed bytes: download the archive once; verify it with `gh attestation verify --repo mdml/dogtag --signer-workflow mdml/dogtag/.github/workflows/release.yml`; confirm its `sha256` equals the published sidecar; then install *that verified file* by pointing `DOGTAG_DOWNLOAD_BASE` at it, on macOS and on Linux; then prove life with `dogtag version` and `dogtag doctor` against a fixture vault.
+
+   The order matters. `install.sh` performs no attestation check — its only integrity check is the sidecar, which comes from the same release under the same write permissions, and the supply-chain policy is explicit that *"whoever can swap an asset can swap its sidecar and leave the pair agreeing."* `install.sh` also deletes its download directory on exit, so a separately downloaded archive would be a different file from the one installed, and three independent acts over three downloads would not chain into a verified installation. Naming `--signer-workflow` rather than only `--repo` is what constrains *which* workflow minted the attestation; without it, any workflow in the repository holding the attestation permissions would satisfy the check.
 7. The cutover evidence below is complete.
 
 ### SBOM and provenance
 
-**No new tooling.** The M2 release ships what M1 already ships: `cargo auditable`'s embedded dependency list, so a binary can be audited directly rather than by trusting a manifest elsewhere; SLSA build-provenance attestations linking every asset to its workflow run and commit; per-asset `sha256` sidecars; and the aggregate `sha256.sum`.
+**The M2 release ships an SBOM, because the standing trigger fires here.** [The supply-chain policy](2026-07-30-supply-chain-and-vulnerability-policy.md) already set the condition — *the first prerelease whose dependency closure differs from the M1 set* — and pre-decided the tooling. This record executes that decision rather than making a new one.
 
-A CycloneDX or SPDX SBOM is deferred behind a named trigger: **a consumer or policy that actually requires one, or the first non-prerelease tag, whichever comes first.** Adding it now would mean a new `tools.toml` pin, a release-workflow step, gate-parity work, and another third-party binary in the release path — for a beta whose two users are both founders, and duplicating data `cargo auditable` already embeds in the artifact.
+It was very nearly missed. The first draft of this section deferred the SBOM behind a freshly invented trigger ("a consumer or policy that actually requires one, or the first non-prerelease tag") without citing or superseding the standing one, on the reasoning that `serde` and `toml` are already workspace dependencies so the contract format adds nothing. That reasoning was **true of the workspace and false of the shipped artifact**, which is precisely the distinction the supply-chain policy drew: the SDK crate's `[dependencies]` is empty today, and every dependency in the installed binary comes through the CLI. Parsing the contract with spans moves `serde`, `toml`, and their tree into the SDK, and structured output adds a JSON dependency that `Cargo.lock` does not currently contain at all — taking the shipped closure from roughly seventeen crates to the mid-twenties. That is the trigger condition, met squarely.
+
+The supply-chain policy predicted this failure in its own words: *"If the trigger condition passes unnoticed — a dependency added without anyone re-reading this ADR — the deferral silently becomes an omission."* It passed unnoticed, and was caught by review rather than by anything mechanical, which is worth recording as evidence about how well a named trigger with no owner actually works.
+
+So: the M2 implementation adds SBOM generation to the release path alongside what M1 already ships — `cargo auditable`'s embedded dependency list, SLSA build-provenance attestations, per-asset `sha256` sidecars, and the aggregate `sha256.sum` — with its tool pinned in `tools.toml`, its workflow step declared, and gate parity updated in the same commit.
 
 ### The cutover
 
@@ -43,7 +49,9 @@ A CycloneDX or SPDX SBOM is deferred behind a named trigger: **a consumer or pol
 
 1. The real vault carries a hand-authored `.dogtag/contract.toml` that loads with zero error diagnostics. This is a private-repository act and is not performed here.
 2. `0.1.0-beta.1` is installed from the public release and verified as above.
-3. **Seven consecutive days of parallel running**: the incumbent configuration check and `dogtag doctor` both run, and every discrepancy is triaged to either a dogtag defect or a deliberate scope difference. Defects are fixed forward before the cutover completes.
+3. **Seven consecutive days of parallel running**: the incumbent configuration check and `dogtag doctor --strict` both run, and every discrepancy is triaged to either a dogtag defect or a deliberate scope difference. Defects are fixed forward before the cutover completes — and because criterion 6 requires verification from the public release, a fix ships as `0.1.0-beta.2` rather than as a locally patched binary. **A fix that changes what `doctor` reports restarts the seven days; one that does not, does not.** That rule is written down because it is the criterion that costs calendar time, which is exactly where schedule pressure lands, and "does the clock restart" should not be decided in the moment by whoever wants it not to.
+
+   Diagnostic output from a private vault is private: triage happens against `--format json` locally, and pasted output is treated the way the [fixture privacy gate](2026-07-31-m2-fixtures-and-the-privacy-gate.md) treats vocabulary, because diagnostics quote the corpus's own names.
 4. The incumbent configuration check is removed from the schedule and does not return.
 5. `docs/roadmap.md` records the receipt: that the vault configuration health check runs on installed dogtag, and the date. **No path, no schema content, no vocabulary, no hostname.**
 
@@ -51,7 +59,7 @@ A single successful run was rejected as evidence: it cannot show the check keeps
 
 ### Publication gating while required checks cannot run
 
-**Implementation proceeds locally to completion and stops hard at the merge gate.** While required GitHub checks cannot execute:
+**While required GitHub checks cannot execute, implementation proceeds locally to completion and stops hard at the merge gate.** This section is conditional and is spent the moment required checks run green on a merge commit; it is written in the present tense about a transient infrastructure state, and `docs/roadmap.md` — the one document licensed to go stale — is where that state is tracked. While the condition holds:
 
 - Permitted: implementing, testing, running the full local gate including Code Health, committing on a feature branch, and reviewing.
 - Blocked unconditionally: pushing, merging, tagging, publishing, bumping the version, and weakening, skipping, or reinterpreting any gate.
@@ -61,8 +69,7 @@ There is no time-based escape and no documented exception. A local gate is evide
 ### Alternatives considered
 
 - **`0.2.0-beta.0`.** Rejected as above.
-- **Adding a CycloneDX SBOM at M2.** Rejected as above.
-- **Tying the SBOM trigger to the first crates.io publish.** Rejected: it adds a second condition to track that overlaps the first-non-prerelease one.
+- **Deferring the SBOM behind a new trigger.** Rejected once the standing trigger was found: restating an existing policy with different terms, without citing or superseding it, is the one move this trail's discipline forbids. Superseding it deliberately remained available — the argument would have had to be that a fifty-percent growth in the shipped closure no longer warrants an SBOM — and was not made because it is not believable.
 - **A single clean run as cutover evidence.** Rejected as above.
 - **Cutting over with the incumbent retained as a fallback.** Rejected as above.
 - **A documented publication exception after a fixed backlog period.** Rejected as above.
@@ -73,5 +80,6 @@ There is no time-based escape and no documented exception. A local gate is evide
 - **M2 cannot be declared done for at least seven days after the prerelease is installed**, regardless of how quickly the code lands. That is calendar time bought deliberately, and it is the first milestone where the cutover rule costs schedule rather than effort.
 - **The cutover's first precondition is work in a private repository** that this trail cannot verify or cite. The public record has the receipt and the date; the evidence behind it stays private, which is a deliberate asymmetry and a limit on what the public record can prove.
 - **The coverage ratchet becomes a genuine constraint at M2.** Every branch in the kernel needs a test, including the compatibility branches no real vault reaches — which is why the version gate is a pure function over an injectable range.
-- **Deferring the SBOM means an enterprise-shaped request would arrive unmet.** The trigger is recorded so the answer is "here is when we add it" rather than "we never considered it."
+- **The SBOM adds a pinned tool and a release-workflow step to a milestone already carrying the largest implementation load of the beta.** That cost is the price of the standing policy being honored rather than quietly restated, and it is smaller than the cost of discovering at the beta verdict that the trigger fired six milestones ago.
+- **A named trigger with no owner nearly failed on its first use.** It was caught by an independent review pass, not by any gate, which is worth remembering the next time a decision is deferred behind a condition nobody is scheduled to re-read.
 - **If the Actions backlog persists, M2 stalls at the merge gate with completed, locally verified work.** That is the intended behavior and it is uncomfortable by design; the discomfort is what keeps the alternative from looking reasonable.

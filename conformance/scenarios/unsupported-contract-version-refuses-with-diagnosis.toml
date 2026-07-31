@@ -12,10 +12,11 @@ contract is attempted.
 
 Then the operation is refused in both cases, with distinct stable diagnostic
 identifiers for a version that is too new and one that is below the supported
-floor, each naming the version found and the range supported. Diagnosis still
-produces a report: the resolved root, the local installation state, and the
-version classification are all reported, and every part depending on the
-contract is marked as not evaluated together with the reason. A version
-inside the supported range but below the current one loads fully, and reports
-the newer format as information rather than as a defect.
+floor, each naming the version found and the range supported. The refusal is
+the version's, not the parser's: an out-of-range contract yields exactly that
+one diagnostic rather than a series of complaints about keys the tool does not
+recognize. Diagnosis still produces a report — the resolved root, the local
+installation state, and the version classification are all reported, and every
+part depending on the contract is marked as not evaluated together with the
+reason.
 """

@@ -1,18 +1,23 @@
 id = "list-filters-by-declared-lifecycle-axis"
-title = "List filters by the declared lifecycle axis without any vocabulary reaching the core"
+title = "Lifecycle filtering is answered from the declaration, including when a corpus declares it has none"
 milestone = "M3"
 status = "pending"
 contract = """
-Given a contract that names its lifecycle axis and declares how the ordinary
-state is encoded — including a profile where the ordinary state is a named
-value and a profile where the ordinary state is the absence of a value.
+Given a contract that declares whether the corpus has a lifecycle axis: either
+naming the property that carries it together with how the ordinary state is
+encoded, or declaring explicitly that the corpus has none.
 
 When listing filters for notes in the ordinary state, and again for notes
 outside it.
 
-Then filtering is answered entirely from the declaration: the core reads
-which axis the contract named and what encoding the contract declared for the
-ordinary state, and neither the corpus's vocabulary nor any product-assumed
-lifecycle word reaches the core. The same filter expression works against
-every profile.
+Then the answer comes entirely from that declaration. Where an axis is
+declared, filtering reads which property the contract named and what encoding
+it declared for the ordinary state, and works identically whether the ordinary
+state is a named value or the absence of one; neither the corpus's vocabulary
+nor any product-assumed lifecycle word reaches the core. Where the contract
+declares no axis, the same filter is refused with a stable diagnostic
+identifier naming that the corpus declares no life axis — never an empty
+result and never a full one, because both would assert something the corpus
+did not say. The filter is expressed identically against every corpus; only
+the declaration decides which of the two outcomes it produces.
 """
