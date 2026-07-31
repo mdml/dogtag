@@ -10,8 +10,14 @@
 
 ## What the fixture is
 
-The contract and starter notes produced by initialization, committed verbatim. Because the fixture *is* the default output, it is regenerated (and its diff reviewed) whenever the initialization profile changes.
+**The normative initialization profile, authored here.** The direction of authority runs from this fixture outward: it is the definition of what a fresh install must stamp, not a copy of what one happened to produce. When an initialization command lands, a test asserts its output equals this fixture byte for byte, and a change to either is reviewed as a change to both.
+
+That inverts the profile's original wording, which described the fixture as initialization's committed output. No initialization command exists — it appears in no milestone of [beta.md](../../../docs/beta.md#milestones) — and a fixture defined as the output of an unscheduled command could not land at M2 at all. Authoring it normatively keeps the M2 pair intact without adding a vault-creating write to the milestone whose job is opening and diagnosing. The reasoning is in [the M2 fixture and privacy record](../../../docs/decisions/engineering/2026-07-31-m2-fixtures-and-the-privacy-gate.md), which also records the absence of an initialization command as an open question rather than resolving it.
+
+## What it must cover
+
+Exactly one catch-all, at least one identity-bearing type, a lifecycle axis whose ordinary state is an explicit named value, and otherwise the smallest contract that is genuinely useful. It loads with zero diagnostics — doubly load-bearing here, since this fixture is the standing test that the product's own defaults satisfy the product's own rules.
 
 ## Why it is not built yet
 
-The committed vault-contract format and the initialization profile that stamps it are M2 decisions. This fixture cannot exist before the command that produces it; the specification lands now, the corpus lands with initialization.
+The committed vault-contract format is an M2 decision. The contract lands with the format it must be written in; the starter notes land with the document model at M3.

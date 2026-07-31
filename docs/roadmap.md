@@ -4,13 +4,16 @@
 
 ## Now — M2, open and diagnose
 
-The next installed prerelease opens a real vault, explains its resolved contract, and takes over the daily vault health check.
+The next installed prerelease, `0.1.0-beta.1`, opens a real vault, explains its resolved contract, and takes over the vault's daily configuration health check.
 
-- [ ] Decide the committed vault-contract format and its compatibility version, plus the shape of the local installation record.
-- [ ] Implement vault-root discovery and layered configuration loading, with per-setting provenance.
-- [ ] Build the `dense` and `starter` fixture contracts and corpora, running `dense` through the dedicated privacy pass that the [extraction and sanitization record](decisions/engineering/2026-07-30-document-extraction-sanitization.md) requires of a derived contract.
-- [ ] Validate capabilities and compatibility with structured diagnostics carrying shared identifiers, and ship `dogtag doctor` and `dogtag contract explain`.
-- [ ] Publish and install the next prerelease and run it against a real vault, completing the cutover the ladder sets for this rung.
+- [x] **Decision packet closed 2026-07-31.** The committed contract is `.dogtag/contract.toml` (TOML, integer `contract_version`, fatal unknown keys); the local installation record is `~/.config/dogtag/installation.toml`, read and never written at M2. Six records carry it, beginning with [the vault contract and installation record](decisions/engineering/2026-07-31-vault-contract-and-installation-record.md).
+- [ ] Implement vault-root discovery and configuration resolution, with per-leaf provenance across the committed contract, the local record, and format defaults.
+- [ ] Author the `dense` and `starter` fixture contracts — `dense` from numeric shape alone, with all vocabulary authored, per [the fixture and privacy record](decisions/engineering/2026-07-31-m2-fixtures-and-the-privacy-gate.md).
+- [ ] Validate capabilities, the lifecycle declaration, and compatibility with structured diagnostics carrying shared identifiers, and ship `dogtag doctor` and `dogtag contract explain`.
+- [ ] Graduate the M2 conformance scenarios against both fixtures, and raise the coverage baseline with the kernel code that lands.
+- [ ] Publish and install `0.1.0-beta.1` from the public release, then complete the cutover: seven days of parallel running before the incumbent configuration check is retired.
+
+**Blocked on infrastructure.** GitHub Actions is not assigning runners for this repository, so required checks cannot execute. Work proceeds locally under `just gate`; nothing pushes, merges, tags, or publishes until required checks run and pass. See [the release and cutover record](decisions/engineering/2026-07-31-m2-release-and-cutover.md).
 
 ## Next — M3, read and validate
 

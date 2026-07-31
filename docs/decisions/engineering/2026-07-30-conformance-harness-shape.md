@@ -1,6 +1,6 @@
 # Conformance harness shape
 
-- Status: accepted
+- Status: accepted (amended 2026-07-31 — see [Amendments](#amendments))
 - Date: 2026-07-30
 
 ## Context
@@ -28,3 +28,11 @@ The beta contract commits to a no-waiver conformance rule: every scenario runs a
 - Every harness run prints an all-Pending matrix at M1. That is honest but noisy; the pressure it creates to turn cells green is intended.
 - `deny_unknown_fields` makes the scenario schema rigid: legitimate future fields require a deliberate schema change too. Accepted — schema evolution should be exactly that deliberate.
 - Because the harness will consume only the public SDK API, conformance doubles as a permanent test that the public API is sufficient — any private hook it needs is an architecture bug.
+
+## Amendments
+
+The Decision above stands as written; these later records change parts of it, and the original text is left intact so the change is legible.
+
+- **2026-07-31 — the scenario set is no longer the M0 eleven, and four scenarios moved milestone.** The Context above describes eleven golden scenarios enumerated at M1, which remains an accurate account of M1. The M2 decision packet adds seven scenarios and retags four from M2 to M3: `unknown-type-diagnostic`, `missing-required-property-diagnostic`, `dangling-typed-link-diagnostic`, and `conforming-corpus-zero-diagnostics` all validate *notes*, which is `check` at M3, while M2 opens and diagnoses the vault and its contract. This is a metadata correction, not a waiver — every scenario still runs against every profile, and no schema field changed.
+- **2026-07-31 — negative cases are derived from each profile's own contract, never authored.** The Decision does not say where a scenario's non-conforming input comes from. A hand-authored broken contract would have to be written in some corpus's vocabulary, making it a profile-specific fixture with a shared-sounding name — the shape this record's no-waiver mechanism exists to prevent. The harness instead copies a profile's contract into a temporary directory and transforms it, so every negative case runs against every profile by construction. Recorded in [the M2 fixture and privacy record](2026-07-31-m2-fixtures-and-the-privacy-gate.md).
+- **2026-07-31 — `corpus = "built"` means the fixture vault exists, not that it holds notes.** The fourth Decision bullet defers corpora to the milestone that defines the contract format. At M2 that yields a vault root and its committed contract, which is everything the M2 scenarios need since none of them reads a note; notes land at M3 with the document model that defines them. A third corpus status was rejected rather than added, so each `PROFILE.md` carries the distinction the schema deliberately does not.

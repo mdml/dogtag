@@ -1,0 +1,23 @@
+id = "lifecycle-declaration-is-mandatory"
+title = "A contract declares its lifecycle axis or its absence, and never leaves it to silence"
+milestone = "M2"
+status = "pending"
+contract = """
+Given a contract that declares whether the corpus has a lifecycle axis —
+either naming the property that carries it together with how the ordinary
+state is encoded, or declaring explicitly that the corpus has none.
+
+When the contract is loaded, and again when the lifecycle declaration is
+removed from it entirely.
+
+Then a contract declaring an axis loads, and a contract declaring the absence
+of one loads equally: a corpus without a life axis is as loadable as a corpus
+with one, and the core never assumes a lifecycle exists. A contract that
+declares neither fails to load with a stable diagnostic identifier, because
+the absence of an axis is a statement a corpus makes and never something
+inferred from an omission. Where an axis is declared, loading also enforces
+that it names a declared property whose values are a closed set, and that the
+declared encoding of the ordinary state agrees with whether that property is
+required — all of it read from the declaration, with no vocabulary reaching
+the core.
+"""

@@ -1,0 +1,22 @@
+id = "contract-explain-renders-every-declaration"
+title = "The explained contract carries every declaration, in both renderings"
+milestone = "M2"
+status = "pending"
+contract = """
+Given a vault whose committed contract loads, carrying its declared types and
+their capabilities, each type's properties with their value kinds and whether
+each is required, its relationship predicates with their requirements and
+permitted targets, its lifecycle declaration, its write policy, and its
+dialect.
+
+When the resolved contract is explained, both as instructions written for an
+agent to follow and as a structured document.
+
+Then every declaration present in the contract appears in both renderings,
+and neither carries a declaration the contract does not make. The two agree
+with each other, so an agent reading the instructions and a program reading
+the structured document receive the same vault. The rendering is produced
+once and shared by every surface rather than restated per surface, and it
+names no concept the contract did not declare, whatever the corpus's
+taxonomy, dialect, or lifecycle encoding.
+"""

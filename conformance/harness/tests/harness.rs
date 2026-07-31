@@ -36,8 +36,8 @@ fn all_scenario_files_parse_with_unique_kebab_case_ids() {
     let scenarios = load_scenarios().expect("every scenario file parses and validates");
     assert_eq!(
         scenarios.len(),
-        11,
-        "the M0 golden set is exactly eleven scenarios"
+        18,
+        "the M0 golden set of eleven plus the M2 packet's seven"
     );
 
     // load_scenarios already enforces id == filename stem, kebab-case, and
@@ -55,12 +55,12 @@ fn all_scenario_files_parse_with_unique_kebab_case_ids() {
         assert_eq!(
             scenario.status,
             ScenarioStatus::Pending,
-            "at M1 every scenario is pending (`{}` is not)",
+            "no scenario has graduated yet (`{}` has)",
             scenario.id
         );
         assert!(
             matches!(scenario.milestone, Milestone::M2 | Milestone::M3),
-            "the M0 golden set covers M2-M3 (`{}` does not)",
+            "the scenario set covers M2-M3 (`{}` does not)",
             scenario.id
         );
     }
