@@ -92,5 +92,6 @@ How it's built is [architecture.md](architecture.md); the concepts it's built fr
 ## Pointers
 
 - [README.md](../README.md) · [abstractions.md](abstractions.md) · [architecture.md](architecture.md) · [beta.md](beta.md) · [strategy.md](strategy.md) — the rest of the doc set
+- [roadmap.md](roadmap.md) — which milestone is active, and what has shipped
 - [docs/decisions/product/](decisions/product/README.md) — the product decision records (PDRs); each owns its config/invariant seam line
 - [docs/decisions/engineering/](decisions/engineering/README.md) — the product repository's own ADR trail: build decisions, honestly dated

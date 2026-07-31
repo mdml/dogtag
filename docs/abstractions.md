@@ -1,6 +1,6 @@
 # Abstractions
 
-> **Status: pre-build draft (2026-07-14).** The key concepts Dogtag is invested in — more likely to change than the [architecture](architecture.md), but foundational to how everything works. One of a six-doc set; reading order in the [README](../README.md).
+> **Status: pre-build draft (2026-07-14).** The key concepts Dogtag is invested in — more likely to change than the [architecture](architecture.md), but foundational to how everything works. One of a six-document set; reading order in the [documentation index](README.md).
 
 - **Vault** — a directory plus committed config; the unit of git, schema, and sharing.
 - **Note** — frontmatter properties + markdown body; the document model every surface agrees on. In mixed-ownership notes, inline AI fences are the default (and configurable) markup attributing which prose is the agent's.

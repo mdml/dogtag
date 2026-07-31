@@ -1,8 +1,9 @@
 # Coverage ratchet baseline. CI fails if measured coverage falls below these
 # values or below the hard thresholds (95% line / 90% branch global; 100%
 # line for every file under the kernel paths). Raising values is routine;
-# lowering them requires an ADR (see docs/decisions/engineering/). The toolchain pin exists
-# because branch coverage requires nightly instrumentation.
+# lowering them requires an ADR (see docs/decisions/engineering/). The
+# toolchain pin exists because branch coverage requires nightly
+# instrumentation.
 toolchain = "nightly-2026-07-30"
 
 [global]

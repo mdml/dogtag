@@ -1,6 +1,6 @@
 # Documentation
 
-The spec set, in reading order:
+The six-document set, in reading order:
 
 | Document | What it answers |
 | --- | --- |
@@ -16,6 +16,6 @@ Then:
 - **[roadmap.md](roadmap.md)** — which milestone is active and what has shipped. The one document here designed to go stale.
 - **[decisions/](decisions/README.md)** — two trails: [product](decisions/product/README.md) for what Dogtag is and how it behaves, [engineering](decisions/engineering/README.md) for how this repository is built and shipped.
 
-Paths carry role here: a document's directory says what kind of document it is, and its filename says what it is about without needing the directory. Those rules, and the triggers for adding another level rather than adding one now, are in [documentation architecture and roadmap ownership](decisions/engineering/2026-07-30-documentation-architecture.md).
+Paths carry role here: inside `decisions/` a document's directory says what kind of document it is, and everywhere the filename says what it is about without needing the directory. The six flat files above share one directory and are told apart by name — `roadmap.md` is the one licensed to go stale. Those rules, and the triggers for adding another level rather than adding one now, are in [documentation architecture and roadmap ownership](decisions/engineering/2026-07-30-documentation-architecture.md).
 
 Contributor and agent instructions live at the root, in [AGENTS.md](../AGENTS.md).
