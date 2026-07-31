@@ -18,9 +18,11 @@ A conforming vault on disk (file names illustrative):
 my-vault/
   <notes, in whatever folders the user likes — folders carry no semantics>
   .dogtag/
-    schema.toml     # types, properties, relationships, lifecycle, presentation hints
-    target.toml     # dialect profile: obsidian | tolaria | plain
+    contract.toml   # the one committed asset: types, properties, relationships,
+                    # capabilities, lifecycle, write policy, dialect, version
   skills/           # travel-with-vault agent verbs
-  AGENTS.md         # generated agent contract — regenerated from schema, not hand-edited
+  AGENTS.md         # generated agent contract — regenerated from the contract, not hand-edited
   .index/           # derived search index + caches, gitignored
 ```
+
+One file, not two: the dialect travels *inside* the committed contract so every collaborator reads the corpus the same way, and the only other configuration is a machine-local installation record that never leaves your machine. The format is decided in [the vault contract record](docs/decisions/engineering/2026-07-31-vault-contract-and-installation-record.md).

@@ -1,0 +1,19 @@
+id = "vault-root-discovered-from-a-nested-path"
+title = "Discovery from a nested path resolves the nearest vault root, canonically"
+milestone = "M2"
+status = "pending"
+contract = """
+Given a vault whose root holds the committed contract, a directory nested
+some levels beneath that root, and a second path that reaches the same root
+through a symbolic link.
+
+When discovery runs from the nested directory, and again from the same
+directory reached through the symbolic link.
+
+Then both resolve to the same root, reported as one canonical path, so a note
+in the corpus has one identity whichever route reached it. The walk stops at
+the nearest ancestor holding the committed contract and consults nothing but
+the starting path — no current directory, no environment, and no process-wide
+state. When the resolved root differs from the path that was requested, that
+difference is reported as its own diagnostic rather than left silent.
+"""

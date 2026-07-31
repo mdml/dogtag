@@ -1,0 +1,20 @@
+id = "installation-record-cannot-supply-contract-settings"
+title = "Machine-local configuration cannot supply or override a committed setting"
+milestone = "M2"
+status = "pending"
+contract = """
+Given a vault with a valid committed contract, and a machine-local
+installation record that attempts to supply a setting the committed contract
+owns — a type, a property requirement, a capability assignment, the lifecycle
+declaration, or the dialect.
+
+When the configuration is resolved.
+
+Then the local record fails to load with a stable diagnostic identifier, and
+the committed setting is unaffected: a setting has exactly one scope
+authorized to supply it, so machine-local configuration cannot weaken,
+reinterpret, or quietly replace what collaborators share. Resolution
+succeeds only when each source stays within its authority, and every resolved
+value reports which source supplied it — the committed contract, the local
+record, or the format default fixed by the contract's declared version.
+"""

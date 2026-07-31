@@ -1,6 +1,6 @@
 # Document extraction and sanitization
 
-- Status: accepted
+- Status: accepted (amended 2026-07-31 — see [Amendments](#amendments))
 - Date: 2026-07-30
 
 ## Context
@@ -31,3 +31,9 @@ The documents were moved in one sanitization pass governed by these rules:
 - Future edits to the six documents and PDRs happen here, under these same rules — anything drafted privately first must pass the same transformation before it lands.
 - The same gate binds future fixture work: a derived fixture contract (the `dense` profile's, mechanically derived from a private corpus's schema) publishes that corpus's type names, property vocabulary, and lifecycle words, and therefore requires its own dedicated privacy pass — renaming or pruning personal vocabulary — before it lands.
 - This ADR is itself written under rule 6: it describes the transformation without reproducing anything the transformation removed.
+
+## Amendments
+
+The Decision above stands as written; this later record changes part of it, and the original text is left intact so the change is legible.
+
+- **2026-07-31 — the `dense` fixture is derived numerically, so the anticipated vocabulary pass does not apply to it.** The fourth Consequence above says a derived fixture contract publishes the source corpus's type names, property vocabulary, and lifecycle words, and therefore requires a dedicated privacy pass renaming or pruning personal vocabulary before it lands. [The M2 fixture and privacy record](2026-07-31-m2-fixtures-and-the-privacy-gate.md) takes a different route: only the corpus's *shape* crosses the boundary, as counts and axis facts, and every name in the public fixture is authored fiction. No vocabulary is published, so there is nothing to rename or prune. The gate is not removed but replaced, by a check that the artifact crossing the boundary contains no strings at all — and it runs before the commit rather than before the push, because a public history is not rewritten. The six transformation rules and the standalone-readability test are unchanged and continue to govern every document here.

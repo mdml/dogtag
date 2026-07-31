@@ -5,3 +5,6 @@ node_modules/
 
 # Python bytecode from the checked-in helper scripts
 __pycache__/
+
+# Working notes and launch prompts for in-flight work — never part of the record
+.scratch/

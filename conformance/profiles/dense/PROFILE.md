@@ -11,8 +11,14 @@
 
 ## What the fixture is
 
-A committed vault contract plus roughly forty hand-authored fictional notes. The contract is derived mechanically from the schema of an established private corpus, so it stays a faithful dense schema; the notes on top are fiction written for the fixture — no real note is ever copied, so nothing personal can leak into this public repository.
+A committed vault contract at M2, and roughly forty hand-authored fictional notes on top of it at M3, when the document model those notes must be written in is decided.
+
+**The contract's shape is derived; its vocabulary is not.** Only counts and axis facts cross from the established private corpus this profile is modelled on — how many types, how many carry each capability, how many predicates and how many are required, which property kinds appear, the lifecycle encoding, the dialect. Every name in this fixture is authored fiction: no type name, property name, predicate, lifecycle value, or tag is copied. Nothing lexical crosses the boundary, so nothing personal can reach this public repository even in principle, and the privacy gate reduces to confirming that the artifact which crossed carries no strings at all. The reasoning, and the rejected alternative of scrubbing a derived vocabulary, are in [the M2 fixture and privacy record](../../../docs/decisions/engineering/2026-07-31-m2-fixtures-and-the-privacy-gate.md).
+
+## What it must cover
+
+At least two identity-bearing types, exactly one catch-all, at least one closed-write; every one of the contract's property value kinds used at least once; at least two relationship predicates, at least one of them required and at least one constraining its permitted targets; a lifecycle axis whose ordinary state is absence; the wikilink dialect. The contract loads with zero diagnostics.
 
 ## Why it is not built yet
 
-The committed vault-contract format is an M2 decision. Writing this corpus before that format exists would freeze a guess and then defend it; the specification lands now, the corpus lands with the format it must be written in.
+The committed vault-contract format is an M2 decision. Writing this corpus before that format exists would freeze a guess and then defend it; the specification lands now, the contract lands with the format it must be written in, and the notes land with the document model at M3.

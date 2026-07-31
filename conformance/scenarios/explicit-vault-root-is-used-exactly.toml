@@ -1,0 +1,20 @@
+id = "explicit-vault-root-is-used-exactly"
+title = "An explicitly supplied root is used exactly, and a missing root fails distinctly"
+milestone = "M2"
+status = "pending"
+contract = """
+Given a vault root supplied explicitly rather than discovered, and separately
+a directory that holds no committed contract anywhere between itself and the
+filesystem root.
+
+When the explicit root is a vault root; when the explicit root is a directory
+nested inside a vault; and when discovery runs from the directory with no
+vault above it.
+
+Then an explicit root that is a vault root is used as given. An explicit root
+that is not itself a vault root is refused — it is never searched upward,
+because an explicitly supplied path means exactly that path. A start with no
+vault above it fails with a diagnostic naming the directory searched from and
+what was sought, under an identifier distinct from the one reporting a vault
+that exists but cannot be used.
+"""
