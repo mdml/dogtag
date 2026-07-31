@@ -12,6 +12,6 @@
 # rationale = "why this is safe enough for now"
 # owner = "mdml"
 # expires = 2026-09-30             # TOML date; CI fails after this date
-# record = "docs/adr/YYYY-MM-DD-slug.md"  # ADR or security-exception record
+# record = "docs/decisions/engineering/YYYY-MM-DD-slug.md"  # ADR or exception record
 # oneoff = true                    # bun only: a one-off --minimum-release-age
 #                                  # override with no standing config trace

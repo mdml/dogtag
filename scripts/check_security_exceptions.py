@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """check_security_exceptions.py — enforce the security-exception registry.
 
-Cross-checks docs/security/exceptions.toml against every security tool
+Cross-checks security-exceptions.toml against every security tool
 config, in both directions: every suppression (deny.toml [advisories].ignore,
 osv-scanner.toml IgnoredVulns, bunfig.toml minimumReleaseAgeExcludes) must
 have a registry entry of the matching tool, every registry entry must be
@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import NamedTuple
 
 ROOT = Path(__file__).resolve().parent.parent
-REGISTRY = ROOT / "docs" / "security" / "exceptions.toml"
+REGISTRY = ROOT / "security-exceptions.toml"
 DENY = ROOT / "deny.toml"
 OSV = ROOT / "osv-scanner.toml"
 BUNFIG = ROOT / "bindings" / "typescript" / "bunfig.toml"
