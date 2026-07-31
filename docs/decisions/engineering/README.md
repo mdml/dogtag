@@ -2,7 +2,7 @@
 
 This trail records **build decisions** for this repository: layout, toolchain, dependency policy, test structure, release pipeline — the choices about how dogtag is built and shipped, as opposed to how it behaves.
 
-**Product stances live elsewhere.** A decision about how dogtag behaves for its users — for any PKM, on any vault — is a product decision record (PDR) and belongs in [docs/decisions/product/](../product/README.md). A decision about this repository's own machinery belongs here. Rule of thumb: if it would still matter to someone reimplementing dogtag from the docs alone, it is a PDR; if it only matters to someone working in this repository, it is an ADR.
+**Product stances live elsewhere.** A decision about how dogtag behaves for its users — for any PKM, on any vault — is a product decision record (PDR) and belongs in [docs/decisions/product/](../product/README.md). A decision about this repository's own machinery belongs here. The test that routes between the two lives once, in [docs/decisions/README.md](../README.md).
 
 ## Format
 

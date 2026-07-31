@@ -4,7 +4,7 @@ Canonical instructions for anyone — human or agent — contributing here. `CLA
 
 ## What this repository is
 
-Dogtag is a personal knowledge management SDK designed for AI agents: they configure it, co-author the notes, and keep the vault maintained. The kernel model is four abstractions — note, type, property, relationship — with everything else declared configuration; the SDK (`crates/dogtag`) is the product, and every surface (CLI today; TUI, MCP server, and language bindings later) is a consumer of its public API. This repository holds the Rust workspace, the conformance harness, the reserved TypeScript binding scaffold, and the product documentation set. Reading order for the doc set: [README.md](README.md) (what it is and the first hour), [product.md](docs/product.md) (the full case), [abstractions.md](docs/abstractions.md) (domain concepts), [architecture.md](docs/architecture.md) (SDK architecture), [beta.md](docs/beta.md) (the first release contract, including the milestone ladder), [strategy.md](docs/strategy.md) (the experiment sequence).
+Dogtag is a personal knowledge management SDK designed for AI agents: they configure it, co-author the notes, and keep the vault maintained. The kernel model is four abstractions — note, type, property, relationship — with everything else declared configuration; the SDK (`crates/dogtag`) is the product, and every surface (CLI today; TUI, MCP server, and language bindings later) is a consumer of its public API. This repository holds the Rust workspace, the conformance harness, the reserved TypeScript binding scaffold, and the product documentation set. Reading order for the doc set: [README.md](README.md) (what it is and the first hour), [product.md](docs/product.md) (the full case), [abstractions.md](docs/abstractions.md) (domain concepts), [architecture.md](docs/architecture.md) (SDK architecture), [beta.md](docs/beta.md) (the first release contract, including the milestone ladder), [strategy.md](docs/strategy.md) (the experiment sequence). [docs/roadmap.md](docs/roadmap.md) names the milestone currently in flight; [docs/README.md](docs/README.md) indexes the whole corpus.
 
 ## Load-bearing boundaries
 
@@ -73,7 +73,7 @@ This is enforced, not merely asked for. `just hooks` installs a `commit-msg` hoo
 - **PDR** (`docs/decisions/product/`) — a product stance: how dogtag behaves for its users, written timelessly and for any PKM. See [docs/decisions/product/README.md](docs/decisions/product/README.md).
 - **ADR** (`docs/decisions/engineering/`) — a build decision: this repository's layout, toolchain, dependencies, pipelines, policy. See [docs/decisions/engineering/README.md](docs/decisions/engineering/README.md).
 
-Rule of thumb: if the decision would still matter to someone reimplementing dogtag from the docs alone, it is a PDR; if it only matters to someone working in this repository, it is an ADR. Both trails supersede — they never delete.
+Rule of thumb: if the decision would still matter to someone reimplementing dogtag from the docs alone, it is a PDR; if it only matters to someone working in this repository, it is an ADR — [docs/decisions/README.md](docs/decisions/README.md) is the canonical statement of that test, and of the documents it routes besides decisions. Both trails supersede — they never delete.
 
 ## Releases
 

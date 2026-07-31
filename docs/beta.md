@@ -71,7 +71,7 @@ The beta ships when:
 
 ## Milestones
 
-The beta ships in nine milestones, each an installable vertical slice published as a prerelease. Every milestone from M2 on names one real workflow that moves from the incumbent personal tooling onto installed Dogtag and does not move back — the cutover rule in Required properties.
+The beta ships in nine milestones, each an installable vertical slice published as a prerelease. Which one is active, and what the finished ones produced, is [roadmap.md](roadmap.md); this section defines what each one delivers. Every milestone from M2 on names one real workflow that moves from the incumbent personal tooling onto installed Dogtag and does not move back — the cutover rule in Required properties.
 
 - **M0 — beta contract and extraction packet.** Shipped: the decisions this document carries.
 - **M1 — clean repository and empty release.** The product repository, Rust workspace, CLI and TypeScript scaffolds, conformance harness, release automation, and the doc set; `dogtag version` published and installed as `0.1.0-beta.0`.

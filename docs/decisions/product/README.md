@@ -1,6 +1,6 @@
 # Product Decision Records (PDRs)
 
-Product decisions recorded the way [ADRs](../engineering/README.md) record technical ones — but for *what the product is*, not *how it's built*. This directory holds one file per decision; the [six-document set](../../../README.md) carries the product thesis the decisions hang off.
+Product decisions recorded the way [ADRs](../engineering/README.md) record technical ones — but for *what the product is*, not *how it's built*; the test that routes between the two lives once, in [docs/decisions/README.md](../README.md). This directory holds one file per decision; the [six-document set](../../../README.md) carries the product thesis the decisions hang off.
 
 A PDR is the product analog of an ADR, after Luca Rossi's pattern: 👁️ Intent, 🎨 Design, ⚖️ Tradeoffs — plus a 🖥️ **Surfaces** section, because Dogtag's product decisions are deliberately UI-independent and the interesting part is *how each surface satisfies the same intent*.
 
