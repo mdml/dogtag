@@ -32,13 +32,13 @@ The rungs will separate as the repository grows. Recording that they have not se
 
 ### Every gate is declared once, as the command CI runs
 
-[scripts/gate.py](../../scripts/gate.py) holds a table of steps. Each step is an id, the **exact command string** CI runs, an optional environment, and the name of an extractor for its metric. The suites are literal tuples — `CHECK = FAST + (…)`, `GATE = CHECK + (…)` — so the nesting is a fact about the data rather than a convention someone maintains, and `just gates` prints the table.
+[scripts/gate.py](../../../scripts/gate.py) holds a table of steps. Each step is an id, the **exact command string** CI runs, an optional environment, and the name of an extractor for its metric. The suites are literal tuples — `CHECK = FAST + (…)`, `GATE = CHECK + (…)` — so the nesting is a fact about the data rather than a convention someone maintains, and `just gates` prints the table.
 
 Declaring the command rather than a recipe name is what makes the next part possible.
 
 ### check-gate-parity.py binds the table to the workflows
 
-The repository already refused to let a comment vouch for a version: `scripts/check-tool-pins.py` reads the declaration that actually runs. [scripts/check-gate-parity.py](../../scripts/check-gate-parity.py) extends that reasoning from versions to commands. It runs in `just check` and in CI, and enforces six rules:
+The repository already refused to let a comment vouch for a version: `scripts/check-tool-pins.py` reads the declaration that actually runs. [scripts/check-gate-parity.py](../../../scripts/check-gate-parity.py) extends that reasoning from versions to commands. It runs in `just check` and in CI, and enforces six rules:
 
 1. Every step in the `gate` suite is a **whole `run:` line** in a workflow, or is listed in `DIVERGENCES` (CI does it differently) or `LOCAL_ONLY` (CI does not do it at all) with the reason. Fifteen match; four diverge; one is local-only.
 2. Every environment variable a step declares is declared on the CI side too, so the docs gate cannot lose `-D warnings` on one side only.

@@ -5,7 +5,7 @@
 
 ## Context
 
-The architecture makes one boundary load-bearing: the SDK is the product and the CLI is only a consumer of its public API (see [ARCHITECTURE.md](../../ARCHITECTURE.md)). The repository layout has to make that boundary structural rather than aspirational, and the first release (`0.1.0-beta.0`, the empty vertical slice) has to fix the names users and toolchains will see from now on.
+The architecture makes one boundary load-bearing: the SDK is the product and the CLI is only a consumer of its public API (see [architecture.md](../../architecture.md)). The repository layout has to make that boundary structural rather than aspirational, and the first release (`0.1.0-beta.0`, the empty vertical slice) has to fix the names users and toolchains will see from now on.
 
 ## Decision
 

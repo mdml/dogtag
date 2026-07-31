@@ -72,7 +72,7 @@ fn profile_roster_is_exactly_the_beta_roster() {
     let names: Vec<&str> = profiles.iter().map(|p| p.name.as_str()).collect();
     assert_eq!(
         names, REQUIRED_PROFILES,
-        "conformance/profiles/ must hold exactly the four BETA.md profiles"
+        "conformance/profiles/ must hold exactly the four docs/beta.md profiles"
     );
     for profile in &profiles {
         assert_eq!(

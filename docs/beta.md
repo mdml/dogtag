@@ -1,6 +1,6 @@
 # Dogtag SDK beta
 
-> **Status: scope contract, 2026-07-29; M0 packet folded in 2026-07-30.** This document defines the first externally installable experiment. The beta's milestone receipts live in the maintainers' planning record; the product repository's ADR trail is `docs/adr/`.
+> **Status: scope contract, 2026-07-29; M0 packet folded in 2026-07-30.** This document defines the first externally installable experiment. The beta's milestone receipts live in the maintainers' planning record; the product repository's ADR trail is `docs/decisions/engineering/`.
 
 ## Promise
 
@@ -81,11 +81,11 @@ The beta ships in nine milestones, each an installable vertical slice published 
 - **M5 — safe mutation.** Plan/validate/apply transaction with one `capture` operation: explicit file scope, actor/provenance, preview, post-write validation, structured result, recovery. Cutover: one capture path.
 - **M6 — TypeScript SDK and dynamic workflow.** The binding backed by the Rust core, then an SDK-backed MCP server (`search`, `show`, `capture`) deployed alongside the maintainers' existing infrastructure.
 - **M7 — second-vault onboarding.** Install the released artifact, configure the second founder vault, complete one read and one write workflow without a product source checkout.
-- **M8 — upgrade and beta verdict.** Upgrade both installations from older prereleases, run the complete conformance and workflow test, publish limitations and recovery documentation, and decide whether E0 graduates to assisted adoption ([STRATEGY.md](STRATEGY.md)).
+- **M8 — upgrade and beta verdict.** Upgrade both installations from older prereleases, run the complete conformance and workflow test, publish limitations and recovery documentation, and decide whether E0 graduates to assisted adoption ([strategy.md](strategy.md)).
 
 ## Fixture profiles
 
-Four profiles, each standing for one audience in [PRODUCT.md](PRODUCT.md)'s persona table — `starter` for the fresh install every persona begins at — and together spreading across every axis the configuration seam claims to absorb: type taxonomy, capability assignment, property requirements, predicate vocabulary, lifecycle encoding, name resolution, and dialect. Two are built for the first release that can load a vault contract; two are specified now and built when the hypothesis they serve comes up. All four ship as specifications from M1; each corpus lands at its named milestone, because the committed contract format the corpora depend on is an M2 decision (the reasoning is recorded in [docs/adr/2026-07-30-conformance-harness-shape.md](docs/adr/2026-07-30-conformance-harness-shape.md)).
+Four profiles, each standing for one audience in [product.md](product.md)'s persona table — `starter` for the fresh install every persona begins at — and together spreading across every axis the configuration seam claims to absorb: type taxonomy, capability assignment, property requirements, predicate vocabulary, lifecycle encoding, name resolution, and dialect. Two are built for the first release that can load a vault contract; two are specified now and built when the hypothesis they serve comes up. All four ship as specifications from M1; each corpus lands at its named milestone, because the committed contract format the corpora depend on is an M2 decision (the reasoning is recorded in [the conformance harness ADR](decisions/engineering/2026-07-30-conformance-harness-shape.md)).
 
 | Profile | Stands for | Distinguishing axes | Corpus lands |
 | --- | --- | --- | --- |

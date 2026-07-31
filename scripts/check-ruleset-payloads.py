@@ -23,7 +23,7 @@ import re
 import sys
 from pathlib import Path
 
-ADR = "docs/adr/2026-07-30-workflow-security-and-repository-rules.md"
+ADR = "docs/decisions/engineering/2026-07-30-workflow-security-and-repository-rules.md"
 RULESET_DIR = ".github/rulesets"
 
 # The eight CI jobs plus cargo-deny, each of which runs on a pull request and
@@ -32,7 +32,7 @@ RULESET_DIR = ".github/rulesets"
 #
 # Code Health is deliberately absent. It is enforced locally by `just gate`
 # against the pinned CodeScene CLI, not by a required check — see the
-# [code health ADR](../docs/adr/2026-07-30-code-health-and-coverage-gates.md).
+# [code health ADR](../docs/decisions/engineering/2026-07-30-code-health-and-coverage-gates.md).
 # Adding it back here without also restoring the CI job would create a
 # required context nothing reports, which blocks every merge permanently.
 COMMON_CONTEXTS = [

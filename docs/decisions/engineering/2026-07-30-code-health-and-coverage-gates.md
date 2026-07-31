@@ -5,7 +5,7 @@
 
 ## Context
 
-M1's gate was formatting, clippy, and tests — necessary, but it measures nothing about design quality or test depth, and those are exactly the properties that erode invisibly in a repository maintained largely by agents. Self-assessed quality is worthless in that setting: an agent (or a rushed human) will sincerely report "clean, well tested" over code that is neither, so every gate in this contract must be mechanical, absolute, and computed by a tool rather than claimed by a contributor. The semantic kernel (`crates/dogtag`) carries a stricter bar than the shells around it because the kernel is the product (see [ARCHITECTURE.md](../../ARCHITECTURE.md)). These decisions were made against the 2026-07-30 state of the tooling; the pinned versions are the record of that state.
+M1's gate was formatting, clippy, and tests — necessary, but it measures nothing about design quality or test depth, and those are exactly the properties that erode invisibly in a repository maintained largely by agents. Self-assessed quality is worthless in that setting: an agent (or a rushed human) will sincerely report "clean, well tested" over code that is neither, so every gate in this contract must be mechanical, absolute, and computed by a tool rather than claimed by a contributor. The semantic kernel (`crates/dogtag`) carries a stricter bar than the shells around it because the kernel is the product (see [architecture.md](../../architecture.md)). These decisions were made against the 2026-07-30 state of the tooling; the pinned versions are the record of that state.
 
 ## Decision
 
@@ -41,7 +41,7 @@ So the enforcement moved to where the credential already is. What the repository
 
 Losing the daily CI sweep loses the thing that kept the induction's base case current. CodeScene's rules evolve between CLI versions, so a bump can drop an untouched file below 10.0 — and a delta cannot see it, because no change touched that file.
 
-[tools.toml](../../tools.toml) therefore records `swept_at` beside the CodeScene CLI `version`, and `scripts/check-tool-pins.py` fails `just check` unless the two are equal. Bumping the pinned CLI means running a full `just codescene` sweep and moving `swept_at` in the same commit. That is the mechanism that keeps "every supported file scores 10.0" a measured fact rather than a memory of one.
+[tools.toml](../../../tools.toml) therefore records `swept_at` beside the CodeScene CLI `version`, and `scripts/check-tool-pins.py` fails `just check` unless the two are equal. Bumping the pinned CLI means running a full `just codescene` sweep and moving `swept_at` in the same commit. That is the mechanism that keeps "every supported file scores 10.0" a measured fact rather than a memory of one.
 
 The CLI stays pinned at 1.0.36, fetched by its build SHA (`5f703ce1f9c264701f32c795fa7104467f1e4ab4`) and verified against a sha256 recorded in tools.toml — upstream publishes no checksums, so the repository carries its own. `scripts/install-dev-tools.sh` reads all three fields at install time, so the pin, the URL and the checksum have exactly one copy between them.
 
@@ -51,7 +51,7 @@ The CLI stays pinned at 1.0.36, fetched by its build SHA (`5f703ce1f9c264701f32c
 
 ### Coverage: hard thresholds plus a ratchet
 
-- **cargo-llvm-cov 0.8.7 (pinned)** measures the workspace. Floors: ≥95% line and ≥90% branch globally, and 100% line for every file under `crates/dogtag/src/` — the semantic kernel. The kernel paths list in [coverage-baseline.toml](../../coverage-baseline.toml) grows as kernel, domain, and configuration modules appear.
+- **cargo-llvm-cov 0.8.7 (pinned)** measures the workspace. Floors: ≥95% line and ≥90% branch globally, and 100% line for every file under `crates/dogtag/src/` — the semantic kernel. The kernel paths list in [coverage-baseline.toml](../../../coverage-baseline.toml) grows as kernel, domain, and configuration modules appear.
 - **Branch coverage requires nightly instrumentation** (rust-lang/rust#79649 is still open; `-Z coverage-options` is unstable), so the coverage job — and only the coverage job — runs a pinned nightly (`nightly-2026-07-30`, recorded in coverage-baseline.toml). Everything else builds on the pinned stable 1.97.1.
 - **Thresholds and the committed baseline ratchet** are enforced by `scripts/coverage-gate.sh` plus `scripts/coverage_check.py` from the machine-readable JSON export — never from eyeballed terminal output. Raising the baseline is routine; lowering it, or either threshold, requires an ADR. Re-baselining after a coverage-toolchain bump is routine but must be called out in the bump commit.
 - **No coverage-exclusion attributes.** Code that is hard to cover gets restructured or tested, not annotated out of the denominator.

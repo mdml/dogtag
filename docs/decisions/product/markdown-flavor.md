@@ -3,7 +3,7 @@
 - **Status:** adopted (interviewed and confirmed 2026-07-22; lived daily by the incumbent corpus); amended 2026-07-30 — identity is the path, the name is a resolution shorthand (see Design)
 - **Decided / updated:** 2026-07-22; amended 2026-07-30 (identity)
 - **Layer:** substrate
-- **Config vs. invariant:** *Invariants* — notes are plain markdown files; the dialect stays small, and every extension carries machine-enforceable meaning; a writing surface never alters bytes it didn't semantically touch; identity is the path and a bare name is a resolution shorthand whose ambiguity is reported against the link. *Config-points* — the dialect's concrete inventory (canonical home: each vault's committed contract, validated by the SDK's contract types (`crates/dogtag`, forthcoming — see [ARCHITECTURE](../../ARCHITECTURE.md)), never restated here), the per-machine editor dialect rendered at the boundary of one canonical stored form, and whether a corpus adopts name-uniqueness as authoring discipline.
+- **Config vs. invariant:** *Invariants* — notes are plain markdown files; the dialect stays small, and every extension carries machine-enforceable meaning; a writing surface never alters bytes it didn't semantically touch; identity is the path and a bare name is a resolution shorthand whose ambiguity is reported against the link. *Config-points* — the dialect's concrete inventory (canonical home: each vault's committed contract, validated by the SDK's contract types (`crates/dogtag`, forthcoming — see [Architecture](../../architecture.md)), never restated here), the per-machine editor dialect rendered at the boundary of one canonical stored form, and whether a corpus adopts name-uniqueness as authoring discipline.
 
 ## 👁️ Intent
 
@@ -45,4 +45,4 @@ The dialect and the round-trip contract are UI-independent; what differs per sur
 ## Notes
 
 - Interview follow-ups resolved 2026-07-22: "separation of concerns" confirmed as *store decoupled from every application layer*; identity (filename-as-slug / H1-as-title) confirmed as this PDR's to own, with `note-types` and `wikilink-ui` consuming it; the base-grammar-vs-dialect line settled as "the admission test governs only what's beyond the common GFM-ish baseline."
-- The per-machine-dialect exception is the tool's model (canonical form in the store, per-editor on-disk dialects at the boundary — [PRODUCT](../../PRODUCT.md)); this PDR grounds why it's the *only* sanctioned deviation from byte-preservation.
+- The per-machine-dialect exception is the tool's model (canonical form in the store, per-editor on-disk dialects at the boundary — [Product](../../product.md)); this PDR grounds why it's the *only* sanctioned deviation from byte-preservation.
