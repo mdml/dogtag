@@ -1,6 +1,6 @@
 # cargo-deny policy (cargo-deny 0.20.2). Strict by default: any suppression
 # added here (e.g. [advisories].ignore) REQUIRES a matching entry in
-# docs/security/exceptions.toml — scripts/check_security_exceptions.py
+# security-exceptions.toml — scripts/check_security_exceptions.py
 # enforces the pairing in CI. See that file for the exception process.
 
 [advisories]
@@ -15,7 +15,7 @@ unsound = "all"
 # Vulnerabilities are unconditional errors under cargo-deny's v2 semantics,
 # and `unmaintained` already defaults to "all". Exceptions take the form
 # ignore = [{ id = "RUSTSEC-...", reason = "..." }] and each one REQUIRES a
-# matching entry in docs/security/exceptions.toml (CI-enforced).
+# matching entry in security-exceptions.toml (CI-enforced).
 #
 # Known limit worth stating rather than discovering later: cargo-deny warns
 # (`yanked-not-detected`) when an ignore matches nothing, but that warning

@@ -323,7 +323,7 @@ def zizmor_summary(text: str) -> str | None:
     "Filtered", not "suppressed": zizmor's parenthetical counts what the
     `--persona regular --min-severity low` flags excluded, which is a
     reporting choice. It is not a suppression in this repository's sense —
-    those are registered in docs/security/exceptions.toml — and calling it
+    those are registered in security-exceptions.toml — and calling it
     one would imply a registry entry that does not and should not exist.
     """
     clean = ZIZMOR_CLEAN.search(text)

@@ -3,7 +3,7 @@ version: 2
 # public for seven days, so a compromised or immediately-yanked release is
 # less likely to reach a pull request here at all. It matches the seven-day
 # quarantine the TypeScript binding already applies to npm dependencies
-# (docs/security/exceptions.toml, bindings/typescript/bunfig.toml), so the
+# (security-exceptions.toml, bindings/typescript/bunfig.toml), so the
 # two ecosystems wait the same length of time for the same reason.
 #
 # It delays **ordinary version updates only.** Dependabot security updates —
