@@ -1,6 +1,6 @@
 # Decision records
 
-Two trails, one question each. Both supersede rather than delete, and neither is rewritten after acceptance.
+Two trails, one question each. Both supersede rather than delete. An accepted ADR's Decision is never rewritten; a PDR is a living position that evolves in place.
 
 - **[Product decision records](product/README.md)** (`docs/decisions/product/`) — what Dogtag *is* and how it behaves for its users, written timelessly and for any PKM. Named by stable topic slug, because a product position is a living document that evolves in place.
 - **[Architecture decision records](engineering/README.md)** (`docs/decisions/engineering/`) — how *this repository* is built and shipped: layout, toolchain, dependencies, pipelines, policy. Named `YYYY-MM-DD-slug.md`, because a build decision is a dated event.

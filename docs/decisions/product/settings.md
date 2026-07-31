@@ -85,4 +85,4 @@ The table names ownership, not storage keys. Concrete vocabularies remain in the
 
 - The first conformance test is two independently configured vaults operated simultaneously by the same released SDK. A difference that requires a product fork is evidence that either the configuration model is incomplete or the supposed invariant is personal.
 - Multi-vault aggregation does not create a federated corpus: results retain vault identity, links resolve within their originating vault, and mutations target exactly one vault.
-- The concrete file layout, serialization format, merge behavior, and generated language types belong to the SDK's architecture ([Architecture](../../architecture.md), [Beta](../../beta.md)) and the repository's ADR trail ([docs/adr](../engineering/README.md)), not this PDR.
+- The concrete file layout, serialization format, merge behavior, and generated language types belong to the SDK's architecture ([Architecture](../../architecture.md), [Beta](../../beta.md)) and the repository's ADR trail ([the engineering trail](../engineering/README.md)), not this PDR.

@@ -1,6 +1,6 @@
 # Dogtag SDK beta
 
-> **Status: scope contract, 2026-07-29; M0 packet folded in 2026-07-30.** This document defines the first externally installable experiment. The beta's milestone receipts live in the maintainers' planning record; the product repository's ADR trail is `docs/decisions/engineering/`.
+> **Status: scope contract, 2026-07-29; M0 packet folded in 2026-07-30.** This document defines the first externally installable experiment. Milestone status and completion receipts are in [roadmap.md](roadmap.md); the maintainers' planning record keeps the private context behind them. The product repository's ADR trail is `docs/decisions/engineering/`.
 
 ## Promise
 
