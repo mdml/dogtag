@@ -1,6 +1,6 @@
 # dogtag — TypeScript binding (reserved scaffold)
 
-This directory reserves the home of the dogtag TypeScript binding. **Nothing here is installable yet**, and nothing will be until milestone M6 (see [BETA](../../BETA.md)).
+This directory reserves the home of the dogtag TypeScript binding. **Nothing here is installable yet**, and nothing will be until milestone M6 (see [Beta](../../docs/beta.md)).
 
 ## Boundary
 
@@ -12,5 +12,5 @@ This directory reserves the home of the dogtag TypeScript binding. **Nothing her
 
 ## Pointers
 
-- [ARCHITECTURE](../../ARCHITECTURE.md) — "one implementation; idiomatic bindings".
-- [BETA](../../BETA.md) — milestone plan, including M6.
+- [Architecture](../../docs/architecture.md) — "one implementation; idiomatic bindings".
+- [Beta](../../docs/beta.md) — milestone plan, including M6.

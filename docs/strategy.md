@@ -1,6 +1,6 @@
 # Dogtag product strategy
 
-> **Status: beta hypothesis map, 2026-07-29; M0 packet folded in 2026-07-30.** Evidence and decisions accumulate in the maintainers' planning record; the product repository's ADR trail is `docs/adr/`; this document owns the experiment sequence beyond the build.
+> **Status: beta hypothesis map, 2026-07-29; M0 packet folded in 2026-07-30.** Evidence and decisions accumulate in the maintainers' planning record; the product repository's ADR trail is `docs/decisions/engineering/`; this document owns the experiment sequence beyond the build.
 
 ## Strategic premise
 
@@ -25,7 +25,7 @@ Two maintainers install the same prerelease and use it against independently con
 
 Evidence: setup time, config differences, manual interventions, rejected mutations, upgrade failures, recurring workflows, and places where a personal convention masquerades as an invariant.
 
-Gate: the [beta ship test](BETA.md#ship-test) passes.
+Gate: the [beta ship test](beta.md#ship-test) passes.
 
 ### E1 — assisted existing-vault adoption
 

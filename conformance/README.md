@@ -1,6 +1,6 @@
 # Conformance
 
-Every scenario runs against every fixture profile. **There are no waivers.** A scenario expressible against only one profile fails the harness and is triaged as either an incomplete configuration model or a personal convention mistaken for an invariant. This rule — not prose review — is what keeps one author's assumptions out of the kernel; see [BETA.md](../BETA.md) (required properties) and [ARCHITECTURE.md](../ARCHITECTURE.md).
+Every scenario runs against every fixture profile. **There are no waivers.** A scenario expressible against only one profile fails the harness and is triaged as either an incomplete configuration model or a personal convention mistaken for an invariant. This rule — not prose review — is what keeps one author's assumptions out of the kernel; see [beta.md](../docs/beta.md) (required properties) and [architecture.md](../docs/architecture.md).
 
 ## Layout
 

@@ -12,7 +12,7 @@
 # signal a contributor gets. They decline loudly rather than fail when no
 # CodeScene token is configured — an external contributor needs no account —
 # and they never report a pass they did not measure. See
-# docs/adr/2026-07-30-code-health-and-coverage-gates.md.
+# docs/decisions/engineering/2026-07-30-code-health-and-coverage-gates.md.
 
 commit-msg:
   jobs:

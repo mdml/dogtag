@@ -28,7 +28,7 @@ Placing it in `tools/` rather than `crates/` follows the layout ADR's "code by r
 
 ### Two enforcement points, only one of which is binding
 
-- **Locally**, [lefthook.yml](../../lefthook.yml) runs the validator as a `commit-msg` hook, alongside format, clippy, and a staged Code Health delta. Installed with `just hooks`.
+- **Locally**, [lefthook.yml](../../../lefthook.yml) runs the validator as a `commit-msg` hook, alongside format, clippy, and a staged Code Health delta. Installed with `just hooks`.
 - **In CI**, the `Commit messages` job validates every commit the pull request introduces, as a required check.
 
 The CI check is the enforcement boundary and the hook is a convenience — a distinction worth stating because it is easy to get backwards. Hooks are not installed on a fresh clone, and `--no-verify` always exists; a rule enforced only by a hook is a rule enforced only against people who were not in a hurry. Both run the same binary built from this workspace, so the local and CI verdicts cannot drift apart.
@@ -39,7 +39,7 @@ The CI job derives its range from `github.event.pull_request.base.sha` on a pull
 
 ### git-cliff for deterministic release notes
 
-[cliff.toml](../../cliff.toml) (git-cliff 2.13.1, pinned in [tools.toml](../../tools.toml)) generates the draft release body at release time from the tag range. Grouping: breaking changes first, then features, bug fixes, performance, documentation, refactoring, and reverts. `test`, `ci`, `build`, and `chore` are excluded — real work, but not news to someone deciding whether to install a version.
+[cliff.toml](../../../cliff.toml) (git-cliff 2.13.1, pinned in [tools.toml](../../../tools.toml)) generates the draft release body at release time from the tag range. Grouping: breaking changes first, then features, bug fixes, performance, documentation, refactoring, and reverts. `test`, `ci`, `build`, and `chore` are excluded — real work, but not news to someone deciding whether to install a version.
 
 Two properties are load-bearing. **Grouping is by declared type only**: a body-text pattern (matching, say, "security" anywhere in a message) was rejected because it silently reclassifies commits on a word, and a reader cannot tell why something landed where it did. **Unconventional commits are dropped rather than guessed at**, which is safe only because `commit-lint` makes them unmergeable — the two settings are a pair, and weakening the validator would silently start losing commits from the notes.
 

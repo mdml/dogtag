@@ -9,7 +9,7 @@ use std::fmt;
 
 use serde::Deserialize;
 
-/// The exact fixture-profile roster from BETA.md, sorted by name.
+/// The exact fixture-profile roster from docs/beta.md, sorted by name.
 ///
 /// Four profiles, each standing for one persona and together spreading
 /// across every axis the configuration seam claims to absorb. The harness
@@ -88,7 +88,7 @@ pub struct Profile {
     pub name: String,
     /// The persona the profile stands for, from the persona table.
     pub persona: String,
-    /// The seam axes this profile stresses, from BETA.md's fixture table.
+    /// The seam axes this profile stresses, from docs/beta.md's fixture table.
     pub distinguishing_axes: Vec<String>,
     /// Whether the fixture corpus exists yet.
     pub corpus: CorpusStatus,

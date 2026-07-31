@@ -5,7 +5,7 @@
 
 ## Context
 
-The architecture pillar is one implementation with idiomatic bindings: the TypeScript SDK, due at M6, wraps the Rust core rather than reimplementing vault behavior (see [ARCHITECTURE.md](../../ARCHITECTURE.md) and [BETA.md](../../BETA.md)). A binding that starts as "just a little TypeScript logic while the core catches up" becomes a parallel implementation nobody decided to build. The repository should state the boundary from day one — before there is any TypeScript to be tempted by.
+The architecture pillar is one implementation with idiomatic bindings: the TypeScript SDK, due at M6, wraps the Rust core rather than reimplementing vault behavior (see [architecture.md](../../architecture.md) and [beta.md](../../beta.md)). A binding that starts as "just a little TypeScript logic while the core catches up" becomes a parallel implementation nobody decided to build. The repository should state the boundary from day one — before there is any TypeScript to be tempted by.
 
 ## Decision
 

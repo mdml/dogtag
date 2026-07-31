@@ -5,7 +5,7 @@
 - **Layer:** substrate — the SDK resolves and validates settings; surfaces and workflows consume the resulting configuration
 - **Config vs. invariant:** *Invariant* — configuration is a **first-class, typed, inspectable substrate model** resolved separately for each vault in an installation; settings are scoped by who must agree, not by implementation convenience; product defaults materialize a complete committed vault contract at initialization rather than remaining a live inheritance layer; installation and invocation choices may narrow capabilities but never silently weaken or reinterpret that contract; every SDK consumer reads the same resolved model and may operate multiple isolated vaults simultaneously; shared-contract changes expose compatibility and corpus impact before application. *Config-point* — the schema, lifecycle labels, relationship vocabulary, ownership policy, retrieval tuning, views, workflows, VCS posture, target dialect, installation bindings, and presentation choices inventoried below.
 
-> **Boundary.** The other PDRs own the meaning of each configurable concept; this PDR owns how those config-points become one coherent settings surface. It inventories and links rather than redefining them. [Architecture](../../ARCHITECTURE.md) owns the implementation boundary; the SDK's public configuration types and file format are build-time decisions downstream of this product contract.
+> **Boundary.** The other PDRs own the meaning of each configurable concept; this PDR owns how those config-points become one coherent settings surface. It inventories and links rather than redefining them. [Architecture](../../architecture.md) owns the implementation boundary; the SDK's public configuration types and file format are build-time decisions downstream of this product contract.
 
 ## 👁️ Intent
 
@@ -85,4 +85,4 @@ The table names ownership, not storage keys. Concrete vocabularies remain in the
 
 - The first conformance test is two independently configured vaults operated simultaneously by the same released SDK. A difference that requires a product fork is evidence that either the configuration model is incomplete or the supposed invariant is personal.
 - Multi-vault aggregation does not create a federated corpus: results retain vault identity, links resolve within their originating vault, and mutations target exactly one vault.
-- The concrete file layout, serialization format, merge behavior, and generated language types belong to the SDK's architecture ([ARCHITECTURE](../../ARCHITECTURE.md), [BETA](../../BETA.md)) and the repository's ADR trail ([docs/adr](../adr/README.md)), not this PDR.
+- The concrete file layout, serialization format, merge behavior, and generated language types belong to the SDK's architecture ([Architecture](../../architecture.md), [Beta](../../beta.md)) and the repository's ADR trail ([docs/adr](../engineering/README.md)), not this PDR.

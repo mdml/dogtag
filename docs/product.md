@@ -1,6 +1,6 @@
 # Dogtag — product
 
-> **Status: beta product draft, started 2026-07-03; spin-off activated 2026-07-29.** The product case for **Dogtag-the-tool** — the shareable SDK a stranger can install, with the maintainers' incumbent vault demoted to one configuration of it. Working doc for maintainers and agents, published as it stands: the `>` blocks mark product questions the maintainers have deliberately not yet answered — they are the open edges of the case, kept visible rather than polished away. Companions: [README.md](README.md), [ABSTRACTIONS.md](ABSTRACTIONS.md), [ARCHITECTURE.md](ARCHITECTURE.md), [BETA.md](BETA.md), and [STRATEGY.md](STRATEGY.md). **Target artifact:** a standalone shareable doc set for beta users, collaborators, SDK consumers, and build partners. The decisions pass closed in the maintainers' private planning record; extraction and release sequencing lives in [BETA.md](BETA.md) and the product repository's ADR trail (`docs/adr/`).
+> **Status: beta product draft, started 2026-07-03; spin-off activated 2026-07-29.** The product case for **Dogtag-the-tool** — the shareable SDK a stranger can install, with the maintainers' incumbent vault demoted to one configuration of it. Working doc for maintainers and agents, published as it stands: the `>` blocks mark product questions the maintainers have deliberately not yet answered — they are the open edges of the case, kept visible rather than polished away. Companions: [README.md](../README.md), [abstractions.md](abstractions.md), [architecture.md](architecture.md), [beta.md](beta.md), and [strategy.md](strategy.md). **Target artifact:** a standalone shareable doc set for beta users, collaborators, SDK consumers, and build partners. The decisions pass closed in the maintainers' private planning record; extraction and release sequencing lives in [beta.md](beta.md) and the product repository's ADR trail (`docs/decisions/engineering/`).
 
 ## Thesis
 
@@ -44,13 +44,13 @@ The floor, in comfort and spend: *guided* terminal use (install an agentic CLI, 
 
 ## The product — a tour
 
-The first hour — install, init or import, customize the schema, connect a remote — is the [README's Getting started](README.md#getting-started); it belongs to the doc a stranger reads first. The tour here picks up at steady state.
+The first hour — install, init or import, customize the schema, connect a remote — is the [README's Getting started](../README.md#getting-started); it belongs to the doc a stranger reads first. The tour here picks up at steady state.
 
 Day to day, the agent is the primary operator — capture, triage, ingestion, and synthesis all run through it — and the human touches the vault directly in exactly two places: the shipped minimal TUI for browse and search, and their own editor for writing, with the on-disk dialect configured per machine for that editor (Obsidian and [Tolaria](https://github.com/refactoringhq/tolaria) at launch) — so teammates sharing a vault can each keep their favored editor. The MCP server is the surface for software: other agents, remote clients, future phone capture. Scheduled labor is the user's to compose — Dogtag ships the verbs a schedule would call, and your agent can build the routine around them; the schedulability is the product, the scheduler is not.
 
 Just as deliberate is what's absent. No query builder — faceted browse and search over the authored structure replace it. No sync service — git is the store. No bundled scheduler, no embedded editor, no plugin system: the contract makes all of these cheap to build yourself, and keeping them out keeps the product small enough to trust.
 
-How it's built is [ARCHITECTURE.md](ARCHITECTURE.md); the concepts it's built from are [ABSTRACTIONS.md](ABSTRACTIONS.md); what a vault looks like on disk is in the [README](README.md).
+How it's built is [architecture.md](architecture.md); the concepts it's built from are [abstractions.md](abstractions.md); what a vault looks like on disk is in the [README](../README.md).
 
 ## What ships in the box
 
@@ -91,6 +91,6 @@ How it's built is [ARCHITECTURE.md](ARCHITECTURE.md); the concepts it's built fr
 
 ## Pointers
 
-- [README.md](README.md) · [ABSTRACTIONS.md](ABSTRACTIONS.md) · [ARCHITECTURE.md](ARCHITECTURE.md) · [BETA.md](BETA.md) · [STRATEGY.md](STRATEGY.md) — the rest of the doc set
-- [docs/decisions/](docs/decisions/README.md) — the product decision records (PDRs); each owns its config/invariant seam line
-- [docs/adr/](docs/adr/README.md) — the product repository's own ADR trail: build decisions, honestly dated
+- [README.md](../README.md) · [abstractions.md](abstractions.md) · [architecture.md](architecture.md) · [beta.md](beta.md) · [strategy.md](strategy.md) — the rest of the doc set
+- [docs/decisions/product/](decisions/product/README.md) — the product decision records (PDRs); each owns its config/invariant seam line
+- [docs/decisions/engineering/](decisions/engineering/README.md) — the product repository's own ADR trail: build decisions, honestly dated
