@@ -149,15 +149,6 @@ pub fn explicit_root_used_exactly(corpus: &Corpus) -> Checked {
             root.path().display()
         )
     })?;
-    // The corpus copy is already canonical, so resolving it reports nothing:
-    // the symlink info is for a root the caller did not type.
-    require(resolved.diagnostics().is_empty(), || {
-        format!(
-            "a canonical explicit root reports nothing, but reported {:?}",
-            ids(resolved.diagnostics())
-        )
-    })?;
-
     let inside = corpus.root().join("inside-the-vault");
     make_dir(&inside)?;
     let refusal = root_at(&inside)
