@@ -345,7 +345,9 @@ impl Tree {
         let path = self.root.join(stamp());
         fs::create_dir_all(path.join(SENTINEL_DIRECTORY)).expect("a sentinel directory");
         fs::write(path.join(SENTINEL), body.as_str()).expect("a contract this test owns");
-        root_at(&path).expect("a directory holding the sentinel is a vault root")
+        root_at(&path)
+            .expect("a directory holding the sentinel is a vault root")
+            .into_root()
     }
 
     /// A path inside the tree that was never created.

@@ -42,7 +42,7 @@ use std::path::{Path, PathBuf};
 
 use crate::diagnostic::{Diagnostic, KernelDiagnostic};
 
-pub use discover::{discover, root_at};
+pub use discover::{Resolved, discover, root_at};
 pub use open::{Opened, open};
 pub use trust::inspect_root_trust;
 

@@ -68,17 +68,70 @@ pub fn discover(start: &Path) -> Discovered {
               consequence onto every consumer and every binding of a public API whose shape is \
               fixed."
 )]
-pub fn root_at(path: &Path) -> Result<VaultRoot, Diagnostic> {
+pub fn root_at(path: &Path) -> Result<Resolved, Diagnostic> {
     let canonical = match fs::canonicalize(path) {
         Ok(canonical) => canonical,
         Err(error) => return Err(path_unreadable(path, &error)),
     };
     match probe(&canonical) {
-        Ok(Probe::Root) => Ok(VaultRoot::new(canonical)),
+        Ok(Probe::Root) => Ok(Resolved {
+            diagnostics: differs(path, &canonical),
+            root: VaultRoot::new(canonical),
+        }),
         Ok(Probe::Incomplete) => Err(incomplete_root(&canonical)),
         Ok(Probe::NotARoot) => Err(not_a_vault_root(&canonical)),
         Err(error) => Err(path_unreadable(&canonical, &error)),
     }
+}
+
+/// A root resolved from an explicit path, and what resolving it had to say.
+///
+/// The success side carries diagnostics because one of them can only arise on
+/// success: a root reached through a symlink resolves *and* reports a path the
+/// caller did not type. A `Result<VaultRoot, Diagnostic>` had nowhere to put
+/// that, so the info the records require was being discarded on both explicit
+/// routes — the surprise the decision exists to make visible.
+#[derive(Debug)]
+pub struct Resolved {
+    root: VaultRoot,
+    diagnostics: Vec<Diagnostic>,
+}
+
+impl Resolved {
+    /// The verified root.
+    pub fn root(&self) -> &VaultRoot {
+        &self.root
+    }
+
+    /// The root, taken.
+    pub fn into_root(self) -> VaultRoot {
+        self.root
+    }
+
+    /// What resolving it had to say, which may be nothing.
+    pub fn diagnostics(&self) -> &[Diagnostic] {
+        &self.diagnostics
+    }
+
+    /// The root and its diagnostics, taken together.
+    pub fn into_parts(self) -> (VaultRoot, Vec<Diagnostic>) {
+        (self.root, self.diagnostics)
+    }
+}
+
+/// The info a root reached through something other than its canonical path.
+///
+/// `Path` equality is by component, so a trailing slash, a `.` component and a
+/// doubled separator are all the same path and report nothing.
+fn differs(requested: &Path, canonical: &Path) -> Vec<Diagnostic> {
+    if requested == canonical {
+        return Vec::new();
+    }
+    let start = Start {
+        requested,
+        canonical: canonical.to_owned(),
+    };
+    vec![canonical_root(&start, canonical)]
 }
 
 /// Where a walk began: what the caller asked for, and what it canonicalized to.
@@ -529,7 +582,7 @@ mod tests {
         let tree = Tree::new("root-at-root");
         let root = tree.vault("vault");
         let verified = root_at(&root).expect("the path is a vault root");
-        assert_eq!(verified.path(), root);
+        assert_eq!(verified.root().path(), root);
     }
 
     #[test]
@@ -574,10 +627,37 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
+    fn root_at_reports_a_root_reached_through_a_symlink() {
+        // The info can only arise on success — the root resolves *and* the
+        // caller is handed a path they did not type — so a
+        // `Result<VaultRoot, Diagnostic>` had nowhere to put it and the
+        // surprise the records exist to make visible went unreported.
+        let tree = Tree::new("root-at-symlink-reported");
+        let root = tree.vault("real");
+        let link = tree.link("linked", &root);
+        let resolved = root_at(&link).expect("the link resolves to a vault root");
+        assert_eq!(resolved.root().path(), root);
+        let reported: Vec<&str> = resolved
+            .diagnostics()
+            .iter()
+            .map(|diagnostic| diagnostic.id.as_str())
+            .collect();
+        assert_eq!(reported, ["discovery.root-resolved-through-symlink"]);
+    }
+
+    #[test]
+    fn root_at_reports_nothing_for_a_path_that_is_already_canonical() {
+        let tree = Tree::new("root-at-canonical-quiet");
+        let root = tree.vault("plain");
+        let resolved = root_at(&root).expect("a vault root");
+        assert!(resolved.diagnostics().is_empty());
+    }
+
+    #[test]
     fn root_at_canonicalizes_the_path_it_verifies() {
         let tree = Tree::new("root-at-symlink");
         let root = tree.vault("real/vault");
         let verified = root_at(&tree.link("shortcut", &root)).expect("a vault root");
-        assert_eq!(verified.path(), root);
+        assert_eq!(verified.root().path(), root);
     }
 }

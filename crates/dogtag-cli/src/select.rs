@@ -34,7 +34,7 @@ use std::path::{MAIN_SEPARATOR, PathBuf};
 use dogtag::diagnostic::{Diagnostic, DiagnosticList};
 use dogtag::installation::{Installation, resolve_registered};
 use dogtag::report::{Selection, SelectionRoute};
-use dogtag::vault::{VaultRoot, discover, root_at};
+use dogtag::vault::{Resolved, VaultRoot, discover, root_at};
 
 use crate::environment::Environment;
 
@@ -115,7 +115,7 @@ fn explicit(
     environment: &Environment,
     installation: &Installation,
 ) -> Result<Selected, Vec<Diagnostic>> {
-    let (route, root) = if is_path(argument) {
+    let (route, resolved) = if is_path(argument) {
         (
             source.path,
             root_at(&absolute(argument, environment)).map_err(one),
@@ -123,12 +123,14 @@ fn explicit(
     } else {
         (source.name, registered(argument, installation))
     };
+    // Neither route walks, but either can resolve through a symlink and hand
+    // back a root the caller did not type. That info is the SDK's, and this is
+    // where it reaches the report.
+    let (root, diagnostics) = resolved?.into_parts();
     Ok(Selected {
-        root: root?,
+        root,
         selection: Selection::new(route, Some(argument.to_owned())),
-        // Neither route walks anywhere, so neither has anything to report
-        // beyond the refusal it may already have returned.
-        diagnostics: Vec::new(),
+        diagnostics,
     })
 }
 
@@ -165,7 +167,7 @@ fn is_path(argument: &str) -> bool {
 /// reports the record — a run that resolves a vault reports it through
 /// [`dogtag::vault::open`]. A record that loaded, or that was never there, has
 /// nothing to add here.
-fn registered(name: &str, installation: &Installation) -> Result<VaultRoot, Vec<Diagnostic>> {
+fn registered(name: &str, installation: &Installation) -> Result<Resolved, Vec<Diagnostic>> {
     resolve_registered(name, installation).map_err(|refusal| {
         let mut raised = DiagnosticList::new();
         raised.push(refusal);

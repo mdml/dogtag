@@ -30,7 +30,7 @@
 //! identifiers exist to prevent.
 
 use crate::diagnostic::{Diagnostic, FileRef, KernelDiagnostic, Location, Related};
-use crate::vault::{self, SENTINEL, VaultRoot};
+use crate::vault::{self, Resolved, SENTINEL};
 
 use super::{Installation, InstallationRecord, InstallationState, VaultEntry};
 
@@ -83,10 +83,7 @@ const NO_VAULTS: &str = ": the installation record registers no vaults at all";
               consequence onto every consumer and every binding of a public API whose shape is \
               fixed."
 )]
-pub fn resolve_registered(
-    name: &str,
-    installation: &Installation,
-) -> Result<VaultRoot, Diagnostic> {
+pub fn resolve_registered(name: &str, installation: &Installation) -> Result<Resolved, Diagnostic> {
     match installation.state() {
         InstallationState::Loaded(record) => registered(name, record),
         InstallationState::Absent => Err(unknown_vault_name(name, NO_RECORD)),
@@ -100,7 +97,7 @@ pub fn resolve_registered(
     reason = "this answers with the same Result as `resolve_registered`, for the reason recorded \
               there"
 )]
-fn registered(name: &str, record: &InstallationRecord) -> Result<VaultRoot, Diagnostic> {
+fn registered(name: &str, record: &InstallationRecord) -> Result<Resolved, Diagnostic> {
     let Some(entry) = record.entry(name) else {
         return Err(unknown_vault_name(name, emptiness(record)));
     };
@@ -351,7 +348,7 @@ mod tests {
         let path = tree.vault();
         let root = resolve_registered("work", &registry(&[("work", &path)]))
             .expect("the entry names a vault root");
-        assert_eq!(root.path(), path);
+        assert_eq!(root.root().path(), path);
     }
 
     #[test]
