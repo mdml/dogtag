@@ -386,6 +386,60 @@ mod tests {
         checked.expect_err("a rendering that disagrees with the contract must not pass")
     }
 
+    #[test]
+    fn the_array_reader_reads_what_a_scalar_reader_cannot() {
+        assert_eq!(
+            json_array_strings("{\"caps\": [\"x\", \"y\"], \"other\": []}", "caps"),
+            ["x", "y"]
+        );
+        // A key that is not there, and a key whose array the document never
+        // closes: neither loops and neither invents a member.
+        assert!(json_array_strings("{\"caps\": [\"x\"]}", "absent").is_empty());
+        assert!(json_array_strings("{\"caps\": [\"x\"", "caps").is_empty());
+    }
+
+    #[test]
+    fn the_clause_reader_takes_only_what_follows_the_name() {
+        let text = "### `person` — identity-bearing\n### `plain`\nnot a heading\n";
+        assert_eq!(clauses_after(text, "### `"), ["identity-bearing"]);
+    }
+
+    /// The capability vocabulary was asserted by nothing until 2026-08-01:
+    /// the Markdown carries it after the type name in a heading, which the
+    /// name scanner stops short of, and the JSON's array was read by no
+    /// assertion. Each spoiling below is a rendering that used to pass.
+    #[test]
+    fn a_markdown_heading_that_drops_a_capability_is_refused() {
+        let (contract, rendered) = subject("capability-dropped", WITH_AXIS);
+        let spoiled = markdown_edited(&rendered, " — catch-all", " — no capabilities");
+        let detail = refusal(capabilities_agree(&contract, &spoiled));
+        assert!(detail.contains("catch-all"), "{detail}");
+    }
+
+    #[test]
+    fn a_markdown_heading_that_invents_a_capability_is_refused() {
+        let (contract, rendered) = subject("capability-invented", WITH_AXIS);
+        let spoiled = markdown_edited(&rendered, " — catch-all", " — catch-all, closed-write");
+        let detail = refusal(capabilities_agree(&contract, &spoiled));
+        assert!(detail.contains("closed-write"), "{detail}");
+    }
+
+    #[test]
+    fn a_json_document_that_drops_a_capability_is_refused() {
+        let (contract, rendered) = subject("capability-json", WITH_AXIS);
+        let spoiled = json_edited(&rendered, "\"catch-all\"", "\"identity-bearing\"");
+        let detail = refusal(capabilities_agree(&contract, &spoiled));
+        assert!(detail.contains("catch-all"), "{detail}");
+    }
+
+    #[test]
+    fn a_corpus_whose_types_declare_no_capability_still_agrees() {
+        // The clause has two spellings and both must round-trip, or the
+        // "no capabilities" branch would be asserted by nothing.
+        let (contract, rendered) = subject("capability-none", NO_AXIS);
+        capabilities_agree(&contract, &rendered).expect("an unspoiled rendering agrees");
+    }
+
     /// Every name is asserted in both renderings and in both directions, so a
     /// rendering that drops a declaration and one that invents a declaration
     /// the contract never made are each named — whichever rendering it is in.
