@@ -204,7 +204,9 @@ mod tests {
     fn vault_holding(tree: &Tree, body: &str) -> VaultRoot {
         let path = tree.vault(&next_name());
         fs::write(path.join(SENTINEL), body).expect("a contract this test owns");
-        root_at(&path).expect("a directory holding the sentinel is a vault root")
+        root_at(&path)
+            .expect("a directory holding the sentinel is a vault root")
+            .into_root()
     }
 
     /// The state of a machine that has never registered a vault. Absence is a

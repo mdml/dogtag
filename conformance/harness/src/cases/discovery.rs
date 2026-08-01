@@ -135,17 +135,26 @@ fn halted_at(found: &Discovered, id: &str, at: &Path, subject: &str) -> Checked 
 /// `explicit-vault-root-is-used-exactly`.
 pub fn explicit_root_used_exactly(corpus: &Corpus) -> Checked {
     hermetic(corpus.root())?;
-    let root = root_at(corpus.root()).map_err(|diagnostic| {
+    let resolved = root_at(corpus.root()).map_err(|diagnostic| {
         format!(
             "an explicit vault root must be accepted, but was refused with {}",
             diagnostic.id.as_str()
         )
     })?;
+    let root = resolved.root();
     require(root.path() == corpus.root(), || {
         format!(
             "an explicit root is used as given, but `{}` verified as `{}`",
             corpus.root().display(),
             root.path().display()
+        )
+    })?;
+    // The corpus copy is already canonical, so resolving it reports nothing:
+    // the symlink info is for a root the caller did not type.
+    require(resolved.diagnostics().is_empty(), || {
+        format!(
+            "a canonical explicit root reports nothing, but reported {:?}",
+            ids(resolved.diagnostics())
         )
     })?;
 
@@ -396,7 +405,7 @@ mod tests {
     fn a_walk_that_resolved_a_root_did_not_halt() {
         let corpus = Corpus::holding("discovery-halted-but-resolved", NO_AXIS);
         let found = Discovered {
-            root: Some(root_at(corpus.root()).expect("a vault root")),
+            root: Some(root_at(corpus.root()).expect("a vault root").into_root()),
             diagnostics: Vec::new(),
         };
         let detail = refusal(halted_at(

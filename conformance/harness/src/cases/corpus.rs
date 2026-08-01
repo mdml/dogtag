@@ -6,7 +6,7 @@ use std::path::{Path, PathBuf};
 
 use dogtag::contract::{Contract, ContractLoad, load_contract};
 use dogtag::installation::{Installation, load_installation};
-use dogtag::vault::{Opened, VaultRoot, open, root_at};
+use dogtag::vault::{Opened, Resolved, VaultRoot, open, root_at};
 
 use crate::temptree::{TempTree, copy_tree};
 use crate::transform::Transformed;
@@ -66,13 +66,15 @@ impl Corpus {
     ///
     /// The diagnostic `root_at` refused with, rendered.
     pub fn vault_root(&self) -> Result<VaultRoot, String> {
-        root_at(&self.root).map_err(|diagnostic| {
-            format!(
-                "the copied corpus is not a vault root: {}: {}",
-                diagnostic.id.as_str(),
-                diagnostic.message
-            )
-        })
+        root_at(&self.root)
+            .map(Resolved::into_root)
+            .map_err(|diagnostic| {
+                format!(
+                    "the copied corpus is not a vault root: {}: {}",
+                    diagnostic.id.as_str(),
+                    diagnostic.message
+                )
+            })
     }
 
     /// The committed contract's bytes.
