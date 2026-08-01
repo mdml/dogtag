@@ -1,35 +1,18 @@
-//! Harness self-tests: the fixtures parse, the roster is exact, the cross
-//! product is complete, and — the load-bearing one — waiver-shaped fields
-//! cannot exist in the schema.
+//! Harness self-tests over the real fixtures: the scenario set and the profile
+//! roster are what M2 says they are, graduation is all-or-nothing, and the
+//! cross product reports each pair as the two facts about it make it.
+//!
+//! The strict-schema and strict-loader tests live beside this file in
+//! `strictness.rs`, because they are about synthetic trees rather than about
+//! the fixtures on disk.
 
 use std::collections::BTreeSet;
-use std::fs;
-use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicU32, Ordering};
 
 use dogtag_conformance::{
-    CorpusStatus, HarnessError, Milestone, Outcome, Pair, Profile, REQUIRED_PROFILES, Scenario,
-    ScenarioStatus, load_profiles, load_profiles_from, load_scenarios, load_scenarios_from,
-    parse_profile, parse_scenario, pending_matrix, report,
+    CORPORA_EVER_BUILT, CorpusStatus, Execution, Milestone, NoExecution, Outcome, Pair, Profile,
+    REQUIRED_PROFILES, Scenario, ScenarioStatus, SdkExecution, graduated_case_count, load_profiles,
+    load_scenarios, matrix, report,
 };
-
-/// A minimal scenario document that must parse; the waiver-rejection tests
-/// append one extra key to it and demand failure.
-const MINIMAL_SCENARIO: &str = r#"
-id = "minimal-scenario"
-title = "A minimal scenario for schema tests"
-milestone = "M2"
-status = "pending"
-contract = "Given a corpus. When nothing happens. Then nothing is reported."
-"#;
-
-const MINIMAL_PROFILE: &str = r#"
-name = "minimal"
-persona = "a schema-test persona"
-distinguishing_axes = ["one axis"]
-corpus = "scheduled"
-corpus_milestone = "M2"
-"#;
 
 #[test]
 fn all_scenario_files_parse_with_unique_kebab_case_ids() {
@@ -52,18 +35,47 @@ fn all_scenario_files_parse_with_unique_kebab_case_ids() {
             "scenario id `{}` is kebab-case",
             scenario.id
         );
-        assert_eq!(
-            scenario.status,
-            ScenarioStatus::Pending,
-            "no scenario has graduated yet (`{}` has)",
-            scenario.id
-        );
         assert!(
             matches!(scenario.milestone, Milestone::M2 | Milestone::M3),
             "the scenario set covers M2-M3 (`{}` does not)",
             scenario.id
         );
     }
+}
+
+/// Graduation is all-or-nothing, so at M2 **every** scenario tagged `M2` is
+/// executable and a straggler fails the suite. The M3 scenarios have not
+/// graduated ahead of their milestone, and every executable scenario has a
+/// case behind it — an executable scenario without one would refuse the whole
+/// report, but saying so here names the fault instead.
+#[test]
+fn every_m2_scenario_has_graduated_and_nothing_has_graduated_early() {
+    let scenarios = load_scenarios().expect("scenarios load");
+    for scenario in &scenarios {
+        let expected = match scenario.milestone {
+            Milestone::M2 => ScenarioStatus::Executable,
+            Milestone::M3 => ScenarioStatus::Pending,
+        };
+        assert_eq!(
+            scenario.status, expected,
+            "`{}` is tagged {} and must be {expected:?}: graduation is all-or-nothing",
+            scenario.id, scenario.milestone
+        );
+    }
+
+    let executable = scenarios
+        .iter()
+        .filter(|s| s.status == ScenarioStatus::Executable)
+        .count();
+    assert_eq!(
+        executable, 10,
+        "the ten M2 scenarios graduated together, all at once"
+    );
+    assert_eq!(
+        graduated_case_count(),
+        executable,
+        "every graduated scenario has an execution path, and nothing else does"
+    );
 }
 
 #[test]
@@ -74,80 +86,39 @@ fn profile_roster_is_exactly_the_beta_roster() {
         names, REQUIRED_PROFILES,
         "conformance/profiles/ must hold exactly the four docs/beta.md profiles"
     );
+    // A corpus is built exactly when the ratchet says it has ever been built.
+    // At M2 that is `dense` and `starter`; `docs` and `records` are scheduled,
+    // so M2's cross-profile evidence is two profiles rather than four.
     for profile in &profiles {
+        let ever_built = CORPORA_EVER_BUILT.contains(&profile.name.as_str());
+        let expected = if ever_built {
+            CorpusStatus::Built
+        } else {
+            CorpusStatus::Scheduled
+        };
         assert_eq!(
             profile.corpus,
-            CorpusStatus::Scheduled,
-            "at M1 every corpus is scheduled, not built (`{}` is not)",
-            profile.name
+            expected,
+            "profile `{}` is {}named in CORPORA_EVER_BUILT",
+            profile.name,
+            if ever_built { "" } else { "not " }
         );
     }
 }
 
-/// The no-waiver test. A scenario schema with any field that could name,
-/// skip, or scope a profile must not exist; serde's `deny_unknown_fields`
-/// turns each such key into a parse failure. If this test ever starts
-/// failing, someone widened the schema — that is the exact change the
-/// conformance rule forbids.
-#[test]
-fn waiver_shaped_fields_fail_scenario_parsing() {
-    assert!(
-        parse_scenario(MINIMAL_SCENARIO).is_ok(),
-        "the minimal scenario itself must parse, or the rejections below prove nothing"
-    );
-
-    let waiver_keys = [
-        r#"profiles = ["dense"]"#,
-        r#"skip = ["dense"]"#,
-        r#"waive = "dense""#,
-        r#"only = ["starter"]"#,
-        r#"except = ["records"]"#,
-    ];
-    for key in waiver_keys {
-        let doc = format!("{MINIMAL_SCENARIO}{key}\n");
-        assert!(
-            parse_scenario(&doc).is_err(),
-            "a scenario with `{key}` must fail to parse: profile scoping has no syntax"
-        );
-    }
-}
-
-/// Symmetric rejection on the profile side: a profile cannot exempt itself
-/// from scenarios either.
-#[test]
-fn waiver_shaped_fields_fail_profile_parsing() {
-    assert!(
-        parse_profile(MINIMAL_PROFILE).is_ok(),
-        "the minimal profile itself must parse, or the rejections below prove nothing"
-    );
-
-    let waiver_keys = [
-        r#"scenarios = ["missing-required-property-diagnostic"]"#,
-        r#"skip = ["missing-required-property-diagnostic"]"#,
-        r#"waive = "all""#,
-        r#"only = ["contract-loads-with-provenance"]"#,
-    ];
-    for key in waiver_keys {
-        let doc = format!("{MINIMAL_PROFILE}{key}\n");
-        assert!(
-            parse_profile(&doc).is_err(),
-            "a profile with `{key}` must fail to parse: scenario scoping has no syntax"
-        );
-    }
-}
-
-/// Load the real fixtures and compute the M1 report; the cross-product and
+/// Load the real fixtures and run the real report; the cross-product and
 /// matrix tests all start from this triple.
-fn m1_report() -> (Vec<Scenario>, Vec<Profile>, Vec<Pair>) {
+fn m2_report() -> (Vec<Scenario>, Vec<Profile>, Vec<Pair>) {
     let scenarios = load_scenarios().expect("scenarios load");
     let profiles = load_profiles().expect("profiles load");
-    let pairs = report(&scenarios, &profiles).expect("the M1 report succeeds");
+    let pairs = report(&scenarios, &profiles, &SdkExecution::in_repository())
+        .expect("the M2 report succeeds");
     (scenarios, profiles, pairs)
 }
 
 #[test]
 fn cross_product_is_complete() {
-    let (scenarios, profiles, pairs) = m1_report();
+    let (scenarios, profiles, pairs) = m2_report();
 
     assert_eq!(
         pairs.len(),
@@ -180,31 +151,63 @@ fn cross_product_is_complete() {
     );
 }
 
+/// Every pair's outcome follows from the two facts about it: an executable
+/// scenario against a built corpus ran, and everything else is pending for
+/// exactly the reasons that make it so.
 #[test]
-fn all_pairs_pending_at_m1() {
-    let (_scenarios, _profiles, pairs) = m1_report();
+fn every_pair_reports_what_its_two_halves_make_it() {
+    let (scenarios, profiles, pairs) = m2_report();
+    let runnable = |pair: &Pair| {
+        let scenario = scenarios
+            .iter()
+            .find(|s| s.id == pair.scenario_id)
+            .expect("every pair names a loaded scenario");
+        let profile = profiles
+            .iter()
+            .find(|p| p.name == pair.profile_name)
+            .expect("every pair names a loaded profile");
+        (
+            scenario.status == ScenarioStatus::Pending,
+            profile.corpus == CorpusStatus::Scheduled,
+        )
+    };
+
+    let mut ran = 0;
     for pair in &pairs {
-        // Irrefutable at M1: Pending is the only outcome variant until the
-        // execution path lands.
-        let Outcome::Pending {
-            scenario_pending,
-            corpus_missing,
-        } = pair.outcome;
-        assert!(
-            scenario_pending || corpus_missing,
-            "({}, {}) is marked pending for no reason",
-            pair.scenario_id,
-            pair.profile_name
-        );
-        // At M1 specifically, both hold for every pair.
-        assert!(
-            scenario_pending && corpus_missing,
-            "at M1 every scenario is pending AND every corpus is scheduled \
-             (({}, {}) disagrees)",
-            pair.scenario_id,
-            pair.profile_name
-        );
+        let (scenario_pending, corpus_missing) = runnable(pair);
+        match &pair.outcome {
+            Outcome::Passed => ran += 1,
+            Outcome::Failed { detail } => {
+                panic!(
+                    "({}, {}) failed: {detail}",
+                    pair.scenario_id, pair.profile_name
+                )
+            }
+            Outcome::Pending {
+                scenario_pending: reported_scenario,
+                corpus_missing: reported_corpus,
+            } => {
+                assert!(
+                    scenario_pending || corpus_missing,
+                    "({}, {}) is marked pending for no reason",
+                    pair.scenario_id,
+                    pair.profile_name
+                );
+                assert_eq!(
+                    (*reported_scenario, *reported_corpus),
+                    (scenario_pending, corpus_missing),
+                    "({}, {}) reports the wrong reasons",
+                    pair.scenario_id,
+                    pair.profile_name
+                );
+            }
+        }
     }
+    assert_eq!(
+        ran,
+        10 * 2,
+        "the ten graduated scenarios ran against the two built corpora"
+    );
 }
 
 /// A scenario that has flipped to `executable` — the status that commits it
@@ -231,13 +234,14 @@ fn profile_with_corpus(name: &str, corpus: CorpusStatus) -> Profile {
 }
 
 /// Graduation is all-or-nothing: the harness refuses to produce a report at
-/// all when a pair is runnable but execution is not wired, rather than
-/// quietly calling it pending.
+/// all when a pair is runnable but the scenario has no execution path, rather
+/// than quietly calling it pending. An executor is not a filter, and this is
+/// what stops one being used as one.
 #[test]
 fn runnable_pair_without_execution_path_is_refused() {
     let profile = profile_with_corpus("built-profile", CorpusStatus::Built);
-    let err =
-        report(&[graduated_scenario()], &[profile]).expect_err("runnable pair must be refused");
+    let err = report(&[graduated_scenario()], &[profile], &NoExecution)
+        .expect_err("runnable pair must be refused");
     let message = err.to_string();
     assert!(
         message.contains("graduated-scenario") && message.contains("built-profile"),
@@ -245,432 +249,89 @@ fn runnable_pair_without_execution_path_is_refused() {
     );
 }
 
+/// An execution path that answers for every pair, so the two ran outcomes are
+/// reachable in a test without a corpus on disk.
+struct Fixed(Result<(), String>);
+
+impl Execution for Fixed {
+    fn run(&self, _scenario: &Scenario, _profile: &Profile) -> Option<Result<(), String>> {
+        Some(self.0.clone())
+    }
+}
+
+/// A runnable pair that runs reports the result of running, not a pending
+/// placeholder — in both directions.
+#[test]
+fn a_runnable_pair_reports_what_running_it_produced() {
+    let profiles = [profile_with_corpus("built-profile", CorpusStatus::Built)];
+    let passed = report(&[graduated_scenario()], &profiles, &Fixed(Ok(())))
+        .expect("a pair with an execution path reports");
+    assert_eq!(passed[0].outcome, Outcome::Passed);
+
+    let failed = report(
+        &[graduated_scenario()],
+        &profiles,
+        &Fixed(Err("the contract did not resolve".to_string())),
+    )
+    .expect("a failing pair is still a report, not an error");
+    assert_eq!(
+        failed[0].outcome,
+        Outcome::Failed {
+            detail: "the contract did not resolve".to_string()
+        }
+    );
+}
+
 /// Graduating a scenario is not on its own enough to make a pair runnable:
 /// an `executable` scenario against a still-scheduled corpus is reported
 /// pending, and pending for exactly one reason — the corpus, not the
-/// scenario. Only when both halves are ready does the refusal above fire.
+/// scenario. That is the distinction the matrix has to keep visible.
 #[test]
 fn executable_scenario_with_a_scheduled_corpus_is_pending_on_the_corpus() {
     let profile = profile_with_corpus("scheduled-profile", CorpusStatus::Scheduled);
-    let pairs =
-        report(&[graduated_scenario()], &[profile]).expect("a scheduled corpus is never runnable");
+    let pairs = report(&[graduated_scenario()], &[profile], &NoExecution)
+        .expect("a scheduled corpus is never runnable");
     assert_eq!(pairs.len(), 1, "one scenario times one profile is one pair");
-    let Outcome::Pending {
-        scenario_pending,
-        corpus_missing,
-    } = pairs[0].outcome;
-    assert!(
-        !scenario_pending,
-        "the scenario has graduated to executable"
-    );
-    assert!(corpus_missing, "the corpus is still scheduled");
-}
-
-/// A throwaway directory under the system temp dir, removed on drop.
-/// Standard library only, per the dependency policy — no `tempfile`.
-struct TempTree(PathBuf);
-
-impl TempTree {
-    fn new(label: &str) -> Self {
-        static COUNTER: AtomicU32 = AtomicU32::new(0);
-        let path = std::env::temp_dir().join(format!(
-            "dogtag-conformance-{label}-{}-{}",
-            std::process::id(),
-            COUNTER.fetch_add(1, Ordering::Relaxed)
-        ));
-        fs::create_dir_all(&path).expect("temp tree created");
-        TempTree(path)
-    }
-
-    fn path(&self) -> &Path {
-        &self.0
-    }
-}
-
-impl Drop for TempTree {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.0);
-    }
-}
-
-/// A scenario document and the filename to write it under, field by field,
-/// so a test can spoil exactly one field-level rule with `..valid(id)` and
-/// leave the rest satisfied.
-struct ScenarioDoc<'a> {
-    /// The file's basename without `.toml`; the loader requires `id == stem`.
-    stem: &'a str,
-    id: &'a str,
-    title: &'a str,
-    contract: &'a str,
-}
-
-impl<'a> ScenarioDoc<'a> {
-    /// A document that satisfies every rule the loader enforces.
-    fn valid(id: &'a str) -> Self {
-        ScenarioDoc {
-            stem: id,
-            id,
-            title: "A minimal scenario for schema tests",
-            contract: "Given a corpus. When nothing happens. Then nothing is reported.",
+    assert_eq!(
+        pairs[0].outcome,
+        Outcome::Pending {
+            scenario_pending: false,
+            corpus_missing: true,
         }
-    }
-
-    /// Render and write the document into a scenarios directory.
-    fn write_into(&self, dir: &Path) {
-        let body = format!(
-            "id = \"{}\"\ntitle = \"{}\"\nmilestone = \"M2\"\n\
-             status = \"pending\"\ncontract = \"{}\"\n",
-            self.id, self.title, self.contract
-        );
-        fs::write(dir.join(format!("{}.toml", self.stem)), body).expect("scenario written");
-    }
-}
-
-/// The profile counterpart of [`ScenarioDoc`]: `dirname` is the profile
-/// directory, which the loader requires to equal `name`.
-struct ProfileDoc<'a> {
-    dirname: &'a str,
-    name: &'a str,
-    persona: &'a str,
-    axes: &'a str,
-    corpus: &'a str,
-    milestone: &'a str,
-}
-
-impl<'a> ProfileDoc<'a> {
-    /// A document that satisfies every rule the loader enforces.
-    fn valid(name: &'a str) -> Self {
-        ProfileDoc {
-            dirname: name,
-            name,
-            persona: "a strictness-test persona",
-            axes: "[\"one axis\"]",
-            corpus: "scheduled",
-            milestone: "M2",
-        }
-    }
-
-    /// Render and write the document as `<dirname>/PROFILE.toml`, returning
-    /// the profile directory.
-    fn write_into(&self, profiles_dir: &Path) -> PathBuf {
-        let dir = profiles_dir.join(self.dirname);
-        fs::create_dir_all(&dir).expect("profile dir created");
-        let body = format!(
-            "name = \"{}\"\npersona = \"{}\"\n\
-             distinguishing_axes = {}\ncorpus = \"{}\"\n\
-             corpus_milestone = \"{}\"\n",
-            self.name, self.persona, self.axes, self.corpus, self.milestone
-        );
-        fs::write(dir.join("PROFILE.toml"), body).expect("PROFILE.toml written");
-        dir
-    }
-}
-
-/// A profile document declaring `corpus = "built"` — the status the loader
-/// requires a `corpus/` directory on disk to back.
-fn built_profile_doc() -> ProfileDoc<'static> {
-    ProfileDoc {
-        corpus: "built",
-        ..ProfileDoc::valid("minimal")
-    }
-}
-
-/// A complete profile directory: `PROFILE.toml` plus the `PROFILE.md` the
-/// loader also permits.
-fn write_profile_dir(doc: &ProfileDoc<'_>, profiles_dir: &Path) -> PathBuf {
-    let dir = doc.write_into(profiles_dir);
-    fs::write(dir.join("PROFILE.md"), "# strictness-test profile\n").expect("PROFILE.md written");
-    dir
-}
-
-fn expect_invalid<T: std::fmt::Debug>(result: Result<T, HarnessError>, needle: &str) {
-    match result {
-        Err(HarnessError::Invalid(message)) => assert!(
-            message.contains(needle),
-            "error message should mention `{needle}`: {message}"
-        ),
-        other => panic!("expected HarnessError::Invalid mentioning `{needle}`, got {other:?}"),
-    }
-}
-
-/// Assert a load failed with [`HarnessError::Io`] at `path`, and that the
-/// rendering names both the path being read and the cause the operating
-/// system gave — an unlabelled "io error" would not be actionable.
-fn expect_io<T: std::fmt::Debug>(result: Result<T, HarnessError>, path: &Path) {
-    let err = result.expect_err("a filesystem failure must not load");
-    match &err {
-        HarnessError::Io(at, cause) => {
-            assert_eq!(at, path, "the io error names the path it was reading");
-            let message = err.to_string();
-            assert!(
-                message.starts_with(&format!("io error at {}: ", path.display())),
-                "the rendering leads with the path: {message}"
-            );
-            assert!(
-                message.ends_with(&cause.to_string()),
-                "the rendering carries the cause `{cause}`: {message}"
-            );
-        }
-        other => panic!(
-            "expected HarnessError::Io at {}, got {other:?}",
-            path.display()
-        ),
-    }
-}
-
-/// The [`HarnessError::Parse`] counterpart of [`expect_io`]: the rendering
-/// names the offending file and repeats the TOML parser's own complaint.
-fn expect_parse<T: std::fmt::Debug>(result: Result<T, HarnessError>, path: &Path) {
-    let err = result.expect_err("malformed TOML must not load");
-    match &err {
-        HarnessError::Parse(at, cause) => {
-            assert_eq!(at, path, "the parse error names the file it was parsing");
-            let message = err.to_string();
-            assert!(
-                message.starts_with(&format!("parse error at {}: ", path.display())),
-                "the rendering leads with the path: {message}"
-            );
-            assert!(
-                message.ends_with(&cause.to_string()),
-                "the rendering carries the parser's complaint: {message}"
-            );
-        }
-        other => panic!(
-            "expected HarnessError::Parse at {}, got {other:?}",
-            path.display()
-        ),
-    }
-}
-
-/// The scenarios directory holds only scenario `*.toml` files: a stray file
-/// (or subdirectory) is a load error, not something silently skipped.
-#[test]
-fn stray_entry_in_scenarios_dir_is_a_load_error() {
-    let tree = TempTree::new("scenarios-stray");
-    fs::write(tree.path().join("minimal-scenario.toml"), MINIMAL_SCENARIO)
-        .expect("scenario written");
-    fs::write(tree.path().join("NOTES.md"), "stray\n").expect("stray file written");
-    expect_invalid(load_scenarios_from(tree.path()), "NOTES.md");
-
-    let subdir_tree = TempTree::new("scenarios-subdir");
-    fs::create_dir_all(subdir_tree.path().join("drafts")).expect("stray subdir created");
-    expect_invalid(load_scenarios_from(subdir_tree.path()), "drafts");
-}
-
-/// The profiles directory holds only profile subdirectories.
-#[test]
-fn stray_file_in_profiles_dir_is_a_load_error() {
-    let tree = TempTree::new("profiles-stray");
-    write_profile_dir(&ProfileDoc::valid("minimal"), tree.path());
-    fs::write(tree.path().join("README.md"), "stray\n").expect("stray file written");
-    expect_invalid(load_profiles_from(tree.path()), "README.md");
-}
-
-/// A profile directory holds only PROFILE.toml, PROFILE.md, and (once
-/// built) a corpus/ directory.
-#[test]
-fn stray_entry_in_a_profile_dir_is_a_load_error() {
-    let tree = TempTree::new("profile-stray");
-    let dir = write_profile_dir(&ProfileDoc::valid("minimal"), tree.path());
-    fs::write(dir.join("extra.txt"), "stray\n").expect("stray file written");
-    expect_invalid(load_profiles_from(tree.path()), "extra.txt");
-}
-
-/// The declared corpus status must match the disk: `built` without a
-/// corpus/ directory is a lie, and the loader rejects it.
-#[test]
-fn built_corpus_without_corpus_dir_is_a_load_error() {
-    let tree = TempTree::new("corpus-built-missing");
-    write_profile_dir(&built_profile_doc(), tree.path());
-    expect_invalid(load_profiles_from(tree.path()), "built");
-}
-
-/// The symmetric direction: a corpus/ directory on disk with the status
-/// still `scheduled` is also a mismatch.
-#[test]
-fn scheduled_corpus_with_corpus_dir_is_a_load_error() {
-    let tree = TempTree::new("corpus-scheduled-present");
-    let dir = write_profile_dir(&ProfileDoc::valid("minimal"), tree.path());
-    fs::create_dir_all(dir.join("corpus")).expect("corpus dir created");
-    expect_invalid(load_profiles_from(tree.path()), "scheduled");
-}
-
-/// And the consistent pairing loads: `built` with a corpus/ directory.
-#[test]
-fn built_corpus_with_corpus_dir_loads() {
-    let tree = TempTree::new("corpus-built-present");
-    let dir = write_profile_dir(&built_profile_doc(), tree.path());
-    fs::create_dir_all(dir.join("corpus")).expect("corpus dir created");
-    let profiles = load_profiles_from(tree.path()).expect("consistent profile loads");
-    assert_eq!(profiles.len(), 1);
-    assert_eq!(profiles[0].corpus, CorpusStatus::Built);
-}
-
-/// Every place the loaders touch the disk reports its failure as
-/// [`HarnessError::Io`] rather than skipping the entry: a missing directory,
-/// a fixture file whose bytes are not UTF-8, and a profile directory with no
-/// `PROFILE.toml` at all.
-#[test]
-fn filesystem_failures_are_io_errors_naming_the_path_and_cause() {
-    let missing = TempTree::new("io-missing-dir");
-    let absent = missing.path().join("not-created");
-    expect_io(load_scenarios_from(&absent), &absent);
-
-    let binary = TempTree::new("io-not-utf8");
-    let file = binary.path().join("minimal-scenario.toml");
-    fs::write(&file, b"id = \"minimal-scenario\"\n\xff\xfe\n").expect("scenario written");
-    expect_io(load_scenarios_from(binary.path()), &file);
-
-    let headless = TempTree::new("io-no-profile-toml");
-    let dir = headless.path().join("minimal");
-    fs::create_dir_all(&dir).expect("profile dir created");
-    fs::write(dir.join("PROFILE.md"), "# specified, not declared\n").expect("PROFILE.md written");
-    expect_io(
-        load_profiles_from(headless.path()),
-        &dir.join("PROFILE.toml"),
     );
 }
 
-/// Malformed TOML is a [`HarnessError::Parse`] on both fixture kinds, naming
-/// the file and repeating the parser's complaint — the strict schemas'
-/// rejections stay diagnosable rather than collapsing into "did not load".
-#[test]
-fn malformed_toml_is_a_parse_error_naming_the_path_and_cause() {
-    let scenarios = TempTree::new("parse-scenario");
-    let file = scenarios.path().join("minimal-scenario.toml");
-    fs::write(&file, "id = \n").expect("scenario written");
-    expect_parse(load_scenarios_from(scenarios.path()), &file);
-
-    let profiles = TempTree::new("parse-profile");
-    let dir = profiles.path().join("minimal");
-    fs::create_dir_all(&dir).expect("profile dir created");
-    fs::write(dir.join("PROFILE.toml"), "name = \n").expect("PROFILE.toml written");
-    expect_parse(
-        load_profiles_from(profiles.path()),
-        &dir.join("PROFILE.toml"),
-    );
-}
-
-/// [`HarnessError::Invalid`] renders with an `invalid fixture:` label and
-/// its message verbatim, so a refusal is still readable when it surfaces as
-/// a plain error string rather than a matched variant.
-#[test]
-fn invalid_fixture_errors_render_with_a_label_and_their_message() {
-    let tree = TempTree::new("invalid-display");
-    fs::write(tree.path().join("NOTES.md"), "stray\n").expect("stray file written");
-    let message = load_scenarios_from(tree.path())
-        .expect_err("a stray entry must not load")
-        .to_string();
-    assert!(
-        message.starts_with("invalid fixture: "),
-        "the rendering is labelled: {message}"
-    );
-    assert!(
-        message.contains("NOTES.md"),
-        "the rendering names the offending entry: {message}"
-    );
-}
-
-/// Each field-level scenario rule refuses on its own terms: the id must
-/// equal the filename stem, the id must be kebab-case, and the two
-/// human-facing fields must carry something other than whitespace. Every
-/// document below is valid TOML under the strict schema and breaks exactly
-/// one rule, so each message identifies the rule it broke.
-#[test]
-fn each_scenario_field_rule_refuses_with_its_own_message() {
-    let cases = [
-        (
-            ScenarioDoc {
-                stem: "renamed-scenario",
-                ..ScenarioDoc::valid("other-id")
-            },
-            "does not match filename stem",
-        ),
-        (
-            ScenarioDoc::valid("not_kebab_scenario"),
-            "is not kebab-case",
-        ),
-        (
-            ScenarioDoc {
-                title: "   ",
-                ..ScenarioDoc::valid("blank-title")
-            },
-            "has an empty title",
-        ),
-        (
-            ScenarioDoc {
-                contract: "  ",
-                ..ScenarioDoc::valid("blank-contract")
-            },
-            "has an empty contract",
-        ),
-    ];
-    for (doc, needle) in cases {
-        let tree = TempTree::new(doc.stem);
-        doc.write_into(tree.path());
-        expect_invalid(load_scenarios_from(tree.path()), needle);
-    }
-}
-
-/// The profile side of the same contract: name matches the directory, name
-/// is kebab-case, persona and corpus_milestone say something, and a profile
-/// that stresses no axis is a fixture nothing specified.
-#[test]
-fn each_profile_field_rule_refuses_with_its_own_message() {
-    let cases = [
-        (
-            ProfileDoc {
-                dirname: "renamed-profile",
-                ..ProfileDoc::valid("other-name")
-            },
-            "does not match directory name",
-        ),
-        (ProfileDoc::valid("not_kebab_profile"), "is not kebab-case"),
-        (
-            ProfileDoc {
-                persona: "   ",
-                ..ProfileDoc::valid("blank-persona")
-            },
-            "has an empty persona",
-        ),
-        (
-            ProfileDoc {
-                axes: "[]",
-                ..ProfileDoc::valid("no-axes")
-            },
-            "declares no distinguishing axes",
-        ),
-        (
-            ProfileDoc {
-                milestone: "  ",
-                ..ProfileDoc::valid("blank-milestone")
-            },
-            "has an empty corpus_milestone",
-        ),
-    ];
-    for (doc, needle) in cases {
-        let tree = TempTree::new(doc.dirname);
-        doc.write_into(tree.path());
-        expect_invalid(load_profiles_from(tree.path()), needle);
-    }
-}
-
-/// Prints the human-readable pending matrix. Run with
+/// Prints the human-readable matrix. Run with
 /// `cargo test -p dogtag-conformance -- --nocapture` (or `just conformance`)
 /// to see it.
 #[test]
-fn print_pending_matrix() {
-    let (scenarios, profiles, pairs) = m1_report();
-    let matrix = pending_matrix(&scenarios, &profiles, &pairs);
+fn print_matrix() {
+    let (scenarios, profiles, pairs) = m2_report();
+    let rendered = matrix(&scenarios, &profiles, &pairs);
+    // Printed before anything is asserted, so a run that goes red still shows
+    // the matrix and the failure details it carries.
+    println!("{rendered}");
 
     // Sanity: every scenario and profile appears in the rendering.
     for scenario in &scenarios {
-        assert!(matrix.contains(&scenario.id));
+        assert!(rendered.contains(&scenario.id));
     }
     for profile in &profiles {
-        assert!(matrix.contains(&profile.name));
+        assert!(rendered.contains(&profile.name));
     }
-    assert!(!matrix.contains("MISSING"), "no cell is unaccounted for");
-
-    println!("{matrix}");
+    assert!(!rendered.contains("MISSING"), "no cell is unaccounted for");
+    assert!(
+        !rendered.contains("IMPOSSIBLE"),
+        "no cell is pending for no reason"
+    );
+    // A skip and a result are different cells, so a run reaching two of four
+    // profiles cannot read as a complete matrix.
+    assert!(rendered.contains("no-corpus"), "skips are visible as skips");
+    assert!(rendered.contains("pass"), "runs are visible as runs");
+    assert!(
+        !pairs
+            .iter()
+            .any(|pair| matches!(pair.outcome, Outcome::Failed { .. })),
+        "a failed pair makes the run red; its detail is printed above"
+    );
 }

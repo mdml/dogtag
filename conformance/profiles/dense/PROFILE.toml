@@ -5,5 +5,5 @@ distinguishing_axes = [
   "wikilink dialect",
   "lifecycle where the ordinary state is absence",
 ]
-corpus = "scheduled"
+corpus = "built"
 corpus_milestone = "M2"

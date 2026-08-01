@@ -1,7 +1,7 @@
 # Fixture profile: `starter`
 
 **Stands for:** a fresh install.
-**Corpus:** scheduled, built at M2 (the milestone that defines the committed vault-contract format and the initialization profile).
+**Corpus:** built at M2 (the milestone that defines the committed vault-contract format and the initialization profile).
 
 ## Distinguishing axes
 
@@ -18,6 +18,6 @@ That inverts the profile's original wording, which described the fixture as init
 
 Exactly one catch-all, at least one identity-bearing type, a lifecycle axis whose ordinary state is an explicit named value, and otherwise the smallest contract that is genuinely useful. It loads with zero diagnostics at any severity — doubly load-bearing here, since this fixture is the standing test that the product's own defaults satisfy the product's own rules.
 
-## Why it is not built yet
+## What the corpus holds now
 
-The committed vault-contract format is an M2 decision. The contract lands with the format it must be written in; the starter notes land with the document model at M3.
+`corpus/.dogtag/contract.toml` — a vault root and the contract a fresh install stamps, and nothing else. The starter notes land at M3, with the document model they must be written in.

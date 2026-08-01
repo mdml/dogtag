@@ -1,11 +1,15 @@
 //! The scenarios × profiles cross product and its human-readable rendering.
 //!
-//! [`report`] takes no filter parameter — the signature is part of the
-//! no-waiver enforcement, alongside the strict schemas and loaders.
+//! [`report`] takes **no filter parameter** — the signature is part of the
+//! no-waiver enforcement, alongside the strict schemas and loaders. The
+//! execution parameter it does take is not a filter: an executor cannot
+//! decline a pair, because answering "no execution path" refuses the whole
+//! report rather than skipping the pair (see [`crate::Execution`]).
 
 use std::collections::BTreeMap;
 
 use crate::error::HarnessError;
+use crate::execution::Execution;
 use crate::schema::{CorpusStatus, Profile, Scenario, ScenarioStatus};
 
 /// One cell of the scenarios × profiles cross product.
@@ -20,64 +24,100 @@ pub struct Pair {
 }
 
 /// The outcome of one scenario/profile pair.
-///
-/// At M1 the only possible outcome is [`Outcome::Pending`]. Pass/fail
-/// variants arrive with the execution path, at the milestone that graduates
-/// the first scenario.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Outcome {
-    /// Not runnable yet: the scenario is still a prose contract, the
-    /// profile's corpus is not built, or both.
+    /// Not runnable: the scenario is still a prose contract, the profile's
+    /// corpus is not built, or both. The two reasons are carried separately
+    /// because they are different facts, and a rendering that conflated them
+    /// would let a run covering two of four profiles read as a complete
+    /// matrix.
     Pending {
         /// The scenario's status is still `pending`.
         scenario_pending: bool,
-        /// The profile's corpus is not yet built.
+        /// The profile's corpus is not yet built — a **skip**, not a result.
         corpus_missing: bool,
+    },
+    /// The pair ran and passed.
+    Passed,
+    /// The pair ran and failed.
+    Failed {
+        /// What the case reported.
+        detail: String,
     },
 }
 
 /// Compute the full cross product: every scenario against every profile,
-/// each pair exactly once. No filter parameter exists — the signature is
-/// part of the no-waiver enforcement.
+/// each pair exactly once.
 ///
-/// Errors with [`HarnessError::NotExecutable`] if a pair is runnable
-/// (executable scenario × built corpus) because execution is not wired yet;
-/// the harness refuses to invent an outcome for a pair it should be running.
-pub fn report(scenarios: &[Scenario], profiles: &[Profile]) -> Result<Vec<Pair>, HarnessError> {
+/// **No filter parameter exists** — that absence is part of the no-waiver
+/// enforcement, and `execution` does not reintroduce one. An executor decides
+/// *how* a runnable pair runs, never *whether* it runs: a runnable pair whose
+/// scenario has no execution path is refused below rather than skipped.
+///
+/// # Errors
+///
+/// [`HarnessError::NotExecutable`] if a pair is runnable (an `executable`
+/// scenario against a `built` corpus) and `execution` has no case for it. The
+/// harness refuses to invent an outcome for a pair it should be running, which
+/// is what makes graduation all-or-nothing.
+pub fn report(
+    scenarios: &[Scenario],
+    profiles: &[Profile],
+    execution: &dyn Execution,
+) -> Result<Vec<Pair>, HarnessError> {
     let mut pairs = Vec::with_capacity(scenarios.len() * profiles.len());
     for scenario in scenarios {
         for profile in profiles {
-            pairs.push(pair_outcome(scenario, profile)?);
+            pairs.push(pair_outcome(scenario, profile, execution)?);
         }
     }
     Ok(pairs)
 }
 
-/// Resolve one scenario/profile pair, refusing a runnable pair because
-/// execution is not wired yet.
-fn pair_outcome(scenario: &Scenario, profile: &Profile) -> Result<Pair, HarnessError> {
+/// Resolve one scenario/profile pair.
+fn pair_outcome(
+    scenario: &Scenario,
+    profile: &Profile,
+    execution: &dyn Execution,
+) -> Result<Pair, HarnessError> {
     let scenario_pending = scenario.status == ScenarioStatus::Pending;
     let corpus_missing = profile.corpus == CorpusStatus::Scheduled;
-    if !scenario_pending && !corpus_missing {
-        return Err(HarnessError::NotExecutable {
-            scenario: scenario.id.clone(),
-            profile: profile.name.clone(),
-        });
-    }
+    let outcome = if scenario_pending || corpus_missing {
+        Outcome::Pending {
+            scenario_pending,
+            corpus_missing,
+        }
+    } else {
+        executed(scenario, profile, execution)?
+    };
     Ok(Pair {
         scenario_id: scenario.id.clone(),
         profile_name: profile.name.clone(),
-        outcome: Outcome::Pending {
-            scenario_pending,
-            corpus_missing,
-        },
+        outcome,
     })
 }
 
-/// Render the cross product as a human-readable matrix: one row per
-/// scenario, one column per profile, every cell filled. Printed by the
-/// harness's matrix test (`just conformance` runs it with `--nocapture`).
-pub fn pending_matrix(scenarios: &[Scenario], profiles: &[Profile], pairs: &[Pair]) -> String {
+/// Run a runnable pair, refusing the whole report when there is no case for it.
+fn executed(
+    scenario: &Scenario,
+    profile: &Profile,
+    execution: &dyn Execution,
+) -> Result<Outcome, HarnessError> {
+    match execution.run(scenario, profile) {
+        None => Err(HarnessError::NotExecutable {
+            scenario: scenario.id.clone(),
+            profile: profile.name.clone(),
+        }),
+        Some(Ok(())) => Ok(Outcome::Passed),
+        Some(Err(detail)) => Ok(Outcome::Failed { detail }),
+    }
+}
+
+/// Render the cross product as a human-readable matrix: one row per scenario,
+/// one column per profile, every cell filled, with a legend naming each cell
+/// and a summary counting each category separately. Printed by the harness's
+/// matrix test (`just conformance` runs it with `--nocapture`).
+pub fn matrix(scenarios: &[Scenario], profiles: &[Profile], pairs: &[Pair]) -> String {
     let outcomes = outcome_index(pairs);
     let table = MatrixTable::new(scenarios, profiles);
 
@@ -88,12 +128,42 @@ pub fn pending_matrix(scenarios: &[Scenario], profiles: &[Profile], pairs: &[Pai
         out.push_str(&table.body_row(scenario, &outcomes));
     }
     out.push('\n');
+    out.push_str(&legend());
+    out.push('\n');
     out.push_str(&corpora_line(profiles));
+    out.push_str(&failures_block(pairs));
     out
 }
 
 /// The matrix's row-label column header.
 const HEADER_LABEL: &str = "scenario (milestone)";
+
+/// Every cell spelling, with what it means. The order is the order the legend
+/// prints and the order the summary counts, so the two cannot drift.
+const CELLS: &[(&str, &str)] = &[
+    ("pass", "ran and passed"),
+    ("FAIL", "ran and failed; the detail is printed below"),
+    (
+        "pending",
+        "the scenario is still prose; the corpus is built",
+    ),
+    (
+        "no-corpus",
+        "the scenario is executable; the corpus is not built - a skip, not a result",
+    ),
+    ("pending,no-corpus", "both"),
+];
+
+/// The legend printed under the matrix, generated from [`CELLS`] so a cell
+/// cannot exist without a line explaining it.
+fn legend() -> String {
+    let width = CELLS.iter().map(|(cell, _)| cell.len()).max().unwrap_or(0);
+    let mut out = String::from("legend\n");
+    for (spelling, meaning) in CELLS {
+        out.push_str(&format!("  {spelling:<width$}  {meaning}\n"));
+    }
+    out
+}
 
 /// Lookup from (scenario id, profile name) to the pair's outcome.
 type OutcomeIndex<'a> = BTreeMap<(&'a str, &'a str), &'a Outcome>;
@@ -123,8 +193,7 @@ struct MatrixTable<'a> {
     profiles: &'a [Profile],
     /// Width of the row-label column: the widest label, header included.
     label_width: usize,
-    /// Per-profile column widths; every cell renders `pending` (7 chars),
-    /// so columns are at least that wide.
+    /// Per-profile column widths, at least as wide as the widest cell spelling.
     col_widths: Vec<usize>,
 }
 
@@ -137,7 +206,11 @@ impl<'a> MatrixTable<'a> {
             .chain([HEADER_LABEL.len()])
             .max()
             .unwrap_or(0);
-        let col_widths = profiles.iter().map(|p| p.name.len().max(7)).collect();
+        let cell_width = CELLS.iter().map(|(cell, _)| cell.len()).max().unwrap_or(0);
+        let col_widths = profiles
+            .iter()
+            .map(|p| p.name.len().max(cell_width))
+            .collect();
         MatrixTable {
             profiles,
             label_width,
@@ -181,18 +254,29 @@ impl<'a> MatrixTable<'a> {
     }
 }
 
-/// The headline: total cross-product size and how much of it is pending.
+/// The headline: the cross product's arithmetic, then how many pairs fall in
+/// each category.
+///
+/// Each category is counted separately on purpose. A single "pending" total
+/// would let a run that reached two of four profiles read as a complete
+/// matrix, which is the thing acceptance criterion 1 is about.
 fn summary_line(scenarios: &[Scenario], profiles: &[Profile], pairs: &[Pair]) -> String {
-    let pending_count = pairs
+    let tally: Vec<String> = CELLS
         .iter()
-        .filter(|p| matches!(p.outcome, Outcome::Pending { .. }))
-        .count();
+        .map(|(spelling, _)| {
+            let count = pairs
+                .iter()
+                .filter(|pair| cell(Some(&pair.outcome)) == *spelling)
+                .count();
+            format!("{count} {spelling}")
+        })
+        .collect();
     format!(
-        "conformance cross product: {} scenarios x {} profiles = {} pairs ({} pending)\n\n",
+        "conformance cross product: {} scenarios x {} profiles = {} pairs ({})\n\n",
         scenarios.len(),
         profiles.len(),
         pairs.len(),
-        pending_count
+        tally.join(", ")
     )
 }
 
@@ -200,8 +284,28 @@ fn summary_line(scenarios: &[Scenario], profiles: &[Profile], pairs: &[Pair]) ->
 /// it should never appear, and the matrix test asserts it does not.
 fn cell(outcome: Option<&Outcome>) -> &'static str {
     match outcome {
-        Some(Outcome::Pending { .. }) => "pending",
+        Some(Outcome::Passed) => "pass",
+        Some(Outcome::Failed { .. }) => "FAIL",
+        Some(Outcome::Pending {
+            scenario_pending,
+            corpus_missing,
+        }) => pending_cell(*scenario_pending, *corpus_missing),
         None => "MISSING",
+    }
+}
+
+/// Which pending cell a pair earns, from the two reasons it can be pending for.
+///
+/// `IMPOSSIBLE` is a pending outcome with no reason to be pending. [`report`]
+/// cannot produce one — a pair that is neither pending nor corpus-less is run
+/// or refused — so it is rendered rather than hidden, on the same principle as
+/// `MISSING`.
+fn pending_cell(scenario_pending: bool, corpus_missing: bool) -> &'static str {
+    match (scenario_pending, corpus_missing) {
+        (true, true) => "pending,no-corpus",
+        (true, false) => "pending",
+        (false, true) => "no-corpus",
+        (false, false) => "IMPOSSIBLE",
     }
 }
 
@@ -229,60 +333,69 @@ fn corpus_status_label(status: CorpusStatus) -> &'static str {
     }
 }
 
+/// Every failed pair's detail, or nothing when none failed.
+fn failures_block(pairs: &[Pair]) -> String {
+    let failures: Vec<String> = pairs
+        .iter()
+        .filter_map(|pair| match &pair.outcome {
+            Outcome::Failed { detail } => Some(format!(
+                "  {} x {}: {detail}",
+                pair.scenario_id, pair.profile_name
+            )),
+            Outcome::Passed | Outcome::Pending { .. } => None,
+        })
+        .collect();
+    if failures.is_empty() {
+        return String::new();
+    }
+    format!("\nfailures\n{}\n", failures.join("\n"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::execution::NoExecution;
 
     /// A pair absent from the report renders as `MISSING` rather than being
     /// silently dropped — the visible-alarm branch the integration tests
     /// assert is never reached on a complete report.
     #[test]
     fn absent_pair_renders_as_missing() {
-        let scenarios = [Scenario {
-            id: "lonely-scenario".to_string(),
-            title: "A scenario with no reported pairs".to_string(),
-            milestone: crate::schema::Milestone::M2,
-            status: ScenarioStatus::Pending,
-            contract: "Given/when/then.".to_string(),
-        }];
-        let profiles = [Profile {
-            name: "minimal".to_string(),
-            persona: "a rendering-test persona".to_string(),
-            distinguishing_axes: vec!["one axis".to_string()],
-            corpus: CorpusStatus::Scheduled,
-            corpus_milestone: "M2".to_string(),
-        }];
-        let matrix = pending_matrix(&scenarios, &profiles, &[]);
+        let scenarios = [rendering_scenario("lonely-scenario")];
+        let profiles = [rendering_profile("minimal")];
+        let rendered = matrix(&scenarios, &profiles, &[]);
         assert!(
-            matrix.contains("MISSING"),
-            "an unaccounted-for cell must be visible: {matrix}"
+            rendered.contains("MISSING"),
+            "an unaccounted-for cell must be visible: {rendered}"
         );
     }
 
-    /// The corpora summary renders a built corpus as `built` — the branch
-    /// the all-scheduled M1 fixtures never reach.
+    /// A pending outcome with no reason to be pending is rendered rather than
+    /// hidden. [`report`] cannot produce one, so the branch is reached here.
+    #[test]
+    fn pending_for_no_reason_renders_as_impossible() {
+        assert_eq!(pending_cell(false, false), "IMPOSSIBLE");
+    }
+
+    /// The corpora summary renders a built corpus as `built`.
     #[test]
     fn corpora_line_labels_a_built_corpus() {
         let profiles = [Profile {
-            name: "built-profile".to_string(),
-            persona: "a rendering-test persona".to_string(),
-            distinguishing_axes: vec!["one axis".to_string()],
             corpus: CorpusStatus::Built,
-            corpus_milestone: "M2".to_string(),
+            ..rendering_profile("built-profile")
         }];
-        let matrix = pending_matrix(&[], &profiles, &[]);
+        let rendered = matrix(&[], &profiles, &[]);
         assert!(
-            matrix.contains("corpora: built-profile (built, M2)"),
-            "the corpora line names the built status: {matrix}"
+            rendered.contains("corpora: built-profile (built, M2)"),
+            "the corpora line names the built status: {rendered}"
         );
     }
 
-    /// The headline states the cross product's arithmetic — scenarios times
-    /// profiles equals pairs — and counts the pending ones separately, so a
-    /// shrunken matrix is visible in the first line rather than only in the
-    /// cells.
+    /// The headline states the cross product's arithmetic and counts every
+    /// category separately, so a shrunken matrix is visible in the first line
+    /// rather than only in the cells.
     #[test]
-    fn summary_line_counts_the_whole_cross_product() {
+    fn summary_line_counts_every_category_separately() {
         let scenarios = [
             rendering_scenario("first-scenario"),
             rendering_scenario("second-scenario"),
@@ -292,21 +405,59 @@ mod tests {
             rendering_profile("two"),
             rendering_profile("three"),
         ];
-        let pairs = report(&scenarios, &profiles).expect("all-pending pairs report");
-        let matrix = pending_matrix(&scenarios, &profiles, &pairs);
+        let pairs = report(&scenarios, &profiles, &NoExecution).expect("all-pending pairs report");
+        let rendered = matrix(&scenarios, &profiles, &pairs);
         assert!(
-            matrix.starts_with(
-                "conformance cross product: 2 scenarios x 3 profiles = 6 pairs (6 pending)\n"
+            rendered.starts_with(
+                "conformance cross product: 2 scenarios x 3 profiles = 6 pairs \
+                 (0 pass, 0 FAIL, 0 pending, 0 no-corpus, 6 pending,no-corpus)\n"
             ),
-            "the headline counts the cross product: {matrix}"
+            "the headline counts each category: {rendered}"
         );
         assert!(
-            !matrix.contains("MISSING"),
-            "every cell of a complete report is accounted for: {matrix}"
+            !rendered.contains("MISSING"),
+            "every cell of a complete report is accounted for: {rendered}"
+        );
+        assert!(
+            rendered.contains(&legend()),
+            "the legend prints: {rendered}"
+        );
+        for (spelling, meaning) in CELLS {
+            assert!(
+                rendered.contains(spelling),
+                "the legend names `{spelling}`: {rendered}"
+            );
+            assert!(
+                rendered.contains(meaning),
+                "the legend says what `{spelling}` means: {rendered}"
+            );
+        }
+    }
+
+    /// A failed pair renders as `FAIL` and prints its detail beneath the
+    /// matrix, so the run says what went wrong without a second command.
+    #[test]
+    fn a_failed_pair_prints_its_detail() {
+        let pairs = [Pair {
+            scenario_id: "first-scenario".to_owned(),
+            profile_name: "one".to_owned(),
+            outcome: Outcome::Failed {
+                detail: "the contract did not resolve".to_owned(),
+            },
+        }];
+        let rendered = matrix(
+            &[rendering_scenario("first-scenario")],
+            &[rendering_profile("one")],
+            &pairs,
+        );
+        assert!(rendered.contains("FAIL"), "the cell says FAIL: {rendered}");
+        assert!(
+            rendered.contains("failures\n  first-scenario x one: the contract did not resolve"),
+            "the detail prints beneath the matrix: {rendered}"
         );
     }
 
-    /// A pending scenario, the only status the M1 matrix renders.
+    /// A pending scenario, the status every M3 scenario still carries.
     fn rendering_scenario(id: &str) -> Scenario {
         Scenario {
             id: id.to_string(),
@@ -317,7 +468,7 @@ mod tests {
         }
     }
 
-    /// A profile whose corpus is still scheduled, as every M1 corpus is.
+    /// A profile whose corpus is still scheduled.
     fn rendering_profile(name: &str) -> Profile {
         Profile {
             name: name.to_string(),

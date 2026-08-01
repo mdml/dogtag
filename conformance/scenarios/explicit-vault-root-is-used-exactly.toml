@@ -1,7 +1,7 @@
 id = "explicit-vault-root-is-used-exactly"
 title = "An explicitly supplied root is used exactly, and a missing root fails distinctly"
 milestone = "M2"
-status = "pending"
+status = "executable"
 contract = """
 Given a vault root supplied explicitly rather than discovered, and separately
 a starting directory within a tree the run controls entirely, holding no

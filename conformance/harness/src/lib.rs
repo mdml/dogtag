@@ -6,38 +6,52 @@
 //! triaged as either an incomplete configuration model or a personal
 //! convention mistaken for an invariant. The mechanical channels for a
 //! waiver — schema fields, stray files, a filtered cross product — are
-//! enforced structurally (see [`Scenario`] and the strict directory
-//! loaders); keeping the prose contracts profile-agnostic still rests on
-//! review discipline until execution wiring closes the loop.
+//! enforced structurally (see [`Scenario`] and the strict directory loaders);
+//! keeping the prose contracts profile-agnostic still rests on review
+//! discipline.
 //!
-//! At M1 every scenario is `pending` and every profile corpus is `scheduled`,
-//! so the harness produces the complete scenarios × profiles matrix of
-//! pending outcomes and nothing executes. The harness deliberately does not
-//! depend on the `dogtag` SDK today (there is nothing to call); when the
-//! first scenario graduates to `executable`, execution wiring lands here and
-//! consumes only the SDK's public API.
+//! At M2 the ten scenarios that open and diagnose a vault are `executable` and
+//! the `dense` and `starter` corpora are `built`, so those pairs run; the M3
+//! scenarios are still prose and the `docs` and `records` corpora are still
+//! scheduled, so the rest of the cross product reports why. The matrix
+//! distinguishes the two: a pair that ran and a pair skipped for want of a
+//! corpus render differently, so a run covering two of four profiles cannot
+//! read as a complete matrix.
 //!
-//! The crate is organized by the three stages of a harness run: the strict
-//! fixture schemas ([`Scenario`], [`Profile`], and their parsers), the
-//! strict directory loaders ([`load_scenarios`], [`load_profiles`]), and the
-//! cross-product report ([`report`], [`pending_matrix`]). Everything is
-//! re-exported here; the modules are an internal arrangement.
+//! The harness consumes the SDK's **public API only**, which makes it a
+//! permanent test that the public API is sufficient: any private hook it
+//! needed would be an architecture bug rather than a reason to widen anything.
+//!
+//! The crate is organized by the stages of a harness run: the strict fixture
+//! schemas ([`Scenario`], [`Profile`], and their parsers), the strict
+//! directory loaders ([`load_scenarios`], [`load_profiles`]), the execution
+//! path ([`Execution`], [`SdkExecution`]), and the cross-product report
+//! ([`report`], [`matrix`]). [`TempTree`] and the contract [`transform`]
+//! module support the executed cases and the harness's own tests alike.
+//! Everything is re-exported here; the modules are an internal arrangement.
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
 
+mod cases;
 mod error;
+mod execution;
 mod loader;
 mod report;
 mod schema;
+mod temptree;
+
+pub mod transform;
 
 pub use error::HarnessError;
+pub use execution::{Execution, NoExecution, SdkExecution};
 pub use loader::{load_profiles, load_profiles_from, load_scenarios, load_scenarios_from};
-pub use report::{Outcome, Pair, pending_matrix, report};
+pub use report::{Outcome, Pair, matrix, report};
 pub use schema::{
-    CorpusStatus, Milestone, Profile, REQUIRED_PROFILES, Scenario, ScenarioStatus, is_kebab_case,
-    parse_profile, parse_scenario,
+    CORPORA_EVER_BUILT, CorpusStatus, Milestone, Profile, REQUIRED_PROFILES, Scenario,
+    ScenarioStatus, is_kebab_case, parse_profile, parse_scenario,
 };
+pub use temptree::{TempTree, copy_tree};
 
 use std::path::PathBuf;
 
@@ -57,4 +71,13 @@ pub fn scenarios_dir() -> PathBuf {
 /// `conformance/profiles/`.
 pub fn profiles_dir() -> PathBuf {
     conformance_root().join("profiles")
+}
+
+/// How many scenarios have an execution path behind them.
+///
+/// Exposed so the harness's own tests can assert it against the number of
+/// scenarios that have graduated: graduation is all-or-nothing, so the two
+/// numbers must agree.
+pub fn graduated_case_count() -> usize {
+    cases::graduated_count()
 }

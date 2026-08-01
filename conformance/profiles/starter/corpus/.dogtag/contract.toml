@@ -1,0 +1,57 @@
+# .dogtag/contract.toml — the committed vault contract of the `starter` conformance fixture.
+# `starter` is the normative initialization profile: this file is the definition of what a fresh install must stamp.
+
+contract_version = 1
+
+[dialect]
+links = "wikilink"
+
+[lifecycle]
+axis = "status"
+ordinary = { value = "active" }
+
+[[type]]
+name = "note"
+capabilities = ["catch-all"]
+
+  [[type.property]]
+  name = "status"
+  kind = "enum"
+  values = ["active", "archived"]
+  required = true
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+[[type]]
+name = "person"
+capabilities = ["identity-bearing"]
+
+  [[type.property]]
+  name = "full_name"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "status"
+  kind = "enum"
+  values = ["active", "archived"]
+  required = true
+
+[[type]]
+name = "project"
+
+  [[type.property]]
+  name = "status"
+  kind = "enum"
+  values = ["active", "archived"]
+  required = true
+
+  [[type.property]]
+  name = "due"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "involves"

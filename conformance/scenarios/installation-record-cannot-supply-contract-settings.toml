@@ -1,7 +1,7 @@
 id = "installation-record-cannot-supply-contract-settings"
 title = "Machine-local configuration cannot supply or override a committed setting"
 milestone = "M2"
-status = "pending"
+status = "executable"
 contract = """
 Given a vault with a valid committed contract, and a machine-local
 installation record that attempts to supply a setting the committed contract

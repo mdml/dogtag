@@ -15,11 +15,11 @@ pub enum HarnessError {
     /// Structurally valid TOML that breaks a harness rule (id mismatch,
     /// duplicate id, non-kebab-case name, empty contract, ...).
     Invalid(String),
-    /// A scenario is `executable` and a profile corpus is `built`, but
-    /// execution is not wired yet. The harness refuses to report such a pair
-    /// as anything, rather than silently marking it pending: graduation is
-    /// all-profiles-or-nothing, and the milestone that graduates the first
-    /// scenario must land the execution path here.
+    /// A scenario is `executable` and a profile corpus is `built`, but the
+    /// scenario has no execution path. The harness refuses to report such a
+    /// pair as anything, rather than silently marking it pending: graduation
+    /// is all-profiles-or-nothing, so flipping a scenario's status without
+    /// landing its case fails the suite instead of quietly passing.
     NotExecutable {
         /// The executable scenario.
         scenario: String,
@@ -37,8 +37,8 @@ impl fmt::Display for HarnessError {
             HarnessError::NotExecutable { scenario, profile } => write!(
                 f,
                 "scenario `{scenario}` is executable and profile `{profile}` has a built corpus, \
-                 but the harness has no execution path yet; wire execution before graduating \
-                 scenarios (graduation runs against every profile — no partial graduation)"
+                 but the scenario has no execution path; land its case before graduating it \
+                 (graduation runs against every profile — no partial graduation)"
             ),
         }
     }
