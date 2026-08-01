@@ -8,6 +8,8 @@
 
 use std::collections::BTreeSet;
 
+use dogtag::contract::{Capability, Contract, Ordinary, load_contract};
+
 use dogtag_conformance::{
     CORPORA_EVER_BUILT, CorpusStatus, Execution, Milestone, NoExecution, Outcome, Pair, Profile,
     REQUIRED_PROFILES, Scenario, ScenarioStatus, SdkExecution, graduated_case_count, load_profiles,
@@ -76,6 +78,106 @@ fn every_m2_scenario_has_graduated_and_nothing_has_graduated_early() {
         executable,
         "every graduated scenario has an execution path, and nothing else does"
     );
+}
+
+/// The floors the fixture record states for each built corpus.
+///
+/// The record spells these out and, until now, nothing read them. Both
+/// fixtures met them the day they were written; what was missing was anything
+/// that would notice them stopping. The absence-versus-named-value pair is the
+/// load-bearing one — it is the reason the two profiles exist together, and it
+/// is invisible to every other assertion in this suite because the cases adapt
+/// to whichever encoding they find.
+#[test]
+fn each_built_corpus_meets_the_coverage_floor_its_record_states() {
+    let dense = contract_of("dense");
+    assert!(
+        identity_bearing(&dense) >= 2,
+        "dense: at least two identity-bearing types"
+    );
+    assert_eq!(catch_all(&dense), 1, "dense: exactly one catch-all");
+    assert!(
+        closed_write(&dense) >= 1,
+        "dense: at least one closed-write"
+    );
+    assert!(predicates(&dense) >= 2, "dense: at least two predicates");
+    assert!(
+        required_predicates(&dense) >= 1,
+        "dense: at least one required predicate"
+    );
+    assert!(
+        matches!(ordinary_of(&dense), Some(Ordinary::Absent)),
+        "dense: the ordinary state is absence"
+    );
+    assert_eq!(
+        dense.dialect().links().as_str(),
+        "wikilink",
+        "dense: the wikilink dialect"
+    );
+
+    let starter = contract_of("starter");
+    assert_eq!(catch_all(&starter), 1, "starter: exactly one catch-all");
+    assert!(
+        identity_bearing(&starter) >= 1,
+        "starter: at least one identity-bearing type"
+    );
+    assert!(
+        matches!(ordinary_of(&starter), Some(Ordinary::Value(_))),
+        "starter: the ordinary state is a named value — the other half of the \
+         seam axis the two profiles exist to span"
+    );
+}
+
+/// A built profile's committed contract, loaded the way the SDK loads one.
+fn contract_of(profile: &str) -> Contract {
+    let path = dogtag_conformance::profiles_dir()
+        .join(profile)
+        .join("corpus/.dogtag/contract.toml");
+    load_contract(&path)
+        .contract
+        .clone()
+        .unwrap_or_else(|_| panic!("the {profile} corpus holds a contract that loads"))
+}
+
+fn with(contract: &Contract, capability: Capability) -> usize {
+    contract
+        .types()
+        .iter()
+        .filter(|declared| declared.has(capability))
+        .count()
+}
+
+fn identity_bearing(contract: &Contract) -> usize {
+    with(contract, Capability::IdentityBearing)
+}
+
+fn catch_all(contract: &Contract) -> usize {
+    with(contract, Capability::CatchAll)
+}
+
+fn closed_write(contract: &Contract) -> usize {
+    with(contract, Capability::ClosedWrite)
+}
+
+fn predicates(contract: &Contract) -> usize {
+    contract
+        .types()
+        .iter()
+        .map(|declared| declared.relationships().len())
+        .sum()
+}
+
+fn required_predicates(contract: &Contract) -> usize {
+    contract
+        .types()
+        .iter()
+        .flat_map(|declared| declared.relationships())
+        .filter(|relationship| relationship.required())
+        .count()
+}
+
+fn ordinary_of(contract: &Contract) -> Option<&Ordinary> {
+    contract.lifecycle().ordinary()
 }
 
 #[test]
@@ -325,9 +427,25 @@ fn print_matrix() {
         "no cell is pending for no reason"
     );
     // A skip and a result are different cells, so a run reaching two of four
-    // profiles cannot read as a complete matrix.
-    assert!(rendered.contains("no-corpus"), "skips are visible as skips");
-    assert!(rendered.contains("pass"), "runs are visible as runs");
+    // profiles cannot read as a complete matrix. Asserted against the cells
+    // rather than the whole rendering: `matrix` always appends a legend that
+    // spells every cell word, so `rendered.contains("pass")` was true of a
+    // matrix in which nothing had run.
+    let body = rendered
+        .split_once("\nlegend\n")
+        .map_or(rendered.as_str(), |(body, _)| body);
+    let cells: Vec<&str> = body
+        .lines()
+        .flat_map(|line| line.split_whitespace())
+        .collect();
+    assert!(
+        cells.contains(&"pass"),
+        "a pair that ran is a cell of its own: {body}"
+    );
+    assert!(
+        cells.contains(&"no-corpus"),
+        "and a pair skipped for an unbuilt corpus is a different one: {body}"
+    );
     assert!(
         !pairs
             .iter()
