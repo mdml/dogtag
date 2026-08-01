@@ -45,7 +45,7 @@ impl VersionClass {
     /// The lowercase wire spelling, used by every structured format.
     pub fn as_str(self) -> &'static str {
         match self {
-            Self::BelowFloor => "below-floor",
+            Self::BelowFloor => "below-supported-floor",
             Self::Supported => "supported",
             Self::Current => "current",
             Self::TooNew => "too-new",
@@ -117,7 +117,7 @@ mod tests {
 
     #[test]
     fn classifications_render_and_say_whether_the_asset_is_read_further() {
-        assert_eq!(VersionClass::BelowFloor.as_str(), "below-floor");
+        assert_eq!(VersionClass::BelowFloor.as_str(), "below-supported-floor");
         assert_eq!(VersionClass::Supported.as_str(), "supported");
         assert_eq!(VersionClass::Current.as_str(), "current");
         assert_eq!(VersionClass::TooNew.as_str(), "too-new");
