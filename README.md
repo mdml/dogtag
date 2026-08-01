@@ -26,3 +26,30 @@ my-vault/
 ```
 
 One committed file, not two: the *canonical* dialect travels inside the contract so every collaborator reads the corpus the same way. A machine-local installation record, which never leaves your machine and is never committed, carries what genuinely differs per machine — including which editor dialect gets materialized, so teammates sharing a vault can each keep their favored editor. `AGENTS.md` and `.index/` above are generated and derived respectively; neither is written by the current release. The format is decided in [the vault contract record](docs/decisions/engineering/2026-07-31-vault-contract-and-installation-record.md).
+
+## Verifying a release
+
+Every release publishes, per target, a `.tar.gz`, its `.sha256` sidecar, and a CycloneDX SBOM with its own sidecar, plus one aggregate `sha256.sum` covering all of them. Checksums first:
+
+```sh
+sha256sum -c sha256.sum
+```
+
+Both attestations are minted by [the release workflow](.github/workflows/release.yml) and bound to this repository. Verify the build provenance:
+
+```sh
+gh attestation verify dogtag-x86_64-unknown-linux-musl.tar.gz \
+  --repo mdml/dogtag \
+  --signer-workflow mdml/dogtag/.github/workflows/release.yml
+```
+
+The SBOM is attested separately, as a predicate over the same archive. **`--predicate-type` is required**: without it the command verifies the provenance attestation, exits 0, and tells you nothing about the SBOM — a success that looks exactly like the one you wanted.
+
+```sh
+gh attestation verify dogtag-x86_64-unknown-linux-musl.tar.gz \
+  --repo mdml/dogtag \
+  --signer-workflow mdml/dogtag/.github/workflows/release.yml \
+  --predicate-type https://cyclonedx.org/bom
+```
+
+The SBOM describes one binary on one target and is reconciled against the closure the build actually resolves, so it names what the binary links and nothing more. The rules are in [the supply-chain policy](docs/decisions/engineering/2026-07-30-supply-chain-and-vulnerability-policy.md) and [the release pipeline record](docs/decisions/engineering/2026-07-30-release-pipeline-and-artifacts.md).

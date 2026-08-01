@@ -50,9 +50,15 @@ sweep() {
 
 emitted="crates/dogtag-cli/dogtag_bin.cdx.json"
 output="dist/dogtag-$target.cdx.json"
+closure="$(mktemp)"
+
+cleanup() {
+  sweep
+  rm -f "$closure"
+}
 
 sweep
-trap sweep EXIT
+trap cleanup EXIT
 
 echo "generating SBOM for the dogtag binary on $target"
 cargo cyclonedx \
@@ -69,7 +75,41 @@ if [ ! -f "$emitted" ]; then
   exit 1
 fi
 
+# The closure the build actually resolves, feature gates included. cargo tree
+# honours them; cargo metadata's resolve graph, which the generator reads,
+# does not. Reconciling against this is what keeps the attested document from
+# claiming crates the binary never links.
+cargo tree \
+  --locked \
+  --package dogtag-cli \
+  --edges normal \
+  --target "$target" \
+  --prefix none \
+  | awk 'NF >= 2 { print $1 "@" substr($2, 2) }' \
+  | sort -u >"$closure"
+
 mkdir -p dist
-install -m 0644 "$emitted" "$output"
+python3 scripts/sbom_filter.py "$emitted" "$output" \
+  --closure "$closure" \
+  --root dogtag-cli
+
+# The SBOM gets the same sidecar every other published asset gets. It is an
+# attestation *predicate*, not a subject, so `gh attestation verify` reads the
+# copy in the transparency log and never looks at the published file — which
+# leaves the asset sitting beside the archive with nothing checking it unless
+# the aggregate covers it.
+(
+  cd dist
+  name="$(basename "$output")"
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$name" >"$name.sha256"
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$name" >"$name.sha256"
+  else
+    echo "error: neither sha256sum nor shasum is available" >&2
+    exit 1
+  fi
+)
 
 echo "wrote $output"
+echo "wrote $output.sha256"

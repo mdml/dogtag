@@ -92,6 +92,7 @@ jobs:
             dist/dogtag-${{ matrix.target }}.tar.gz
             dist/dogtag-${{ matrix.target }}.tar.gz.sha256
             dist/dogtag-${{ matrix.target }}.cdx.json
+            dist/dogtag-${{ matrix.target }}.cdx.json.sha256
           if-no-files-found: error
 
   release:
@@ -126,10 +127,14 @@ jobs:
       - name: Verify checksums and build aggregate sha256.sum
         working-directory: dist
         run: |
-          for sidecar in *.tar.gz.sha256; do
+          # Every sidecar, not just the archives': the SBOM is a published
+          # asset too, and the aggregate is documented as the one file that
+          # checks everything. An asset the aggregate skips is an asset a
+          # mirror ships unchecked.
+          for sidecar in *.sha256; do
             sha256sum -c "$sidecar"
           done
-          cat -- *.tar.gz.sha256 | LC_ALL=C sort -k 2 > sha256.sum
+          cat -- *.sha256 | LC_ALL=C sort -k 2 > sha256.sum
           echo "aggregate sha256.sum:"
           cat sha256.sum
       - name: Attest build provenance
@@ -199,4 +204,5 @@ jobs:
             --verify-tag \
             --title "dogtag $TAG" \
             --notes-file NOTES.md \
-            dist/*.tar.gz dist/*.tar.gz.sha256 dist/*.cdx.json dist/sha256.sum
+            dist/*.tar.gz dist/*.tar.gz.sha256 \
+            dist/*.cdx.json dist/*.cdx.json.sha256 dist/sha256.sum
