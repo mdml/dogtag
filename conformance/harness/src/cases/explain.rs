@@ -1,7 +1,9 @@
 //! `contract-explain-renders-every-declaration`: the two renderings carry
 //! every declaration, carry nothing else, and agree with each other.
 
-use dogtag::contract::{Contract, LifecycleDecl, Ordinary, PropertyDecl, RelationshipDecl};
+use dogtag::contract::{
+    Contract, LifecycleDecl, Ordinary, PropertyDecl, RelationshipDecl, TypeDecl,
+};
 use dogtag::report::{contract_json, contract_markdown};
 use dogtag::vault::VaultRoot;
 
@@ -36,6 +38,7 @@ pub fn contract_explain(corpus: &Corpus) -> Checked {
     let rendered = Rendered::of(&root, &contract);
 
     names_agree(&contract, &rendered)?;
+    capabilities_agree(&contract, &rendered)?;
     declarations_carry_their_detail(&contract, &rendered)?;
     lifecycle_and_dialect_appear(&contract, &rendered)?;
     provenance_covers_every_leaf(&contract, &rendered)?;
@@ -111,6 +114,83 @@ fn flags_agree(contract: &Contract, rendered: &Rendered) -> Checked {
         &scan::unique(scan::backticked_after(section, "`")),
         "the Markdown's flags",
     )
+}
+
+/// Every type's capabilities reach both renderings, and neither invents one.
+///
+/// The Markdown puts them after the type name in its heading, which the name
+/// scanner deliberately stops short of — so without this the whole capability
+/// vocabulary was asserted by nothing. A rendering that dropped `closed-write`
+/// from every type that declares it, or granted `catch-all` to a second type,
+/// passed both renderings green.
+fn capabilities_agree(contract: &Contract, rendered: &Rendered) -> Checked {
+    for declared in contract.types() {
+        let expected = capability_clause(declared);
+        let heading = format!("### `{}` — {expected}", declared.name());
+        require_contains(&rendered.markdown, &heading, "the Markdown's type headings")?;
+    }
+    // Both directions: the set the Markdown carries is the set the contract
+    // declares, so a heading for a type that declares none cannot quietly
+    // acquire one.
+    let declared = scan::unique(contract.types().iter().map(capability_clause));
+    require_same_names(
+        &declared,
+        &scan::unique(clauses_after(&rendered.markdown, "### `")),
+        "the Markdown's capability clauses",
+    )?;
+    let named = scan::unique(
+        contract
+            .types()
+            .iter()
+            .flat_map(|t| t.capabilities().iter().map(|c| c.as_str().to_owned())),
+    );
+    require_same_names(
+        &named,
+        &scan::unique(json_array_strings(&rendered.json, "capabilities")),
+        "the JSON's capabilities",
+    )
+}
+
+/// What each heading says after its name.
+///
+/// `scan::backticked_after` deliberately stops at the backticked name, so the
+/// clause carrying the capabilities is read by nothing else.
+fn clauses_after(text: &str, prefix: &str) -> Vec<String> {
+    text.lines()
+        .filter(|line| line.starts_with(prefix))
+        .filter_map(|line| Some(line.split_once(" — ")?.1.trim().to_owned()))
+        .collect()
+}
+
+/// Every string inside each `"<key>": [ ... ]` array.
+///
+/// `scan::json_strings` reads scalars, so an array-valued key read through it
+/// yields nothing at all — which is indistinguishable from a rendering that
+/// carries the key and declares it empty.
+fn json_array_strings(json: &str, key: &str) -> Vec<String> {
+    let opening = format!("\"{key}\": [");
+    let mut found = Vec::new();
+    let mut rest = json;
+    while let Some(at) = rest.find(&opening) {
+        rest = &rest[at + opening.len()..];
+        let Some(end) = rest.find(']') else { break };
+        found.extend(rest[..end].split('"').skip(1).step_by(2).map(str::to_owned));
+        rest = &rest[end..];
+    }
+    found
+}
+
+/// How a type's capabilities are spelled after its name in a heading.
+fn capability_clause(declared: &TypeDecl) -> String {
+    if declared.capabilities().is_empty() {
+        return "no capabilities".to_owned();
+    }
+    declared
+        .capabilities()
+        .iter()
+        .map(|capability| capability.as_str())
+        .collect::<Vec<&str>>()
+        .join(", ")
 }
 
 /// Each property's kind and required flag, and each relationship's required
