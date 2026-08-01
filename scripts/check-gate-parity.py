@@ -18,7 +18,7 @@ to catch, so the parse is worth its lines. A step that legitimately takes a
 runtime argument declares the suffix, so the tolerance is per-step and
 checked rather than global.
 
-Five rules:
+Six rules:
 
 1. Every step in the `gate` suite is a whole `run:` line in a workflow, or is
    listed in DIVERGENCES with the reason it cannot be.
@@ -56,9 +56,16 @@ from typing import NamedTuple
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import gate  # noqa: E402  (path shim above; scripts/ is not a package)
 
+# release.yml is scanned even though it reports no required status check: it
+# is the only path that produces the bytes users install, so rule 4 watching
+# it is the difference between "a script CI runs is accounted for" and "a
+# script a *required* job runs is accounted for". The release path's scripts
+# are rehearsed by `just dist` rather than by a gate step, which is what the
+# CI_ONLY entries below record.
 WORKFLOWS = (
     ".github/workflows/ci.yml",
     ".github/workflows/security.yml",
+    ".github/workflows/release.yml",
 )
 RULESET = ".github/rulesets/main-branch.json"
 
@@ -103,7 +110,19 @@ ARGUMENT_SUFFIX = {
 }
 
 # Repository commands a workflow runs that no gate step covers, and why.
-CI_ONLY: dict[str, str] = {}
+CI_ONLY = {
+    'scripts/package.sh "$TARGET"': (
+        "a release-path script, not a gate step: it stages a built binary "
+        "into the published archive, so it runs on a tag rather than on "
+        "every commit. `just dist` rehearses it with the same arguments the "
+        "release workflow passes, which is where a break surfaces locally"
+    ),
+    'scripts/sbom.sh "$TARGET"': (
+        "same release path as package.sh: it generates the per-target "
+        "CycloneDX SBOM the release publishes and attests, and `just dist` "
+        "runs it immediately after the packaging step for the same reason"
+    ),
+}
 
 # Gate steps CI does not run at all, and the strings that must therefore stay
 # out of the workflows. A local-only gate is a real weakening of the merge

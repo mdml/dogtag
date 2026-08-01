@@ -146,7 +146,7 @@ notes:
 install-dev-tools:
     ./scripts/install-dev-tools.sh
 
-# Release-build the CLI for this machine's release target (Linux ships musl) and package it into dist/ (same scripts/package.sh as the release workflow)
+# Release-build the CLI for this machine's release target (Linux ships musl), package it into dist/ and generate its SBOM (the same scripts the release workflow runs)
 dist:
     #!/usr/bin/env bash
     set -euo pipefail
@@ -159,6 +159,7 @@ dist:
     # and argument order included; only the target is substituted.
     cargo auditable build --release --locked -p dogtag-cli --target "$triple"
     ./scripts/package.sh "$triple"
+    ./scripts/sbom.sh "$triple"
 
 # Rehearse install.sh end-to-end against the locally packaged dist/
 install-local: dist

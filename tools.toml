@@ -36,6 +36,13 @@ form = "install-action"
 # Embeds the linked dependency list in released binaries so a shipped
 # artifact can be audited directly rather than by trusting a side manifest.
 
+[cargo-cyclonedx]
+version = "0.5.9"
+form = "install-action"
+# Generates the per-target CycloneDX SBOM the release publishes beside each
+# archive. Pinned as tightly as cargo-auditable and for the same reason: it
+# describes a shipped artifact, so a bump changes what a consumer verifies.
+
 [git-cliff]
 version = "2.13.1"
 form = "install-action"
