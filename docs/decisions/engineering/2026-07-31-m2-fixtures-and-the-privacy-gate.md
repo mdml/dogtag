@@ -1,6 +1,6 @@
 # The M2 fixture corpora, negative cases, and the privacy gate
 
-- Status: accepted
+- Status: accepted (amended 2026-08-01 — see [Amendments](#amendments))
 - Date: 2026-07-31
 
 ## Context
@@ -86,3 +86,11 @@ This is what makes a negative case profile-agnostic by construction rather than 
 - **`corpus = "built"` means two different things at M2 and M3** — the vault exists, then the vault has notes. The profile specifications carry the distinction, and the harness schema does not, which is a deliberate choice to keep the schema unwidened at the cost of the word carrying context.
 - **The `docs` and `records` corpora stay scheduled**, so M2's executable scenarios run against two of four profiles. The no-waiver machinery is intact — an executable scenario against a scheduled corpus is reported pending on the corpus, and the harness refuses a runnable pair with no execution path — but M2's cross-profile evidence is `dense` and `starter`, not four profiles, and the printed matrix should not be read as more.
 - **Derived negative cases make the harness a program rather than a data set.** It gains transformation logic that must itself be correct, and a bug there could make a negative case vacuously pass. Those transformations need their own tests.
+
+## Amendments
+
+The Decision above stands as written; these later records change parts of it, and the original text is left intact so the change is legible.
+
+- **2026-08-01 — the coverage floors are enforced by the harness rather than by prose.** Both floors were met the day the fixtures were written and nothing read them, so nothing would have noticed them stopping. The sharpest gap was the absence-versus-named-value pair: every case adapts to whichever `ordinary` encoding it finds, so `starter` flipping to absence would have collapsed the seam axis the two profiles exist together to span, with every test still green. This is the erosion channel this record already insisted be mechanized for `corpus = "scheduled"`, left open one layer down.
+
+- **2026-08-01 — `dense` is dense but reads as templated rather than accreted.** The rejected alternative in this record turns on `dense` being *realistically* dense, an invented shape being a guess about what a mature corpus looks like. All fifty-eight types carry an identical seven-property tail. A corpus that accreted over years has irregular edges — a type missing `updated`, a second lifecycle vocabulary on one branch — and this one has none. The vocabulary is good and no privacy leak exists in either direction; the shape is where the derivation stopped short of what the record claims for it.

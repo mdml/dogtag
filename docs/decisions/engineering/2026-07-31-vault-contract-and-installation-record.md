@@ -1,6 +1,6 @@
 # The committed vault contract and the local installation record
 
-- Status: accepted
+- Status: accepted (amended 2026-08-01 — see [Amendments](#amendments))
 - Date: 2026-07-31
 
 ## Context
@@ -184,3 +184,17 @@ Registry entries carry a kebab-case `name` and an **absolute** `path`. No tilde 
 - **Index placement, editor dialect, paths, integrations, and presentation are all absent from the installation record**, so M4 and later either add them under a new `installation_version` or discover they belong elsewhere. Anyone comparing this record against `architecture.md`'s machine-local list will find it short, deliberately.
 - **`float` is in the lattice with no consumer outside the fixtures.** A numeric property is ordinary in any corpus and the kind costs nothing beyond the one it already shares with `integer` — but note that the fixture floors do not mandate exercising every kind, precisely so that a kind nobody reaches for is visible as unused rather than kept alive by a coverage rule. Evidence that the lattice can shrink has to come from a real corpus.
 - **A corpus wanting enforced value formats has no contract-level route.** The linter-over-the-SDK answer is real but unproven — no consumer has written one yet, which makes the [architecture obligation](../../architecture.md) about consumer-authored validation a claim this milestone asserts rather than demonstrates.
+
+## Amendments
+
+The Decision above stands as written; these later records change parts of it, and the original text is left intact so the change is legible.
+
+- **2026-08-01 — version-scoped key legality is a promise, not yet a mechanism.** The Decision says key legality is scoped to the declared version and that the SDK carries every supported version's default table. The implementation carries neither dimension: the key sets are per-table constants and the two defaults are literals, and the declared version reaches only the diagnostic text and the provenance attribution. That is indistinguishable from correct while the supported range is `1..=1`, which is why it survived review twice. It stops being indistinguishable at the first bump, when a version-1 contract would be judged against the union key set and an omitted key would take version 2's value while its provenance said `contract_version = 1` — the lying provenance this record already names as worse than plain inheritance. **A per-version key set and default table are due before the supported range widens, and widening it without them is the regression.** Recorded as an explicit deferral rather than fixed now: at one supported version the mechanism has no reachable second branch, and the coverage floor bans unreachable branches.
+
+- **2026-08-01 — the dotted provenance key path is not injective, and nothing constrains a declaration name.** Provenance is addressed by a dotted key path built from the corpus's own names, and this record fixes a lexical form for the registry's `name` and for nothing else. A type named `t.property.p` therefore produces the same key as type `t`'s property `p`, and the second silently replaces the first in the map whose whole job is saying where a value came from. An empty name is accepted too, yielding keys like `type..capabilities`. Neither is fixed yet; both need a decision about what a declaration name may lexically be, which this record never made.
+
+- **2026-08-01 — `[dialect]`'s mandatoriness and version 1's default table were inferred, not decided.** The Decision states `[lifecycle]` is mandatory and says only what `[dialect]` contains, never whether it may be omitted. The parser inferred that absence is a load error and minted `contract.missing-dialect` for it — a permanent public identifier derived from an inference. The two implemented defaults (`required = false`, `capabilities = []`) appear in this record only inside a rejected alternative, never as the version-1 table the SDK is obliged to carry. Both readings are reasonable; neither is decided here, and a later decision that `links` defaults to `wikilink` would change every existing v1 vault's meaning with no version bump available to carry it.
+
+- **2026-08-01 — four enforced rules this record does not state.** `contract.duplicate-flag`, `contract.no-types`, and the two `contract.lifecycle-ordinary-invalid` refusals (not exactly one of `value`/`absent`; `absent = false` and `none = false`) are all enforced and all absent from the validity list. Each is a reasonable reading and each mints a permanent identifier, so the record cannot currently be used to check the implementation.
+
+- **2026-08-01 — a `contract_version` too large for a `u32` is refused by the parser rather than classified.** This record puts `contract_version` in the domain 0 and above and makes classification total over it, sending anything above the supported range to `compat.contract-too-new`. `contract_version = 4294967296` instead produces `contract.version-invalid`, which is the inversion the next paragraph forbids. The exit code is unaffected; the identifier and `doctor`'s version section are.

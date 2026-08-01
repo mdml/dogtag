@@ -1,6 +1,6 @@
 # The M2 surfaces: `doctor`, `contract explain`, and where rendering lives
 
-- Status: accepted
+- Status: accepted (amended 2026-08-01 — see [Amendments](#amendments))
 - Date: 2026-07-31
 
 ## Context
@@ -76,3 +76,17 @@ A single atomic `open() -> Result<Vault>` cannot produce the report `doctor` is 
 - **The `Opened` shape makes the partial-state case ordinary rather than exceptional**, which is right for a diagnostic tool and slightly verbose for every other caller, who must unwrap a `Result` inside a struct.
 - **Two renderings must stay semantically equal** — every declaration in the Markdown must appear in the JSON and vice versa. That is an acceptance criterion, not a hope, and the `contract-explain-renders-every-declaration` scenario is what holds it up.
 - **`contract explain` writing to standard output only** means the generated-agent-contract obligation is demonstrated but not yet delivered to a vault; the file that must not drift does not exist on disk until a later milestone writes it.
+
+## Amendments
+
+The Decision above stands as written; these later records change parts of it, and the original text is left intact so the change is legible.
+
+- **2026-08-01 — the CLI does not own registry-name resolution; strike that clause.** The Decision's boundary paragraph lists registry-name resolution among the CLI's responsibilities. [The discovery record](2026-07-31-vault-discovery-and-selection.md) places it in the SDK and gives the reason: its failures are `installation.*` diagnostics, and only the SDK may mint an identifier outside the `ext.` namespace. The implementation follows the discovery record and is correct. The clause here is the error — it gives no reason, and acting on it would put kernel identifiers in a consumer. The CLI owns argument parsing, environment and current-directory resolution, colour, stream routing, and the mapping from severity to exit code.
+
+- **2026-08-01 — there is no registry-inventory flag at M2, and the sentence promising one is struck.** The Decision fixes `doctor`'s grammar as three flags and then says the full inventory sits behind an explicit flag. No such flag exists in the grammar, in this record's alternatives, in `beta.md`, or in any scenario, and none shipped. The signature is right; the sentence was aspirational and read as settled.
+
+- **2026-08-01 — `contract explain` takes `--strict`.** The Decision fixes its flags as `[--vault] [--format] [--provenance]`. A nested vault is a warning, and on this surface it means the rendering an agent is about to follow as instructions came from a *different corpus* — which is the reason [the compatibility record](2026-07-31-diagnostics-and-compatibility.md) gives for `--strict` existing, stated there about `doctor`. The surface that renders instructions needed it at least as much. It reaches the one predicate that owns the promotion, so a strict run and an ordinary one differ by exit code and by nothing else.
+
+- **2026-08-01 — `root_at` and `resolve_registered` answer with a root *and* its diagnostics.** The Decision fixes `root_at(path) -> Result<VaultRoot, Diagnostic>`. [The discovery record](2026-07-31-vault-discovery-and-selection.md) requires an info diagnostic whenever the resolved root differs from what was requested, and that diagnostic arises on *success*, so the fixed shape had nowhere to put it and both explicit routes discarded it. Widening the return is the smaller loss: the alternative leaves the `info` severity with one justification instead of the two [the compatibility record](2026-07-31-diagnostics-and-compatibility.md) gives it, and leaves the surprise this record wanted surfaced invisible on exactly the routes where a user types a symlinked path.
+
+- **2026-08-01 — the Markdown folds and escapes what a table cell cannot carry, and the equivalence claim is about declarations, not bytes.** Neither this record nor any other sanctions the renderer rewriting a declared value. It does: a `|` in a type name or enum member is escaped, and a control character is folded to a space, because a Markdown table is line-oriented and because an unfolded control character lets planted text repaint a reader's terminal. The JSON emits the bytes exactly. So the two renderings carry the same *declarations* and can differ in the *spelling* of a value containing a character a table cannot hold. That trade is now decided rather than merely implemented; the equivalence acceptance criterion is about the declaration set, and the fold is the anti-forgery control it looks like.

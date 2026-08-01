@@ -1,6 +1,6 @@
 # The diagnostic envelope and the compatibility direction
 
-- Status: accepted
+- Status: accepted (amended 2026-08-01 — see [Amendments](#amendments))
 - Date: 2026-07-31
 
 ## Context
@@ -100,3 +100,19 @@ A range rather than a single supported version is forced by M0 rather than chose
 - **The compatibility machinery is almost entirely theory at M2**, with one supported version. What ships is the classification, the diagnostics, and the tests; the first real bump is when it is proven. Two of the four classifications are reachable from a real fixture — `current`, and `below-supported-floor` via `contract_version = 0` — and `too-new` via `2`. Only `supported`-but-not-current is unreachable at M2, which is why the conformance scenario asserts the three that are and leaves the fourth to the milestone whose range has two versions in it.
 - **`classify` is public API purely for testability.** That is a real cost — a function on the public surface whose injectable parameter exists for the test suite — accepted because the alternative is either an untestable gate or a blocked coverage ratchet.
 - **The JSON schema version is a third version to maintain**, alongside the crate version and `contract_version`. Three clocks is one more than anyone wants; the alternative was coupling output stability to format stability, which is worse.
+
+## Amendments
+
+The Decision above stands as written; these later records change parts of it, and the original text is left intact so the change is legible.
+
+- **2026-08-01 — the resolved vault root is reported absolutely, and it is the only absolute path in structured output.** The Decision makes in-vault paths vault-relative and leaves the installation record unexpanded, and says nothing about the paths M2 actually reports most: the discovery start, the ancestor root, the trust subject, and the resolved root itself. None of those is in a vault, and the resolved root cannot be expressed relative to itself — it is the fact `doctor` exists to supply. So: **the resolved root is absolute in every rendering; every other path stays vault-relative or unexpanded; structured output carries no other absolute path.** The sentence claiming no diagnostic emits the account name was true of the structured location and false of the message text, and is corrected by this and by the amendment below rather than left to be discovered again.
+
+- **2026-08-01 — `discovery.root-outside-home` no longer prints the home directory.** The SDK is handed the home path rather than reading it, precisely so it never learns the account name, and the diagnostic printed it straight back out. The reader already knows their own home directory; the vault root is the load-bearing fact and is what the message now carries.
+
+- **2026-08-01 — every control character is folded out of rendered free text, not only the two line breaks.** The Decision's line-fold reasoning is a terminal argument: a lone carriage return moves the cursor to column zero and lets what follows overwrite a line the reader had already seen. `ESC[2K` erases that line and `ESC[1A` moves up to overwrite it, so the reasoning generalizes and the fold now covers the whole control range. Every string in a contract is free text, and a contract planted in an ancestor is attacker-authored text on its way to a terminal — the resolved-root line and the trust warning are what a repainting sequence would target.
+
+- **2026-08-01 — the conformance scenario asserts two version classifications, not three.** The Consequences credit `unsupported-contract-version-refuses-with-diagnosis` with asserting `current`, `below-supported-floor` and `too-new`. That scenario is entirely about out-of-range versions and cannot carry the `current` assertion; only the two out-of-range classifications are asserted, by that scenario, and `current` is asserted by no conformance case at all.
+
+- **2026-08-01 — the three read faults report the first one found, not all three.** A BOM, CRLF line endings and invalid UTF-8 each have their own identifier, which is what the Decision fixes; whether a file carrying two reports two was never decided. It reports one, in a fixed order, which sits in tension with the all-diagnostics promise everywhere else. Also unrecorded: `contract.carriage-return-line-ending` fires on any carriage return rather than on a line ending, so its permanent name is wrong for the case its strictness adds; and lone-surrogate handling is correct only because `str::from_utf8` rejects WTF-8, which no record or test states.
+
+- **2026-08-01 — the diagnostic order is a total preorder, not a total order.** Two diagnostics sharing a location and an identifier compare equal though they differ in message, severity, evidence or help. Output stays deterministic — the sort is stable and nothing in the SDK iterates a hash map — but `compare` is public, and a consumer merging lists with an unstable sort would reorder them.
