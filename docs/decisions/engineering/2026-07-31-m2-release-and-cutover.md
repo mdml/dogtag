@@ -1,6 +1,6 @@
 # The M2 prerelease, its acceptance criteria, and the cutover
 
-- Status: accepted
+- Status: accepted (amended 2026-08-01 — see [Amendments](#amendments))
 - Date: 2026-07-31
 
 ## Context
@@ -87,3 +87,11 @@ There is no time-based escape and no documented exception. A local gate is evide
 - **The SBOM adds a pinned tool and a release-workflow step to a milestone already carrying the largest implementation load of the beta.** That cost is the price of the standing policy being honored rather than quietly restated, and it is smaller than the cost of discovering at the beta verdict that the trigger fired six milestones ago.
 - **A named trigger with no owner nearly failed on its first use.** It was caught by an independent review pass, not by any gate, which is worth remembering the next time a decision is deferred behind a condition nobody is scheduled to re-read.
 - **If the Actions backlog persists, M2 stalls at the merge gate with completed, locally verified work.** That is the intended behavior and it is uncomfortable by design; the discomfort is what keeps the alternative from looking reasonable.
+
+## Amendments
+
+The Decision above stands as written; these later records change parts of it, and the original text is left intact so the change is legible.
+
+- **2026-08-01 — the shipped closure is 31 components, not 34, and the generator alone could not have told us.** The figure recorded above was read off `cargo cyclonedx`'s output, which builds its component list from `cargo metadata`'s resolve graph. That graph is filtered by platform but not by feature, so `toml`'s optional `preserve_order` contributed `indexmap`, `equivalent`, and `hashbrown` to a document describing a binary that links none of them. Three of the 34 were phantoms. The word *measured* in the paragraph above was earned against the generator, not against the artifact — the same conflation this record warns about two paragraphs earlier when it distinguishes what is true of the workspace from what is true of the shipped artifact. `scripts/sbom.sh` now reconciles the generated document against the closure `cargo tree` resolves for the same target and fails if the two disagree in the direction a filter cannot fix. The trigger conclusion is unchanged and nothing decided here moves: the closure still very nearly doubled, from 18 to 31.
+- **2026-08-01 — the SBOM assets carry `sha256` sidecars and join the aggregate.** [The release pipeline record](2026-07-30-release-pipeline-and-artifacts.md) documents `sha256.sum` as the one file that checks everything. The SBOM shipped as an attestation *predicate*, which means `gh attestation verify` reads the copy in the transparency log and never looks at the published asset, so the four `.cdx.json` files sat beside the archives with nothing covering them. Each now gets the sidecar every other published asset gets, and the aggregate is built from every sidecar rather than only the archives'.
+- **2026-08-01 — the release path is rehearsed in CI, not only locally.** `scripts/package.sh` and `scripts/sbom.sh` were covered by `just dist` and by nothing a workflow ran, so their first CI execution would have been the `v0.1.0-beta.1` tag itself — on four targets, two of which nothing local builds, with a burned version number as the cost of a failure, `v*` tags being immutable. The `release-build-check` job now runs both scripts on its one target, and `scripts/check-gate-parity.py` records them so the rehearsal cannot quietly lapse.

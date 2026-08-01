@@ -122,6 +122,19 @@ CI_ONLY = {
         "CycloneDX SBOM the release publishes and attests, and `just dist` "
         "runs it immediately after the packaging step for the same reason"
     ),
+    "./scripts/package.sh x86_64-unknown-linux-musl": (
+        "the release-build-check job's rehearsal of the release path on one "
+        "target. It is not a gate step because it needs a release build and "
+        "the musl toolchain, but it must run somewhere before a tag: `v*` "
+        "tags are immutable, so a script that first executes on the tag "
+        "costs a version number when it breaks"
+    ),
+    "./scripts/sbom.sh x86_64-unknown-linux-musl": (
+        "same rehearsal as the packaging step above, and the reason the "
+        "rehearsal exists: the SBOM script reconciles the generated document "
+        "against the build closure, which is where a generator or dependency "
+        "change surfaces as a failure rather than as a wrong attested document"
+    ),
 }
 
 # Gate steps CI does not run at all, and the strings that must therefore stay

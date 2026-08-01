@@ -208,12 +208,23 @@ jobs:
       - uses: taiki-e/install-action@065d6a08a14e61e89fb0a4c10eecdbdef39c7d8e # v2.85.4
         with:
           tool: cargo-auditable@0.7.5
+      - uses: taiki-e/install-action@065d6a08a14e61e89fb0a4c10eecdbdef39c7d8e # v2.85.4
+        with:
+          tool: cargo-cyclonedx@0.5.9
       # Byte-for-byte the release workflow's build invocation, including the
       # cargo-auditable wrapper. A rehearsal that builds differently from the
       # real thing rehearses nothing — it would not have caught the wrapper
       # failing on this target.
       - name: Release build (same invocation as the release workflow)
         run: cargo auditable build --release --locked -p dogtag-cli --target x86_64-unknown-linux-musl
+      # The packaging and SBOM scripts the release runs. Without these the
+      # first CI execution of either would be the tag itself, on a workflow
+      # whose failure costs a burned version number because `v*` tags are
+      # immutable. Same scripts, same arguments, same order as `just dist`.
+      - name: Package (same script as the release workflow)
+        run: ./scripts/package.sh x86_64-unknown-linux-musl
+      - name: SBOM (same script as the release workflow)
+        run: ./scripts/sbom.sh x86_64-unknown-linux-musl
 
   links:
     name: Markdown link integrity
