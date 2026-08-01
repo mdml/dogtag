@@ -43,13 +43,50 @@
 //!
 //! ## Current surface
 //!
-//! This is release `0.1.0-beta.0`, the empty vertical slice: the public API
-//! is exactly [`VERSION`] and [`version`]. The model described above is the
-//! forthcoming surface, landing milestone by milestone behind the
-//! conformance suite; nothing here speculates ahead of it.
+//! This release opens a vault and diagnoses it. Nothing reads a note: no
+//! frontmatter is parsed, no link is resolved, and no index is built, so every
+//! answer here is about the vault's *configuration*, never its corpus.
+//!
+//! - `diagnostic` — the envelope every failure is reported as: the exhaustive
+//!   kernel identifier set, the `ext.` namespace consumers mint their own
+//!   identifiers in, severities, locations and spans, the deterministic total
+//!   order, and the colourless plain-text rendering.
+//! - `compat` — the supported range of format versions, and the classification
+//!   that decides whether an asset is read further.
+//! - `encoding` — reading an asset's bytes without normalizing them, and the
+//!   index that turns a byte offset into a line and a column counted in
+//!   Unicode scalar values.
+//! - `document` — the spanned generic TOML document the parsers walk by hand.
+//! - `contract` — the committed vault contract, its two-pass parse, and the
+//!   validity rules enforced at load.
+//! - `installation` — the local installation record, read and never written.
+//! - `vault` — discovery, exact-path verification, root trust, and `open`.
+//! - `provenance` — where each resolved leaf value came from.
+//! - `report` — the `doctor` report, its structured schema, and the generated
+//!   agent contract.
+//!
+//! [`VERSION`] and [`version`] report the SDK's own version, and every
+//! official surface reports that value rather than carrying one of its own.
+//!
+//! Everything else the model above describes lands milestone by milestone
+//! behind the conformance suite; nothing here speculates ahead of it.
 
 #![forbid(unsafe_code)]
 #![warn(missing_docs)]
+
+pub mod compat;
+pub mod contract;
+pub mod diagnostic;
+pub mod document;
+pub mod encoding;
+pub mod installation;
+pub mod provenance;
+pub mod report;
+pub mod vault;
+
+/// Corpus text on its way into a line-oriented rendering. Private: every
+/// rendering this crate owns folds through it, and no consumer chooses.
+mod text;
 
 /// The SDK version, taken verbatim from the crate's package metadata.
 ///

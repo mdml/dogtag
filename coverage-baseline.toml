@@ -7,18 +7,22 @@
 toolchain = "nightly-2026-07-30"
 
 [global]
-# Measured on the pinned toolchain: 714/721 lines (99.0291%) and 86/88
-# branches (97.7273%). Recorded floored to two decimals, so the ratchet
-# compares against a number a clean run reproduces rather than one that
-# rounds up past it.
+# Measured on the pinned toolchain: 99.2234% lines and 98.5222% branches.
+# Recorded floored to two decimals, so the ratchet compares against a number a
+# clean run reproduces rather than one that rounds up past it.
 #
-# Branch coverage moved down from 98.07 when tools/commit-lint joined the
-# workspace — a larger denominator, not an erosion of what was already
-# covered (line coverage rose over the same change). Lowering this number is
-# the one move the ratchet does not allow silently; it is recorded in
+# Both numbers rose at M2, which is the milestone that gives [kernel] below
+# something to measure: crates/dogtag/src/ stops being a version string and
+# every file under it is at 100% line. The residue is the conformance
+# harness's own failure-reporting arms and one branch in tools/commit-lint.
+#
+# Branch coverage moved down once before, from 98.07 to 97.72, when
+# tools/commit-lint joined the workspace — a larger denominator, not an
+# erosion of what was already covered. Lowering this number is the one move
+# the ratchet does not allow silently; that one is recorded in
 # docs/decisions/engineering/2026-07-30-commit-convention-and-release-notes.md.
-line = 99.02
-branch = 97.72
+line = 99.22
+branch = 98.52
 
 [thresholds]
 line = 95.0
