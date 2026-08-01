@@ -23,7 +23,7 @@ use std::collections::BTreeSet;
 use serde_json::Value;
 
 use super::fixture::{
-    ABSENT_ORDINARY, Body, CLEAN, KINDS, MARKDOWN_LINKS, NAMED_ORDINARY, Tree, rendered,
+    ABSENT_ORDINARY, AWKWARD, Body, CLEAN, KINDS, MARKDOWN_LINKS, NAMED_ORDINARY, Tree, rendered,
 };
 use super::{contract_json, contract_markdown};
 use crate::contract::{Contract, LifecycleDecl, Ordinary, PropertyKind, TypeDecl};
@@ -356,18 +356,21 @@ impl Scan {
     }
 
     fn declaration(&mut self, cells: &[Line<'_>]) {
+        let name = unescaped(cells[0].unquoted());
         let atom = match self.columns.expect("a row arrives after its own header") {
-            Columns::Property => self.declared(cells[0], cells[2]).property(&kind(cells[1])),
-            Columns::Relationship => self.declared(cells[0], cells[1]).relationship(),
+            Columns::Property => self
+                .declared(&name, cells[2])
+                .property(&unescaped(&kind(cells[1]))),
+            Columns::Relationship => self.declared(&name, cells[1]).relationship(),
         };
         self.atoms.insert(atom);
     }
 
     /// The declaration a row names, under the type being read.
-    fn declared<'a>(&'a self, name: Line<'a>, required: Line<'a>) -> Declaration<'a> {
+    fn declared<'a>(&'a self, name: &'a str, required: Line<'a>) -> Declaration<'a> {
         Declaration {
             owner: &self.kind,
-            name: name.unquoted(),
+            name,
             required: required.as_str() == "yes",
         }
     }
@@ -426,18 +429,67 @@ fn kind(cell: Line<'_>) -> String {
         .to_owned()
 }
 
+/// A cell's text with the column rule the renderer escaped restored.
+///
+/// The Markdown renderer's `cell` replaces every `|` with `\|`, so every `|` in
+/// a rendered cell stands behind a backslash the renderer put there, and
+/// removing exactly those is that replacement's inverse. It forgives nothing:
+/// it is *reading* a Markdown cell, which is this reader's job.
+///
+/// Applied to a row's cells and to nothing else. A heading, a lifecycle
+/// sentence and a flag remark are folded but never escaped, so undoing a
+/// backslash there would invent a difference rather than remove one.
+fn unescaped(cell: &str) -> String {
+    cell.replace(r"\|", "|")
+}
+
+/// `atoms` as the Markdown is *permitted* to spell them.
+///
+/// The surfaces record's 2026-08-01 amendment decides that the two renderings
+/// carry the same declarations and may differ in the spelling of a value
+/// holding a character a Markdown table cannot carry. One such difference
+/// survives reading: a control character folds to a space, and no reader can
+/// undo that, so it is stated here as the equivalence relation rather than
+/// repaired.
+///
+/// Applied **only to the contract's and the JSON's atoms**, never to the
+/// Markdown's, so a value that reached the rendering unfolded is still a
+/// difference. The fold is spelled out here rather than borrowed from
+/// [`crate::text`], so that changing the renderer's fold fails this check
+/// instead of moving with it.
+fn markdown_spelling(atoms: &BTreeSet<String>) -> BTreeSet<String> {
+    atoms.iter().map(|atom| folded(atom)).collect()
+}
+
+/// One atom with every control character folded to a space.
+fn folded(atom: &str) -> String {
+    atom.chars()
+        .map(|character| {
+            if character.is_control() {
+                ' '
+            } else {
+                character
+            }
+        })
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
     /// Every contract these renderings are held up against, named so a failure
     /// says which one disagreed.
-    const SUBJECTS: [(&str, Body<'static>); 5] = [
+    const SUBJECTS: [(&str, Body<'static>); 6] = [
         ("starter", NAMED_ORDINARY),
         ("dense", ABSENT_ORDINARY),
         ("clean", CLEAN),
         ("kinds", KINDS),
         ("markdown-links", MARKDOWN_LINKS),
+        // The vocabulary carrying a column rule and a line break. It was the
+        // one fixture this list omitted, and it was omitted because it fails:
+        // the check was arranged around its own counterexample.
+        ("awkward", AWKWARD),
     ];
 
     #[test]
@@ -448,15 +500,25 @@ mod tests {
             let declared = from_contract(&contract);
             let markdown = from_markdown(&contract_markdown(&root, &contract, false));
             let json = from_json(&contract_json(&root, &contract));
+            let spelling = markdown_spelling(&declared);
             assert_eq!(
-                markdown, declared,
-                "`{name}`: the Markdown and the contract disagree"
+                spelling.len(),
+                declared.len(),
+                "`{name}`: the fold merged two declarations into one"
             );
             assert_eq!(
                 json, declared,
                 "`{name}`: the JSON and the contract disagree"
             );
-            assert_eq!(markdown, json, "`{name}`: the two renderings disagree");
+            assert_eq!(
+                markdown, spelling,
+                "`{name}`: the Markdown and the contract disagree"
+            );
+            assert_eq!(
+                markdown,
+                markdown_spelling(&json),
+                "`{name}`: the two renderings disagree"
+            );
         }
     }
 
@@ -466,7 +528,7 @@ mod tests {
         for (name, body) in SUBJECTS {
             let (root, contract) = rendered(&tree, body);
             let annotated = from_markdown(&contract_markdown(&root, &contract, true));
-            let declared = from_contract(&contract);
+            let declared = markdown_spelling(&from_contract(&contract));
             assert!(!declared.is_empty(), "`{name}` declares nothing at all");
             assert_eq!(
                 annotated, declared,
@@ -480,7 +542,7 @@ mod tests {
         let tree = Tree::new("equivalence-negative");
         let (root, contract) = rendered(&tree, NAMED_ORDINARY);
         let document = contract_markdown(&root, &contract, false);
-        let declared = from_contract(&contract);
+        let declared = markdown_spelling(&from_contract(&contract));
         let without = document.replace("| `due` | date (RFC 3339 full-date) | no |\n", "");
         assert_ne!(document, without, "the row this test removes must exist");
         assert_ne!(
