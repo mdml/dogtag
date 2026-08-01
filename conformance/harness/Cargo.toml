@@ -16,9 +16,11 @@ rust-version.workspace = true
 [lints]
 workspace = true
 
-# The harness does NOT depend on the `dogtag` SDK at M1 — every scenario is
-# pending and there is nothing to call. When scenarios become executable the
-# harness consumes only the SDK's public API.
+# The harness consumes the SDK's **public API only**. It is therefore also a
+# permanent test that the public API is sufficient: any private hook the
+# harness turns out to need is an architecture bug in the SDK, never a reason
+# to widen its visibility or to reimplement a kernel rule here.
 [dependencies]
+dogtag = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 toml = { workspace = true }

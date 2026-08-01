@@ -12,3 +12,11 @@ rust-version.workspace = true
 workspace = true
 
 [dependencies]
+# Input parsing deliberately does NOT use `#[derive(Deserialize)]`: the SDK
+# walks `toml::de::DeTable` by hand so that every key and value carries a span,
+# so that a malformed asset yields every diagnostic rather than the first, and
+# so that key legality is scoped to the version the asset declares. `serde`'s
+# derive is for output serialization only.
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = { workspace = true }
