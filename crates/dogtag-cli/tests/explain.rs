@@ -253,3 +253,40 @@ fn piped_output_carries_no_escape_sequence_whether_or_not_colour_is_suppressed()
         "colour changes escape sequences and nothing else"
     );
 }
+
+#[test]
+fn strict_makes_a_nested_vault_fail_on_the_surface_an_agent_reads() {
+    // `contract explain` renders the contract as instructions an agent
+    // follows. A nested vault is a warning, and it means those instructions
+    // came from a different corpus than the one intended — which is the
+    // reason `--strict` exists, and this is the surface that needed it most.
+    let nested = Tree::new("explain-strict");
+    nested.vault("home/outer", STARTER);
+    let inner = nested.vault("home/outer/inner", STARTER);
+    let finished = run(dogtag(&nested)
+        .args(["contract", "explain", "--strict"])
+        .current_dir(&inner));
+    assert_eq!(finished.code, 1, "{finished:?}");
+    assert!(
+        finished.stderr.contains("warning[discovery.nested-vault]"),
+        "{finished:?}"
+    );
+}
+
+#[test]
+fn strict_decides_the_exit_code_and_changes_nothing_else() {
+    let nested = Tree::new("explain-strict-bytes");
+    nested.vault("home/outer", STARTER);
+    let inner = nested.vault("home/outer/inner", STARTER);
+    let ordinary = run(dogtag(&nested)
+        .args(["contract", "explain"])
+        .current_dir(&inner));
+    let strict = run(dogtag(&nested)
+        .args(["contract", "explain", "--strict"])
+        .current_dir(&inner));
+    assert_eq!(ordinary.code, 0, "the warning alone is not a failure");
+    assert_eq!(
+        (ordinary.stdout, ordinary.stderr),
+        (strict.stdout, strict.stderr)
+    );
+}

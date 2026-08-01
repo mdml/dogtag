@@ -8,7 +8,8 @@
 //! from "your vault has a problem" needs those to be different answers.
 //!
 //! Argument parsing is `clap`'s, and its failures exit `2` without reaching
-//! this module.
+//! this module. One more fault takes that code: a vault selector given but
+//! empty, which names no vault and so leaves nothing to diagnose.
 
 use dogtag::diagnostic::{Diagnostic, DiagnosticList, SeverityCounts};
 
@@ -17,6 +18,13 @@ pub const SUCCESS: i32 = 0;
 
 /// Something does.
 pub const FAILURE: i32 = 1;
+
+/// The argument or environment named nothing this run could act on.
+///
+/// Reserved for faults that produce no diagnostic because there was nothing to
+/// diagnose. clap exits `2` without reaching this module; an empty vault
+/// selector is the same kind of fault and takes the same code.
+pub const USAGE: i32 = 2;
 
 /// The code a run's diagnostics earn.
 ///
