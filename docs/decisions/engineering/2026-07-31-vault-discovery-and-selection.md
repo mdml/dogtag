@@ -1,6 +1,6 @@
 # Vault-root discovery and vault selection
 
-- Status: accepted
+- Status: accepted (amended 2026-08-01 — see [Amendments](#amendments))
 - Date: 2026-07-31
 
 ## Context
@@ -98,3 +98,23 @@ This is what keeps *"the SDK is the kernel"* true for the one operation most tem
 - **Discovery is exhaustively testable**, since it takes an explicit path. Every branch — nested, incomplete, absent, symlinked, competing — is reachable against a synthetic tree, which matters directly for the 100% kernel coverage floor. The no-vault-found case is the exception that needs care: because the walk has no boundary, "a directory with no vault above it" is a property of the *machine*, not of a fixture. The conformance harness therefore needs a root it controls, the way `XDG_CONFIG_HOME` already gives it a hermetic installation record; otherwise that scenario's outcome depends on whose checkout it runs in, which is one developer's directory layout reaching a conformance result.
 - **The adversarial cases above are acknowledged rather than closed.** The two mitigations reduce a planted contract to something visible, not to something impossible, and no boundary rule would close it either — this record's whole argument is that every candidate boundary is worse. Anyone extending discovery should treat the trust sentence as the constraint, not the walk.
 - **The registry gains a real job at M2** (name resolution) beyond being reported, which means the installation record's parse and validation rules are load-bearing from the first release that reads it.
+
+## Amendments
+
+The Decision above stands as written; these later records change parts of it, and the original text is left intact so the change is legible.
+
+- **2026-08-01 — halting on an incomplete root applies only while no root has been resolved.** The Decision states without qualification both that a directory holding `.dogtag/` but no contract halts the walk, and that the walk always continues to the filesystem root. For a broken root sitting *above* an already-resolved one the two demand opposite behaviour, and the implementer had to choose. The choice: halt only while nothing has been resolved; above a resolved root, an incomplete directory changes nothing and the nearest root still wins. This is the reading that keeps a stray `.dogtag/` in a shared ancestor from denying service to every vault beneath it. The same rule governs a directory the filesystem refuses to probe, which no record mentioned at all and which reports `discovery.path-unreadable`.
+
+- **2026-08-01 — an empty vault selector is refused, from either source.** Neither this record nor any other says what `--vault ""` or `DOGTAG_VAULT=` means. The CLI answered the same empty value two ways: the variable read as unset and fell through to discovery, the flag became a registry name and errored. The silent one was the dangerous one — an unfilled slot in a CI or cron template made `dogtag doctor --strict` inspect whatever vault the working directory sat in and exit 0, which is the wrong-vault resolution `--strict` exists to catch. An empty selector from either source is now a usage refusal, exit 2: it names no vault, so there is nothing to diagnose. `NO_COLOR` keeps the empty-as-unset convention it is named for.
+
+- **2026-08-01 — the purity invariant needs the caller to pass an absolute path, and now says so.** The Decision says every SDK entry point here is a pure function of explicit arguments and reads no ambient state. `fs::canonicalize` resolves a relative argument against the *process* working directory, so the invariant held only for callers that already passed absolute paths. The CLI now joins a relative `--vault` onto the current directory it resolved. The invariant as stated is a requirement on the caller, and any embedder passing a relative path is reading process state whether it means to or not.
+
+- **2026-08-01 — `VaultRoot`'s opacity does not preserve the option it was bought for.** The Decision forbids reconstructing a `VaultRoot` from its rendered string, to keep open the option of carrying a held directory handle later. The prohibition holds — there is no `Display`, `FromStr`, `From` or serde impl. But the type exposes `path()` and `contract_path()`, and every consumer re-resolves from a raw path, so introducing a handle later would change no consumer's behaviour and the breaking change the opacity was meant to avoid is still owed. The rule closes a door nobody was walking through.
+
+- **2026-08-01 — the trust analysis does not cover a planted *incomplete* root.** The Trust section reasons carefully about a `.dogtag/contract.toml` planted in an ancestor and supplies two mitigations. Planting a bare `.dogtag/` is strictly cheaper — one `mkdir`, no file, no valid TOML — and under the halt rule it stops every run beneath it. Because discovery resolves no root, `inspect_root_trust` never runs, so neither trust warning fires to say the halting directory is world-writable. The diagnostic names the directory, which is all that stands between the reader and a mystery.
+
+- **2026-08-01 — a vault selected by name reports no registry entry when the entry's path is not canonical.** Registry paths are absolute and unexpanded; the resolved root is canonical. The report compares the two lexically, so with a symlink anywhere in a registered path `doctor --vault work` succeeds, prints the canonical root, and reports `installation.entry = null` — a run resolved *through* an entry it then says does not exist.
+
+- **2026-08-01 — `resolve_registered` takes an `Installation`, not an `InstallationRecord`.** The signature recorded in [the surfaces record](2026-07-31-m2-surfaces-and-the-sdk-boundary.md) cannot express the absent and unusable states, which are exactly the states its refusals must distinguish. The deviation is right; the recorded signature is what was wrong.
+
+- **2026-08-01 — `XDG_CONFIG_HOME` is not how the conformance harness stays hermetic.** This record and [the vault contract record](2026-07-31-vault-contract-and-installation-record.md) both credit the variable with giving the harness hermetic runs. The harness sets no environment variable at all; it passes explicit paths into a temporary tree, which is a stronger mechanism than the one recorded. The claim is stale rather than wrong about the outcome.

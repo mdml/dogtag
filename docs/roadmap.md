@@ -6,7 +6,7 @@
 
 The next installed prerelease, `0.1.0-beta.1`, opens a real vault, explains its resolved contract, and takes over the vault's daily configuration health check.
 
-- [x] **Decision packet closed 2026-07-31.** The committed contract is `.dogtag/contract.toml` (TOML, integer `contract_version`, fatal version-scoped unknown keys); the local installation record is `~/.config/dogtag/installation.toml`, read and never written at M2. Six records carry it, beginning with [the vault contract and installation record](decisions/engineering/2026-07-31-vault-contract-and-installation-record.md).
+- [x] **Decision packet closed 2026-07-31.** The committed contract is `.dogtag/contract.toml` (TOML, integer `contract_version`, fatal version-scoped unknown keys); the local installation record is `~/.config/dogtag/installation.toml`, read and never written at M2. Seven records carry it, beginning with [the vault contract and installation record](decisions/engineering/2026-07-31-vault-contract-and-installation-record.md).
 - [x] Vault-root discovery and configuration resolution, with per-leaf provenance across the committed contract, the local record, and format defaults.
 - [x] The `dense` and `starter` fixture contracts — `dense` from numeric shape alone, with all vocabulary authored, per [the fixture and privacy record](decisions/engineering/2026-07-31-m2-fixtures-and-the-privacy-gate.md).
 - [x] Capabilities, the lifecycle declaration, and compatibility validated with structured diagnostics carrying shared identifiers, and reported by `dogtag doctor` and `dogtag contract explain`.
