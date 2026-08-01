@@ -620,7 +620,10 @@ class ParityTest(unittest.TestCase):
 
     def setUp(self) -> None:
         self.root = scratch(self)
-        for relative in (CI, ".github/workflows/security.yml", ".github/rulesets/main-branch.json"):
+        # The file list is the checker's own, not a restatement of it: when
+        # release.yml joined WORKFLOWS this fixture would otherwise have gone
+        # on testing a tree the checker no longer describes.
+        for relative in (*check_gate_parity.WORKFLOWS, check_gate_parity.RULESET):
             target = self.root / relative
             target.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy(REPO_ROOT / relative, target)

@@ -56,6 +56,9 @@ jobs:
       - uses: taiki-e/install-action@065d6a08a14e61e89fb0a4c10eecdbdef39c7d8e # v2.85.4
         with:
           tool: cargo-auditable@0.7.5
+      - uses: taiki-e/install-action@065d6a08a14e61e89fb0a4c10eecdbdef39c7d8e # v2.85.4
+        with:
+          tool: cargo-cyclonedx@0.5.9
       # The target reaches the shell through the environment rather than
       # through template expansion: nothing in the release path interpolates
       # a workflow expression into a command line, so there is no expansion
@@ -74,12 +77,21 @@ jobs:
         env:
           TARGET: ${{ matrix.target }}
         run: scripts/package.sh "$TARGET"
+      # The SBOM is generated here, in the matrix, because it is per-binary
+      # and per-target: this is the only job that knows which target it is
+      # describing. The attestation that binds it to the archive is minted in
+      # the release job, which is the only job holding those permissions.
+      - name: SBOM
+        env:
+          TARGET: ${{ matrix.target }}
+        run: scripts/sbom.sh "$TARGET"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: dogtag-${{ matrix.target }}
           path: |
             dist/dogtag-${{ matrix.target }}.tar.gz
             dist/dogtag-${{ matrix.target }}.tar.gz.sha256
+            dist/dogtag-${{ matrix.target }}.cdx.json
           if-no-files-found: error
 
   release:
@@ -89,7 +101,7 @@ jobs:
     permissions:
       contents: write # create the draft release and upload its assets
       id-token: write # OIDC identity for provenance signing
-      attestations: write # record the build-provenance attestation
+      attestations: write # record the build-provenance and SBOM attestations
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -124,6 +136,42 @@ jobs:
         uses: actions/attest-build-provenance@0f67c3f4856b2e3261c31976d6725780e5e4c373 # v4.1.1
         with:
           subject-path: dist/*.tar.gz
+      # One SBOM attestation per target: the subject is that target's archive
+      # and the predicate is that target's SBOM, so the two cannot be mixed up
+      # by a glob — an SBOM attached to the wrong archive would describe a
+      # dependency closure that binary does not have. `actions/attest` carries
+      # exactly one predicate per call, which is why four archives are four
+      # steps. `actions/attest-sbom` is deliberately not used: upstream
+      # deprecated it in favour of this general action.
+      #
+      # Verifying one of these needs `--predicate-type
+      # https://cyclonedx.org/bom` explicitly, because `gh attestation verify`
+      # defaults to the SLSA provenance predicate and would otherwise report
+      # success having never looked at the SBOM.
+      - name: Attest SBOM (x86_64-unknown-linux-musl)
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
+        with:
+          subject-path: dist/dogtag-x86_64-unknown-linux-musl.tar.gz
+          predicate-type: https://cyclonedx.org/bom
+          predicate-path: dist/dogtag-x86_64-unknown-linux-musl.cdx.json
+      - name: Attest SBOM (aarch64-unknown-linux-musl)
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
+        with:
+          subject-path: dist/dogtag-aarch64-unknown-linux-musl.tar.gz
+          predicate-type: https://cyclonedx.org/bom
+          predicate-path: dist/dogtag-aarch64-unknown-linux-musl.cdx.json
+      - name: Attest SBOM (aarch64-apple-darwin)
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
+        with:
+          subject-path: dist/dogtag-aarch64-apple-darwin.tar.gz
+          predicate-type: https://cyclonedx.org/bom
+          predicate-path: dist/dogtag-aarch64-apple-darwin.cdx.json
+      - name: Attest SBOM (x86_64-apple-darwin)
+        uses: actions/attest@508db95dd578ae2727ebd6217d5ba78e4fbda05d # v4.2.1
+        with:
+          subject-path: dist/dogtag-x86_64-apple-darwin.tar.gz
+          predicate-type: https://cyclonedx.org/bom
+          predicate-path: dist/dogtag-x86_64-apple-darwin.cdx.json
       - uses: taiki-e/install-action@065d6a08a14e61e89fb0a4c10eecdbdef39c7d8e # v2.85.4
         with:
           tool: git-cliff@2.13.1
@@ -151,4 +199,4 @@ jobs:
             --verify-tag \
             --title "dogtag $TAG" \
             --notes-file NOTES.md \
-            dist/*.tar.gz dist/*.tar.gz.sha256 dist/sha256.sum
+            dist/*.tar.gz dist/*.tar.gz.sha256 dist/*.cdx.json dist/sha256.sum

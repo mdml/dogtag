@@ -6,9 +6,9 @@
 # by hand at a different version will fail that check, which is the point.
 #
 # Installs: the Rust toolchains (pinned stable, MSRV floor, coverage
-# nightly), cargo-llvm-cov, cargo-deny, cargo-semver-checks, zizmor,
-# osv-scanner, and the CodeScene CLI. Already-current tools are skipped, so
-# re-running is cheap.
+# nightly), cargo-llvm-cov, cargo-deny, cargo-semver-checks, cargo-cyclonedx,
+# zizmor, git-cliff, osv-scanner, and the CodeScene CLI. Already-current tools
+# are skipped, so re-running is cheap.
 #
 # The CodeScene CLI additionally needs CS_ACCESS_TOKEN in your environment to
 # do anything; get a PAT from https://codescene.io/users/me/pat.
@@ -29,9 +29,14 @@ have() {
 }
 
 # `cargo install` is idempotent but slow, so skip when the version matches.
+# Any trailing arguments are the words the tool needs before `--version`
+# answers: a cargo subcommand that refuses to run standalone — cargo-cyclonedx
+# is one — reports its version only as `cargo-cyclonedx cyclonedx --version`,
+# and probing it wrongly would silently reinstall on every run.
 cargo_tool() {
   local name="$1" version="$2"
-  if have "$name" && "$name" --version 2>/dev/null | grep -qF "$version"; then
+  shift 2
+  if have "$name" && "$name" "$@" --version 2>/dev/null | grep -qF "$version"; then
     echo "install-dev-tools: $name $version already installed"
     return
   fi
@@ -52,6 +57,7 @@ echo "== cargo tools =="
 cargo_tool cargo-llvm-cov "$(pin cargo-llvm-cov version)"
 cargo_tool cargo-deny "$(pin cargo-deny version)"
 cargo_tool cargo-semver-checks "$(pin cargo-semver-checks version)"
+cargo_tool cargo-cyclonedx "$(pin cargo-cyclonedx version)" cyclonedx
 cargo_tool zizmor "$(pin zizmor version)"
 cargo_tool git-cliff "$(pin git-cliff version)"
 
