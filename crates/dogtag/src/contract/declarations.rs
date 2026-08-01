@@ -188,7 +188,12 @@ fn declared_property(
     let declared = spelled_kind(sink, &section);
     sink.sweep(&section, property_keys(declared.spelled));
     let required = sink.optional_flag(&section, "required");
-    let kind = property_kind(sink, &section, &declared)?;
+    // The kind is read here but not required until after the name is claimed.
+    // Dropping the property on an unresolved kind used to happen first, which
+    // cost two things: a second property of the same name went unreported
+    // until the kind was fixed, and the cross-reference rules then concluded
+    // that no type declares a property the file plainly declares.
+    let kind = property_kind(sink, &section, &declared);
     let named = named?;
     sink.written(section.leaf("name").key, named.span.clone());
     let name = named.text.to_owned();
@@ -198,6 +203,10 @@ fn declared_property(
         named,
     };
     sink.keep(&mut scope.seen, claim)?;
+    let Some(kind) = kind else {
+        sink.drop_declaration();
+        return None;
+    };
     Some(Declared {
         decl: PropertyDecl {
             name,

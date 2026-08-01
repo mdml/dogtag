@@ -27,6 +27,14 @@ use super::sink::{Report, Sink};
 /// Applies every load-time validity rule to what the walk resolved.
 pub(crate) fn run(sink: &mut Sink<'_>, parts: &Parts) {
     capabilities(sink, &parts.types);
+    // The rules below conclude from the model's silence that no type declares
+    // something. That inference is only sound when the model holds every
+    // declaration the file makes; when the walk dropped one, the silence is
+    // the parser's and the conclusion would contradict the file. The fault
+    // that caused the drop is already reported, so nothing goes unsaid.
+    if !sink.complete() {
+        return;
+    }
     flags(sink, &parts.flags, &parts.types);
     if let Some(declared) = &parts.lifecycle {
         lifecycle(sink, declared, &parts.types);
@@ -304,6 +312,81 @@ mod tests {
             ),
             body
         )
+    }
+
+    #[test]
+    fn a_repeated_property_is_reported_even_when_the_first_kind_does_not_resolve() {
+        // The property used to be discarded before it claimed its name, so the
+        // second declaration of `p` looked like the first and the duplicate
+        // surfaced only once the kind was corrected.
+        let source = contract(concat!(
+            "\n",
+            "[[type.property]]\n",
+            "name = \"p\"\n",
+            "kind = \"urll\"\n",
+            "\n",
+            "[[type.property]]\n",
+            "name = \"p\"\n",
+            "kind = \"string\"\n",
+        ));
+        let diagnostics = read(&source);
+        let mut found = ids(&diagnostics);
+        found.sort_unstable();
+        assert_eq!(
+            found,
+            [
+                "contract.duplicate-property",
+                "contract.unknown-property-kind"
+            ]
+        );
+    }
+
+    #[test]
+    fn an_axis_property_with_an_unresolved_kind_is_not_also_called_undeclared() {
+        // The property is dropped because its kind does not resolve, and the
+        // cross-reference rules then see a model with no `status` in it. They
+        // used to conclude that no type declares it — of a file that declares
+        // it two lines above the axis. One fault, one diagnostic.
+        let source = concat!(
+            "[dialect]\n",
+            "links = \"wikilink\"\n",
+            "\n",
+            "[lifecycle]\n",
+            "axis = \"status\"\n",
+            "ordinary = { absent = true }\n",
+            "\n",
+            "[[type]]\n",
+            "name = \"capture\"\n",
+            "capabilities = [\"catch-all\"]\n",
+            "\n",
+            "[[type.property]]\n",
+            "name = \"status\"\n",
+            "kind = \"enumm\"\n",
+        );
+        assert_eq!(ids(&read(source)), ["contract.unknown-property-kind"]);
+    }
+
+    #[test]
+    fn a_flag_naming_a_property_with_an_unresolved_kind_is_not_also_called_undeclared() {
+        let source = concat!(
+            "[dialect]\n",
+            "links = \"wikilink\"\n",
+            "\n",
+            "[lifecycle]\n",
+            "none = true\n",
+            "\n",
+            "[[flag]]\n",
+            "property = \"pinned\"\n",
+            "\n",
+            "[[type]]\n",
+            "name = \"capture\"\n",
+            "capabilities = [\"catch-all\"]\n",
+            "\n",
+            "[[type.property]]\n",
+            "name = \"pinned\"\n",
+            "kind = \"boolian\"\n",
+        );
+        assert_eq!(ids(&read(source)), ["contract.unknown-property-kind"]);
     }
 
     #[test]
