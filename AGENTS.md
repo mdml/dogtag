@@ -11,7 +11,7 @@ Dogtag is a personal knowledge management SDK designed for AI agents: they confi
 Three rules carry the architecture. Do not trade any of them for convenience — if one is genuinely in the way, that is a decision record, not a workaround.
 
 1. **The SDK is the kernel; the CLI consumes only its public API.** All vault behavior lives in `crates/dogtag`. If `crates/dogtag-cli` needs something, the SDK grows public surface — never a private backchannel, a copied constant, or a reimplementation. (This goes as far as the version string: the CLI reports `dogtag::version()` and carries no version text of its own.)
-2. **No behavior ahead of its milestone.** Features land at the milestone that owns them (see [beta.md](docs/beta.md)). Do not implement vault discovery, configuration loading, contract validation, diagnostics, or any later-milestone behavior early — narrow interfaces and pending fixtures are the ceiling for foreshadowing.
+2. **No behavior ahead of its milestone.** Features land at the milestone that owns them (see [beta.md](docs/beta.md)). Do not implement the document model, `check`, `list`, `show`, search, an index, mutation, `init`, or any later-milestone behavior early — nothing reads a note, parses frontmatter, resolves a link, or builds an index before the milestone that owns it, and narrow interfaces and pending fixtures are the ceiling for foreshadowing.
 3. **Conformance has no waivers.** Every scenario runs against every fixture profile; there is no profile-specific skip, allowlist, or waiver mechanism, and the scenario format deliberately has no field that could name a profile. Do not add one. See [conformance/README.md](conformance/README.md).
 
 A fourth rule guards the future surfaces: **bindings hold no semantics.** `bindings/typescript` (and any later binding) wraps the one Rust core; it never reimplements vault behavior, and until its milestone it contains no source at all.
@@ -24,9 +24,9 @@ Four commands carry the day-to-day work, as a ladder. Each is a strict superset 
 
 | Command | When | What it costs |
 | --- | --- | --- |
-| `just fast` | while implementing | 0.9s warm, offline. **Not a merge signal** |
-| `just check` | before handing work off | 1.9s warm, offline and deterministic |
-| `just gate` | before opening or updating a pull request, **and before merging anyone else's** | 32s warm (27 of them Code Health); needs the network, the pinned tools, and `CS_ACCESS_TOKEN` |
+| `just fast` | while implementing | 2s warm, offline. **Not a merge signal** |
+| `just check` | before handing work off | 5s warm, offline and deterministic |
+| `just gate` | before opening or updating a pull request, **and before merging anyone else's** | 1m40s warm (1m30 of them Code Health, one round trip per file); needs the network, the pinned tools, and `CS_ACCESS_TOKEN` |
 | `just gate-verbose` | when you want the evidence | identical run, every gate's full output |
 
 - `just fast` — format check, clippy with warnings as errors, the test suite, commit-message validation, and the cheap policy checks (tool pins, security exceptions).
@@ -43,7 +43,7 @@ Narrower recipes, for when the ladder is more than you need. The expensive ones 
 - `just codescene-staged` before a commit, `just codescene-branch [BASE]` for the whole branch, `just codescene-files <paths>` for specific files. These are deltas and already print their findings in full, so they need no verbose twin.
 - `just semver` — API-compatibility check against the last release tag. Advisory until the first non-prerelease tag; see the ADR for why a blocking gate would be meaningless before then.
 - `just commits [RANGE]` / `just hooks` / `just notes` — validate an explicit commit range, install the git hooks, preview the next release's notes.
-- `just dist` — release-build the CLI and package a host-target archive into `dist/`, using the same script as the release pipeline.
+- `just dist` — release-build the CLI, package a host-target archive into `dist/`, and generate its SBOM, using the same scripts as the release pipeline.
 - `just install-local` — rehearse `install.sh` end-to-end against the locally packaged `dist/`.
 
 Three honest limits. The commit check — in `just fast` and by default in `just commits` — resolves `origin/main..HEAD`, while CI validates exactly the commits a pull request introduces, so a stale `origin/main` moves the range under you; it reports `skip`, never `pass`, when that range is empty. `just gate` cannot run the macOS suite or the musl release build; those pass only in CI. And `just commits <range>` and the `commit-msg` hook invoke the validator directly rather than through the gate table, so they are the two commands parity does not cover. The [gate ergonomics ADR](docs/decisions/engineering/2026-07-30-gate-ergonomics-and-the-command-ladder.md) records the four places local and CI deliberately differ, and what the parity checker cannot see.
@@ -77,4 +77,4 @@ Rule of thumb: if the decision would still matter to someone reimplementing dogt
 
 ## Releases
 
-Pushing a tag `v<version>` runs the release workflow: it builds the target matrix, packages archives with checksums via `scripts/package.sh` (the same script `just dist` uses), and creates a **draft** GitHub release. Publishing the draft is always a human act — no automation ever publishes. The workflow fails if the tag does not match the workspace package version, so bump the version first, tag second, and only on a commit whose required checks have passed. Once published, a release and its tag are immutable; a problem in a shipped version is fixed forward under a new version, never by moving a tag. The repository rulesets that enforce all of this mechanically — required checks before merge, immutable `v*` tags — are recorded in the [workflow security ADR](docs/decisions/engineering/2026-07-30-workflow-security-and-repository-rules.md) and are applied by a repository admin; until they are applied, these are conventions, not guarantees.
+Pushing a tag `v<version>` runs the release workflow: it builds the target matrix, packages archives with checksums via `scripts/package.sh` and a per-target CycloneDX SBOM via `scripts/sbom.sh` (the same scripts `just dist` uses), attests each archive's build provenance and its SBOM, and creates a **draft** GitHub release. Publishing the draft is always a human act — no automation ever publishes. The workflow fails if the tag does not match the workspace package version, so bump the version first, tag second, and only on a commit whose required checks have passed. Once published, a release and its tag are immutable; a problem in a shipped version is fixed forward under a new version, never by moving a tag. The repository rulesets that enforce all of this mechanically — required checks before merge, immutable `v*` tags — are recorded in the [workflow security ADR](docs/decisions/engineering/2026-07-30-workflow-security-and-repository-rules.md) and are applied by a repository admin; until they are applied, these are conventions, not guarantees.
