@@ -85,7 +85,7 @@ A range rather than a single supported version is forced by M0 rather than chose
 - **Line numbers without columns.** Simplest to produce and assert. Rejected: no caret rendering, and no way to point at one key inside a line, which is most of what a contract diagnostic wants to do.
 - **A separate Markdown registry of diagnostic identifiers.** Rejected: a second home for a list the enum already holds, with nothing keeping them equal.
 - **A distinct exit code for internal failure.** Rejected as reasoning above.
-- **Warnings exiting nonzero by default.** Rejected: benign warnings would fail the daily health check until the vault was rearranged, and `--strict` is deferred.
+- **Warnings exiting nonzero by default.** Rejected: benign warnings would fail the daily health check until the vault was rearranged. `--strict` gives the unattended check the signal it needs without imposing that cost on every other caller.
 - **Supporting exactly one contract version at a time.** Smallest surface. Rejected: it breaks every existing vault at each format bump, with no migration command in the beta to repair them.
 - **A supported range with in-memory upgrade on read.** Attractive — one internal model regardless of on-disk version. Rejected for now: it needs an upgrade path per version, and it muddies provenance, since a value produced by an upgrade came from neither the file nor a format default and would need a fourth source. Worth revisiting at the first real bump, when the cost is concrete.
 - **Hardcoding the supported range and accepting unreachable branches.** Rejected: the coverage floor blocks it and exclusions are banned.
