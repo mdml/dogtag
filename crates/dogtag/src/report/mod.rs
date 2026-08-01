@@ -277,6 +277,21 @@ impl ContractFacts {
     ///
     /// A file that is not there is the one refusal where *present* is false;
     /// every other one read bytes.
+    /// The facts a contract carries when no vault resolved to hold one.
+    ///
+    /// Distinct from `unresolved`: that one read a vault and failed to read
+    /// its contract, so it knows whether a file was there. Here there was no
+    /// vault to look in, and claiming a version or a presence would be an
+    /// answer nothing established.
+    fn not_evaluated(reason: &str) -> Self {
+        Self {
+            present: false,
+            state: "not evaluated",
+            reason: Some(reason.to_owned()),
+            version: VersionFacts::new(None, &SUPPORTED_CONTRACT_VERSIONS),
+        }
+    }
+
     fn unresolved(unresolved: &ContractUnresolved) -> Self {
         Self {
             present: unresolved.reason != UnresolvedReason::Missing,
@@ -314,6 +329,23 @@ impl InstallationFacts {
                 .and_then(InstallationRecord::actor)
                 .map(|actor| actor.name().to_owned()),
             entry: record.and_then(|record| registered_as(record, root)),
+        }
+    }
+
+    /// The record's facts when no vault resolved, so no entry can be selected.
+    ///
+    /// The registry is not listed here for the same reason it is not listed
+    /// anywhere: a report names the entry for the vault being reported, and
+    /// there is no vault being reported.
+    fn without_a_vault(installation: &Installation) -> Self {
+        let record = installation.record();
+        Self {
+            state: installation.state().as_str(),
+            version: record.map(InstallationFacts::declared_version),
+            actor: record
+                .and_then(InstallationRecord::actor)
+                .map(|actor| actor.name().to_owned()),
+            entry: None,
         }
     }
 
@@ -404,7 +436,7 @@ impl Sections {
 /// [`doctor_json`], so the two renderings cannot answer differently.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DoctorReport {
-    root: String,
+    root: Option<String>,
     selection: Selection,
     contract: ContractFacts,
     installation: InstallationFacts,
@@ -445,13 +477,44 @@ pub fn doctor_report(opened: &Opened, selection: Selection, extra: &[Diagnostic]
     collected.extend(extra.iter().cloned());
     let counts = collected.counts();
     DoctorReport {
-        root: opened.root().display().into_owned(),
+        root: Some(opened.root().display().into_owned()),
         selection,
         contract: opened
             .contract()
             .map_or_else(ContractFacts::unresolved, ContractFacts::resolved),
         installation: InstallationFacts::new(opened.installation(), opened.root()),
         sections: Sections::new(opened.contract()),
+        counts,
+        diagnostics: collected.sorted(),
+    }
+}
+
+/// Builds the `doctor` report for a run whose vault never resolved.
+///
+/// `doctor` never refuses. The compatibility record says so about a contract
+/// outside the supported range, and the reasoning is the same one step earlier:
+/// a selection that named nothing is exactly when a reader most needs the facts
+/// that *are* known — whether an installation record exists, what it declares,
+/// and what was looked for. Refusing with a bare exit code hands a `--format
+/// json` consumer an empty stream during the very run it was added to triage.
+///
+/// Every vault-dependent section says *not evaluated* with the reason, which is
+/// the shape [`doctor_report`] already uses for a contract that did not resolve.
+pub fn doctor_unresolved(
+    installation: &Installation,
+    selection: Selection,
+    diagnostics: &[Diagnostic],
+) -> DoctorReport {
+    const REASON: &str = "the vault did not resolve";
+    let mut collected = DiagnosticList::new();
+    collected.extend(diagnostics.iter().cloned());
+    let counts = collected.counts();
+    DoctorReport {
+        root: None,
+        selection,
+        contract: ContractFacts::not_evaluated(REASON),
+        installation: InstallationFacts::without_a_vault(installation),
+        sections: Sections::NotEvaluated(REASON.to_owned()),
         counts,
         diagnostics: collected.sorted(),
     }
@@ -603,9 +666,9 @@ mod tests {
         let survived = (
             report.installation.state,
             report.installation.actor.as_deref(),
-            report.root.is_empty(),
+            report.root.is_some(),
         );
-        assert_eq!(survived, ("loaded", Some("A Maintainer"), false));
+        assert_eq!(survived, ("loaded", Some("A Maintainer"), true));
     }
 
     #[test]

@@ -46,7 +46,7 @@ pub fn run(environment: &Environment, args: &ExplainArgs) -> i32 {
     let installation = environment.installation();
     match select(environment, args.vault.requested(), &installation) {
         Ok(selected) => explain(environment, args, selected, installation),
-        Err(diagnostics) => refuse(environment, &diagnostics, args.strict),
+        Err(refused) => refuse(environment, &refused.diagnostics, args.strict),
     }
 }
 

@@ -186,21 +186,37 @@ fn doctor_writes_nothing_anywhere() {
 }
 
 #[test]
-fn a_vault_that_cannot_be_resolved_leaves_standard_output_empty() {
+fn a_vault_that_cannot_be_resolved_is_still_reported_on() {
+    // `doctor` never refuses. A selection that named nothing is exactly when a
+    // reader most needs what is known — whether a record exists, what it
+    // declares, what was looked for — and a `--format json` consumer parsing
+    // this stream during the parallel run must get a document either way.
     let tree = Tree::new("no-vault");
     support::assert_no_vault_above(&tree.home());
-    for format in [vec![], vec!["--format", "json"]] {
-        let finished = run(dogtag(&tree).arg("doctor").args(&format));
-        assert_eq!(finished.code, 1, "{finished:?}");
-        assert_eq!(
-            finished.stdout, "",
-            "there is no report, so a consumer parsing this stream gets nothing: {finished:?}"
-        );
-        assert!(
-            finished.stderr.contains("error[discovery.no-vault-found]"),
-            "{finished:?}"
-        );
-    }
+    let finished = run(dogtag(&tree).arg("doctor"));
+    assert_eq!(finished.code, 1, "{finished:?}");
+    assert!(finished.stdout.contains("none resolved"), "{finished:?}");
+    assert!(
+        finished.stdout.contains("error[discovery.no-vault-found]"),
+        "{finished:?}"
+    );
+}
+
+#[test]
+fn a_vault_that_cannot_be_resolved_still_yields_a_parseable_document() {
+    let tree = Tree::new("no-vault-json");
+    support::assert_no_vault_above(&tree.home());
+    let finished = run(dogtag(&tree).arg("doctor").args(["--format", "json"]));
+    assert_eq!(finished.code, 1, "{finished:?}");
+    assert!(
+        support::well_formed_json(&finished.stdout),
+        "a consumer parses one shape whether or not a vault resolved: {finished:?}"
+    );
+    assert!(finished.stdout.contains("\"root\": null"), "{finished:?}");
+    assert!(
+        finished.stdout.contains("\"evaluated\": false"),
+        "{finished:?}"
+    );
 }
 
 #[test]

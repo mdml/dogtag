@@ -29,18 +29,21 @@ fn selected_by(finished: &Finished) -> String {
         .unwrap_or_else(|| panic!("no route in the report: {finished:?}"))
 }
 
-/// A refusal, held up against everything a refusal has to be: exit `1`,
-/// nothing at all on standard output, and every fragment named on standard
-/// error.
+/// A refusal, held up against everything a refusal has to be: exit `1`, a
+/// report saying no vault resolved, and every fragment named in it.
+///
+/// `doctor` never refuses, so a selection that resolved nothing still reports
+/// what is known — which is why the fragments are looked for on standard
+/// output rather than standard error.
 fn assert_refused(finished: &Finished, fragments: &[&str]) {
-    assert_eq!(
-        (finished.code, finished.stdout.as_str()),
-        (1, ""),
-        "{finished:?}"
+    assert_eq!(finished.code, 1, "{finished:?}");
+    assert!(
+        finished.stdout.contains("none resolved"),
+        "a run that resolved no vault says so: {finished:?}"
     );
     for fragment in fragments {
         assert!(
-            finished.stderr.contains(fragment),
+            finished.stdout.contains(fragment),
             "`{fragment}` is missing from the refusal: {finished:?}"
         );
     }
@@ -148,15 +151,14 @@ fn an_unregistered_name_refuses_and_teaches_the_correction() {
         finished.code, 1,
         "an installation-area diagnostic is a failure, not a usage error: {finished:?}"
     );
-    assert_eq!(finished.stdout, "", "{finished:?}");
     assert!(
         finished
-            .stderr
+            .stdout
             .contains("error[installation.unknown-vault-name]"),
         "{finished:?}"
     );
     assert!(
-        finished.stderr.contains("./notes"),
+        finished.stdout.contains("./notes"),
         "the correction is not guessable, so the refusal teaches it: {finished:?}"
     );
 }
@@ -233,10 +235,9 @@ fn a_path_argument_is_never_searched_upward() {
         .arg("--vault")
         .arg(tree.home().join("vault/notes")));
     assert_eq!(finished.code, 1, "{finished:?}");
-    assert_eq!(finished.stdout, "", "{finished:?}");
     assert!(
         finished
-            .stderr
+            .stdout
             .contains("error[discovery.not-a-vault-root]"),
         "the vault one directory above must not be resolved: {finished:?}"
     );
@@ -248,10 +249,10 @@ fn a_tilde_makes_an_argument_a_path_and_is_not_expanded() {
     let finished = run(dogtag(&tree).arg("doctor").args(["--vault", "~/vault"]));
     assert_eq!(finished.code, 1, "{finished:?}");
     assert!(
-        finished.stderr.contains("error[discovery.path-unreadable]"),
+        finished.stdout.contains("error[discovery.path-unreadable]"),
         "expansion is the shell's job: the path is used as written: {finished:?}"
     );
-    assert!(finished.stderr.contains("~/vault"), "{finished:?}");
+    assert!(finished.stdout.contains("~/vault"), "{finished:?}");
 }
 
 #[test]
