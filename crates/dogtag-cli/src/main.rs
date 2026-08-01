@@ -119,6 +119,14 @@ struct ExplainArgs {
     /// always carries provenance, so this flag is the Markdown's.
     #[arg(long)]
     provenance: bool,
+    /// Treat warnings as failures — for the exit code only, changing no
+    /// rendering and no severity.
+    ///
+    /// This surface needs it more than `doctor` does: a nested vault is a
+    /// warning, and it means the rendering an agent is about to follow as
+    /// instructions came from a different corpus than the one intended.
+    #[arg(long)]
+    strict: bool,
 }
 
 /// How `doctor` reports.
@@ -151,11 +159,26 @@ fn main() {
 fn dispatch(environment: &Environment, command: Command) -> i32 {
     match command {
         Command::Version => version(environment),
-        Command::Doctor(args) => doctor::run(environment, &args),
+        Command::Doctor(args) => refuse_empty(environment, args.vault.requested())
+            .unwrap_or_else(|| doctor::run(environment, &args)),
         Command::Contract {
             command: ContractCommand::Explain(args),
-        } => explain::run(environment, &args),
+        } => refuse_empty(environment, args.vault.requested())
+            .unwrap_or_else(|| explain::run(environment, &args)),
     }
+}
+
+/// Refuses a vault selector that was given but empty.
+///
+/// An empty selector names no vault, so there is nothing to diagnose and no
+/// diagnostic to weigh: it is clap's kind of fault and takes clap's code. The
+/// alternative is worse than an error — an empty `DOGTAG_VAULT` treated as
+/// unset falls through to discovery and silently resolves whatever vault the
+/// working directory sits in.
+fn refuse_empty(environment: &Environment, flag: Option<&str>) -> Option<i32> {
+    let source = select::empty_selector(flag, environment)?;
+    eprintln!("error: {source} is empty; it names a registered vault or a path");
+    Some(exit::USAGE)
 }
 
 /// Prints the SDK's version, which is the only version this crate knows.

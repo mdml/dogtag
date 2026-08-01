@@ -69,7 +69,14 @@ impl Environment {
             // mangled argument fails loudly instead, naming what it looked
             // for. (The report carries the argument as a `String`, so there
             // is nothing faithful to carry either way.)
-            vault: variable(VAULT).map(|value| value.to_string_lossy().into_owned()),
+            // Read *without* the empty filter the other variables get. An
+            // empty selector is a selector: treating it as unset falls through
+            // to discovery and resolves whatever vault the working directory
+            // sits in, which is the silent wrong-vault resolution the comment
+            // above forbids. An unfilled slot in a CI or cron template is
+            // exactly how it arrives, and `doctor --strict` would report that
+            // wrong vault healthy and exit 0.
+            vault: env::var_os(VAULT).map(|value| value.to_string_lossy().into_owned()),
             colour: variable(NO_COLOR).is_none(),
         }
     }
@@ -110,8 +117,11 @@ impl Environment {
 
 /// A variable's value, treating an empty one as unset.
 ///
-/// Every variable read here names a location or suppresses colour, and an
-/// empty string is neither a location nor a presence worth honouring.
+/// Every variable read *through this function* names a location or suppresses
+/// colour, and an empty string is neither a location nor a presence worth
+/// honouring — `NO_COLOR=` means what `NO_COLOR` unset means, by the
+/// convention the variable is named for. `DOGTAG_VAULT` deliberately does not
+/// come through here: see [`Environment::from_process`].
 fn variable(name: &str) -> Option<OsString> {
     env::var_os(name).filter(|value| !value.is_empty())
 }

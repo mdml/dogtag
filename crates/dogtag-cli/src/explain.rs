@@ -46,7 +46,7 @@ pub fn run(environment: &Environment, args: &ExplainArgs) -> i32 {
     let installation = environment.installation();
     match select(environment, args.vault.requested(), &installation) {
         Ok(selected) => explain(environment, args, selected, installation),
-        Err(diagnostics) => refuse(environment, &diagnostics),
+        Err(diagnostics) => refuse(environment, &diagnostics, args.strict),
     }
 }
 
@@ -68,7 +68,7 @@ fn explain(
         Rendering::diagnostics(&render_plain(&explained.diagnostics)),
     );
     match rendering {
-        Some(text) => delivered(environment, &text, &explained.diagnostics),
+        Some(text) => delivered(environment, &text, &explained.diagnostics, args.strict),
         None => refused(environment),
     }
 }
@@ -106,9 +106,14 @@ fn render(args: &ExplainArgs, root: &VaultRoot, contract: &Contract) -> String {
 ///
 /// The contract resolved, so the rendering is not a fiction — but a run that
 /// raised an error is a run that failed, and severity alone decides that.
-fn delivered(environment: &Environment, rendering: &str, diagnostics: &[Diagnostic]) -> i32 {
+fn delivered(
+    environment: &Environment,
+    rendering: &str,
+    diagnostics: &[Diagnostic],
+    strict: bool,
+) -> i32 {
     output::to_stdout(environment, Rendering::verbatim(rendering));
-    exit::code_for(diagnostics, false)
+    exit::code_for(diagnostics, strict)
 }
 
 /// The refusal: nothing on standard output, and the way forward on standard
@@ -119,10 +124,10 @@ fn refused(environment: &Environment) -> i32 {
 }
 
 /// A vault that could not be resolved at all.
-fn refuse(environment: &Environment, diagnostics: &[Diagnostic]) -> i32 {
+fn refuse(environment: &Environment, diagnostics: &[Diagnostic], strict: bool) -> i32 {
     output::to_stderr(
         environment,
         Rendering::diagnostics(&render_plain(diagnostics)),
     );
-    exit::code_for(diagnostics, false)
+    exit::code_for(diagnostics, strict)
 }

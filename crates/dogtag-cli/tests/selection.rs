@@ -272,3 +272,58 @@ fn an_ancestor_vault_is_reported_without_changing_what_was_resolved() {
         "and the ancestor is named: {finished:?}"
     );
 }
+
+#[test]
+fn an_empty_environment_selector_is_refused_rather_than_falling_through() {
+    // An unfilled slot in a CI or cron template arrives as `DOGTAG_VAULT=`.
+    // Treated as unset it falls through to discovery and resolves whatever
+    // vault the working directory sits in — which `--strict` then reports
+    // healthy, exiting 0, having inspected the wrong corpus.
+    let tree = registered("empty-environment");
+    let finished = run(dogtag(&tree)
+        .arg("doctor")
+        .arg("--strict")
+        .env("DOGTAG_VAULT", ""));
+    assert_eq!(finished.code, 2, "{finished:?}");
+    assert!(finished.stdout.is_empty(), "{finished:?}");
+    assert!(finished.stderr.contains("DOGTAG_VAULT"), "{finished:?}");
+}
+
+#[test]
+fn an_empty_flag_selector_is_refused_the_same_way() {
+    let tree = registered("empty-flag");
+    let finished = run(dogtag(&tree).arg("doctor").args(["--vault", ""]));
+    assert_eq!(finished.code, 2, "{finished:?}");
+    assert!(finished.stdout.is_empty(), "{finished:?}");
+    assert!(finished.stderr.contains("--vault"), "{finished:?}");
+}
+
+#[test]
+fn an_empty_selector_is_refused_on_contract_explain_too() {
+    let tree = registered("empty-explain");
+    let finished = run(dogtag(&tree)
+        .args(["contract", "explain"])
+        .env("DOGTAG_VAULT", ""));
+    assert_eq!(finished.code, 2, "{finished:?}");
+    assert!(finished.stdout.is_empty(), "{finished:?}");
+}
+
+#[test]
+fn a_relative_path_resolves_against_the_directory_the_run_started_in() {
+    // The SDK is a pure function of its arguments, so the CLI owes it an
+    // absolute path: left relative, the operating system would resolve it
+    // against the process working directory instead.
+    let tree = registered("relative-path");
+    let finished = run(dogtag(&tree).arg("doctor").args(["--vault", "./vault"]));
+    assert_eq!(finished.code, 0, "{finished:?}");
+    // The selection still reports the argument as typed — it is what the user
+    // asked for. What must be absolute is the root the SDK was handed, which
+    // the report names.
+    assert_eq!(selected_by(&finished), "--vault ./vault");
+    assert!(
+        finished
+            .stdout
+            .contains(&tree.home().join("vault").display().to_string()),
+        "{finished:?}"
+    );
+}

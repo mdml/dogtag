@@ -29,7 +29,7 @@
 //! chooses *which* of them a run calls, and turns argv and the environment
 //! into their explicit arguments.
 
-use std::path::{MAIN_SEPARATOR, Path};
+use std::path::{MAIN_SEPARATOR, PathBuf};
 
 use dogtag::diagnostic::{Diagnostic, DiagnosticList};
 use dogtag::installation::{Installation, resolve_registered};
@@ -57,18 +57,22 @@ pub struct Selected {
 struct Source {
     path: SelectionRoute,
     name: SelectionRoute,
+    /// How a usage message spells this source.
+    named: &'static str,
 }
 
 /// `--vault`, which outranks everything.
 const FLAG: Source = Source {
     path: SelectionRoute::FlagPath,
     name: SelectionRoute::FlagName,
+    named: "--vault",
 };
 
 /// `DOGTAG_VAULT`, consulted only when no flag was given.
 const ENVIRONMENT: Source = Source {
     path: SelectionRoute::EnvironmentPath,
     name: SelectionRoute::EnvironmentName,
+    named: "DOGTAG_VAULT",
 };
 
 /// Resolves the vault this run is about.
@@ -83,9 +87,19 @@ pub fn select(
     installation: &Installation,
 ) -> Result<Selected, Vec<Diagnostic>> {
     match given(flag, environment) {
-        Some((argument, source)) => explicit(argument, source, installation),
+        Some((argument, source)) => explicit(argument, source, environment, installation),
         None => discovered(environment),
     }
+}
+
+/// Where a vault selector came from, for a usage message that names it.
+///
+/// An empty selector is a usage fault rather than a vault fault: there is no
+/// vault to diagnose and nothing the SDK could be asked about, so it is
+/// clap's kind of error and takes clap's exit code.
+pub fn empty_selector(flag: Option<&str>, environment: &Environment) -> Option<&'static str> {
+    let (argument, source) = given(flag, environment)?;
+    argument.is_empty().then_some(source.named)
 }
 
 /// The argument selection was asked to honour, and where it came from.
@@ -98,10 +112,14 @@ fn given<'a>(flag: Option<&'a str>, environment: &'a Environment) -> Option<(&'a
 fn explicit(
     argument: &str,
     source: Source,
+    environment: &Environment,
     installation: &Installation,
 ) -> Result<Selected, Vec<Diagnostic>> {
     let (route, root) = if is_path(argument) {
-        (source.path, root_at(Path::new(argument)).map_err(one))
+        (
+            source.path,
+            root_at(&absolute(argument, environment)).map_err(one),
+        )
     } else {
         (source.name, registered(argument, installation))
     };
@@ -112,6 +130,20 @@ fn explicit(
         // beyond the refusal it may already have returned.
         diagnostics: Vec::new(),
     })
+}
+
+/// A path argument as an absolute path.
+///
+/// The SDK's entry points are pure functions of their arguments, and a
+/// relative path is not one: the operating system would resolve it against the
+/// *process* working directory rather than the one this run fixed. Joining it
+/// here is what keeps that promise true for every other embedder too, since
+/// nothing in the SDK is left to consult ambient state on a caller's behalf.
+///
+/// A `~` is still not expanded — it makes the argument a path and the path is
+/// used as written, matching the registry's own no-expansion rule.
+fn absolute(argument: &str, environment: &Environment) -> PathBuf {
+    environment.current_dir().join(argument)
 }
 
 /// Whether an argument names a path rather than a registry entry.
@@ -162,6 +194,8 @@ fn one(diagnostic: Diagnostic) -> Vec<Diagnostic> {
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
     use super::*;
     use dogtag::installation::{load_installation, parse_installation};
 
