@@ -55,10 +55,9 @@ fn outside_home(root: &Path, home: &Path) -> Option<Diagnostic> {
         Diagnostic::kernel(
             KernelDiagnostic::DiscoveryRootOutsideHome,
             format!(
-                "the vault root `{}` is outside the home directory `{}`, so its contract was \
+                "the vault root `{}` is outside the home directory, so its contract was \
                  not necessarily authored by whoever is running this command",
-                root.display(),
-                home.display()
+                root.display()
             ),
         )
         .with_help(
@@ -155,14 +154,18 @@ mod tests {
     }
 
     #[test]
-    fn a_root_outside_the_home_directory_is_a_warning_naming_both() {
+    fn a_root_outside_the_home_directory_is_a_warning_naming_the_root_only() {
         let tree = Tree::new("trust-outside-home");
         let root = owned_root(&tree, "elsewhere/vault");
         let home = tree.dir("home");
         let diagnostics = inspect_root_trust(&root, Some(&home));
         assert_eq!(ids(&diagnostics), ["discovery.root-outside-home"]);
         assert!(diagnostics[0].message.contains(&root.display().to_string()));
-        assert!(diagnostics[0].message.contains(&home.display().to_string()));
+        // The home directory is the one path the SDK is handed rather than
+        // reading, precisely so it never learns the account name. Printing it
+        // back out would hand it to every reader of a pasted report, and the
+        // reader already knows their own home directory: the root is the fact.
+        assert!(!diagnostics[0].message.contains(&home.display().to_string()));
         assert!(diagnostics[0].location.is_none());
     }
 

@@ -25,18 +25,29 @@
 //! line break rather than emitting one — which is why this is a rendering rule
 //! rather than a rule about what a corpus may declare.
 
-/// `value` as exactly one line, with every line break folded to a space.
+/// `value` as exactly one line, with every control character folded to a space.
 ///
 /// Both `\n` and `\r` fold. A lone carriage return is not a line to
 /// [`str::lines`], but it is one to a terminal, which reads it as a move to
 /// column zero and lets whatever follows overwrite the line a reader had
 /// already seen.
+///
+/// Every other control character folds for the same reason, and the reason
+/// generalizes further than the two line breaks do: `ESC[2K` erases the line
+/// a reader had already seen, and `ESC[1A` moves the cursor up to overwrite
+/// one. Every string value in a contract is free text, and a contract planted
+/// in an ancestor is attacker-authored text rendered to the reader's terminal,
+/// so the two lines the trust warnings depend on are exactly what a repainting
+/// sequence would target.
 pub(crate) fn one_line(value: &str) -> String {
     value
         .chars()
-        .map(|character| match character {
-            '\n' | '\r' => ' ',
-            other => other,
+        .map(|character| {
+            if character.is_control() {
+                ' '
+            } else {
+                character
+            }
         })
         .collect()
 }
@@ -85,6 +96,21 @@ mod tests {
             one_line("naïve | `a \\ backslash`"),
             "naïve | `a \\ backslash`"
         );
+    }
+
+    #[test]
+    fn every_control_character_folds_for_the_same_reason_a_carriage_return_does() {
+        // ESC[2K erases the line a reader had already seen and ESC[1A moves
+        // the cursor up to overwrite one, which is what a carriage return
+        // does and more. A contract planted in an ancestor is attacker-
+        // authored text on its way to the reader's terminal.
+        assert_eq!(one_line("a\u{1b}[2Kb"), "a [2Kb");
+        assert_eq!(one_line("up\u{1b}[1A"), "up [1A");
+        assert_eq!(one_line("bell\u{7}tab\ttext"), "bell tab text");
+        // C1, which a terminal reads as a control sequence introducer too.
+        assert_eq!(one_line("csi\u{9b}2K"), "csi 2K");
+        // Nothing else moves: printable punctuation and non-ASCII are text.
+        assert_eq!(one_line("naïve — a•b"), "naïve — a•b");
     }
 
     #[test]
