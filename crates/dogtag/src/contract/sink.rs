@@ -199,6 +199,7 @@ pub(crate) struct Sink<'t> {
     version: u32,
     diagnostics: DiagnosticList,
     provenance: Provenance,
+    dropped: bool,
 }
 
 impl<'t> Sink<'t> {
@@ -209,7 +210,26 @@ impl<'t> Sink<'t> {
             version,
             diagnostics: DiagnosticList::new(),
             provenance: Provenance::new(),
+            dropped: false,
         }
+    }
+
+    /// Records that a declaration was parsed far enough to be named and then
+    /// discarded, so the resolved model is missing something the file declares.
+    pub(crate) fn drop_declaration(&mut self) {
+        self.dropped = true;
+    }
+
+    /// Whether the resolved model holds every declaration the file makes.
+    ///
+    /// The cross-reference rules — a flag naming a property, a lifecycle axis
+    /// naming one — conclude "no type declares it" from the model's silence.
+    /// When a declaration was dropped that silence is the parser's, not the
+    /// file's, and the conclusion contradicts the contract in front of the
+    /// reader. The narrower fault is already reported; inventing a second,
+    /// false one on top of it is what this guards.
+    pub(crate) fn complete(&self) -> bool {
+        !self.dropped
     }
 
     /// What has been recorded so far, so a validity rule can point at where a

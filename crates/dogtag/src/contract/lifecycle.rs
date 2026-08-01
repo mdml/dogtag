@@ -58,6 +58,12 @@ fn resolve(sink: &mut Sink<'_>, section: &Section<'_, '_>) -> Option<LifecycleDe
     match (none, axis) {
         (Some(none), Some(axis)) => {
             exclusive(sink, none, axis);
+            // Unknown keys are fatal at every nesting level, and a faulty
+            // enclosing declaration does not make the nested table's keys
+            // legal. Without this, `none` alongside a misspelled key inside
+            // `[lifecycle.ordinary]` reports only the exclusivity, and the
+            // misspelling surfaces one edit later.
+            sweep_ordinary(sink, section);
             None
         }
         (Some(none), Option::None) => no_axis(sink, section, none),
@@ -97,9 +103,22 @@ fn an_axis(sink: &mut Sink<'_>, section: &Section<'_, '_>) -> Option<LifecycleDe
         incomplete(sink, section);
         return None;
     };
-    let axis = sink.string(axis, section.leaf("axis"))?.to_owned();
-    let ordinary = ordinary_state(sink, section, ordinary)?;
-    Some(LifecycleDecl::Axis { axis, ordinary })
+    // Both halves are read before either is required, so an axis that is not
+    // a string still gets the nested table swept rather than reporting the
+    // wrong type and stopping.
+    let named = sink.string(axis, section.leaf("axis"));
+    let ordinary = ordinary_state(sink, section, ordinary);
+    Some(LifecycleDecl::Axis {
+        axis: named?.to_owned(),
+        ordinary: ordinary?,
+    })
+}
+
+/// Sweeps `[lifecycle.ordinary]` for unknown keys, wherever the walk reaches it.
+fn sweep_ordinary(sink: &mut Sink<'_>, section: &Section<'_, '_>) {
+    if let Some(value) = section.get("ordinary") {
+        ordinary_table(sink, section, value);
+    }
 }
 
 fn incomplete(sink: &mut Sink<'_>, section: &Section<'_, '_>) {
@@ -114,11 +133,11 @@ fn incomplete(sink: &mut Sink<'_>, section: &Section<'_, '_>) {
 
 /// Reads `[lifecycle.ordinary]`, which declares exactly one of `value` and
 /// `absent`.
-fn ordinary_state(
+fn ordinary_table<'a, 'i>(
     sink: &mut Sink<'_>,
     section: &Section<'_, '_>,
-    value: &Spanned<DeValue<'_>>,
-) -> Option<Ordinary> {
+    value: &'a Spanned<DeValue<'i>>,
+) -> Option<Section<'a, 'i>> {
     let table = sink.table(value, "ordinary")?;
     let ordinary = Section {
         table,
@@ -127,6 +146,15 @@ fn ordinary_state(
         path: section.path.child("ordinary"),
     };
     sink.sweep(&ordinary, ORDINARY_KEYS);
+    Some(ordinary)
+}
+
+fn ordinary_state(
+    sink: &mut Sink<'_>,
+    section: &Section<'_, '_>,
+    value: &Spanned<DeValue<'_>>,
+) -> Option<Ordinary> {
+    let ordinary = ordinary_table(sink, section, value)?;
     match (ordinary.get("value"), ordinary.get("absent")) {
         (Some(named), Option::None) => named_state(sink, &ordinary, named),
         (Option::None, Some(absent)) => absent_state(sink, &ordinary, absent),
@@ -212,6 +240,30 @@ mod tests {
             .iter()
             .map(|diagnostic| diagnostic.id.as_str())
             .collect()
+    }
+
+    #[test]
+    fn an_unknown_key_in_the_ordinary_table_is_reported_beside_a_wrong_typed_axis() {
+        // The sweep used to sit behind the axis read, so a non-string axis
+        // stopped the walk before the nested table was ever judged and the
+        // misspelling surfaced only after the axis was fixed.
+        let read = read("[lifecycle]\naxis = 4\nordinary = { absent = true, requred = 1 }\n");
+        let mut found = ids(&read);
+        found.sort_unstable();
+        assert_eq!(found, ["contract.unknown-key", "contract.value-wrong-type"]);
+    }
+
+    #[test]
+    fn an_unknown_key_in_the_ordinary_table_is_reported_beside_a_none_declaration() {
+        // Same rule on the other short-circuit: `none` alongside an axis is
+        // fatal, and it does not make the nested table's keys legal.
+        let read = read("[lifecycle]\nnone = true\nordinary = { absent = true, requred = 1 }\n");
+        let mut found = ids(&read);
+        found.sort_unstable();
+        assert_eq!(
+            found,
+            ["contract.lifecycle-none-with-axis", "contract.unknown-key"]
+        );
     }
 
     #[test]
