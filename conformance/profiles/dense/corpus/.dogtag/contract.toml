@@ -1,0 +1,3248 @@
+# .dogtag/contract.toml — the committed vault contract of the `dense` conformance fixture.
+# `dense` stands for the PKM enthusiast with an established corpus: a mature taxonomy at realistic
+# scale, of the kind that accretes over years. Its shape is derived from an established corpus as
+# approximate counts; every name in it is authored fiction.
+#
+# The lifecycle axis is `standing`, and its ordinary state is the ABSENCE of a value: an unmarked
+# note is simply live, and each named value marks a departure from that. The axis is therefore
+# optional on every type that declares it, which is spelled out rather than defaulted.
+#
+# Two of the eight property kinds go unreached here, and that is the corpus speaking rather than an
+# omission: money is recorded in minor units as an integer, and this corpus dates things by the day.
+
+contract_version = 1
+
+[dialect]
+links = "wikilink"
+
+[lifecycle]
+axis = "standing"
+ordinary = { absent = true }
+
+# Flags are boolean properties, orthogonal to the axis above.
+
+[[flag]]
+property = "needs_rework"
+
+[[flag]]
+property = "verified"
+
+[[flag]]
+property = "confidential"
+
+# The notes the corpus is about. Six kinds of referent, six identity-bearing
+# types: nothing here is a privileged entity with impostors beside it.
+
+[[type]]
+name = "person"
+capabilities = ["identity-bearing"]
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "aliases"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "sort_name"
+  kind = "string"
+
+  [[type.property]]
+  name = "first_met"
+  kind = "date"
+
+  [[type.property]]
+  name = "verified"
+  kind = "boolean"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "employed-by"
+
+  [[type.relationship]]
+  predicate = "located-in"
+
+  [[type.relationship]]
+  predicate = "mentions"
+
+[[type]]
+name = "place"
+capabilities = ["identity-bearing"]
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "aliases"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "locality"
+  kind = "string"
+
+  [[type.property]]
+  name = "region"
+  kind = "string"
+
+  [[type.property]]
+  name = "verified"
+  kind = "boolean"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "located-in"
+
+  [[type.relationship]]
+  predicate = "mentions"
+
+[[type]]
+name = "organization"
+capabilities = ["identity-bearing"]
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "aliases"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "sector"
+  kind = "string"
+
+  [[type.property]]
+  name = "founded"
+  kind = "date"
+
+  [[type.property]]
+  name = "verified"
+  kind = "boolean"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "located-in"
+
+  [[type.relationship]]
+  predicate = "mentions"
+
+[[type]]
+name = "event"
+capabilities = ["identity-bearing"]
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "aliases"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "occurred_on"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "attendee_count"
+  kind = "integer"
+
+  [[type.property]]
+  name = "verified"
+  kind = "boolean"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "held-at"
+
+  [[type.relationship]]
+  predicate = "attended-by"
+
+  [[type.relationship]]
+  predicate = "mentions"
+
+[[type]]
+name = "work"
+capabilities = ["identity-bearing"]
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "aliases"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "medium"
+  kind = "enum"
+  values = ["book", "article", "film", "album", "game", "artwork", "podcast", "other"]
+
+  [[type.property]]
+  name = "released"
+  kind = "date"
+
+  [[type.property]]
+  name = "verified"
+  kind = "boolean"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "created-by"
+
+  [[type.relationship]]
+  predicate = "mentions"
+
+[[type]]
+name = "concept"
+capabilities = ["identity-bearing"]
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "aliases"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "discipline"
+  kind = "string"
+
+  [[type.property]]
+  name = "first_encountered"
+  kind = "date"
+
+  [[type.property]]
+  name = "verified"
+  kind = "boolean"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "part-of"
+
+  [[type.relationship]]
+  predicate = "mentions"
+
+# Material kept as it arrived. Closed-write: it is annotated from elsewhere,
+# never edited in place.
+
+[[type]]
+name = "clipping"
+capabilities = ["closed-write"]
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "captured_on"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "source_url"
+  kind = "string"
+
+  [[type.property]]
+  name = "publication"
+  kind = "string"
+
+  [[type.property]]
+  name = "confidential"
+  kind = "boolean"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "about"
+
+  [[type.relationship]]
+  predicate = "mentions"
+
+[[type]]
+name = "transcript"
+capabilities = ["closed-write"]
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "captured_on"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "speaker_count"
+  kind = "integer"
+
+  [[type.property]]
+  name = "confidential"
+  kind = "boolean"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "derived-from"
+
+  [[type.relationship]]
+  predicate = "attended-by"
+
+  [[type.relationship]]
+  predicate = "mentions"
+
+[[type]]
+name = "correspondence"
+capabilities = ["closed-write"]
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "captured_on"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "channel"
+  kind = "enum"
+  values = ["letter", "email", "message", "card"]
+
+  [[type.property]]
+  name = "received_on"
+  kind = "date"
+
+  [[type.property]]
+  name = "confidential"
+  kind = "boolean"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "about"
+
+  [[type.relationship]]
+  predicate = "mentions"
+
+[[type]]
+name = "scan"
+capabilities = ["closed-write"]
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "captured_on"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "page_count"
+  kind = "integer"
+
+  [[type.property]]
+  name = "document_date"
+  kind = "date"
+
+  [[type.property]]
+  name = "confidential"
+  kind = "boolean"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "about"
+
+  [[type.relationship]]
+  predicate = "derived-from"
+
+[[type]]
+name = "excerpt"
+capabilities = ["closed-write"]
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "captured_on"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "page_reference"
+  kind = "string"
+
+  [[type.property]]
+  name = "source_url"
+  kind = "string"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "derived-from"
+  required = true
+
+  [[type.relationship]]
+  predicate = "about"
+
+  [[type.relationship]]
+  predicate = "mentions"
+
+# Logs. One class per thing worth counting, which is where most of the type
+# count comes from.
+
+[[type]]
+name = "daily_log"
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "logged_on"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "high_point"
+  kind = "string"
+
+  [[type.property]]
+  name = "energy"
+  kind = "integer"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "mentions"
+
+[[type]]
+name = "weekly_log"
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "logged_on"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "highlights"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "energy"
+  kind = "integer"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "covers"
+
+  [[type.relationship]]
+  predicate = "mentions"
+
+[[type]]
+name = "monthly_log"
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "logged_on"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "highlights"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "covers"
+
+  [[type.relationship]]
+  predicate = "mentions"
+
+[[type]]
+name = "workout_log"
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "logged_on"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "minutes_spent"
+  kind = "integer"
+
+  [[type.property]]
+  name = "exertion"
+  kind = "enum"
+  values = ["easy", "steady", "hard", "maximal"]
+
+  [[type.property]]
+  name = "distance_metres"
+  kind = "integer"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "held-at"
+
+[[type]]
+name = "meal_log"
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "logged_on"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "meal_slot"
+  kind = "enum"
+  values = ["breakfast", "lunch", "dinner", "snack"]
+
+  [[type.property]]
+  name = "ingredients"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "derived-from"
+
+[[type]]
+name = "sleep_log"
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "logged_on"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "minutes_spent"
+  kind = "integer"
+
+  [[type.property]]
+  name = "quality"
+  kind = "integer"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+[[type]]
+name = "mood_log"
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "logged_on"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "mood_rating"
+  kind = "integer"
+
+  [[type.property]]
+  name = "triggers"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "confidential"
+  kind = "boolean"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "mentions"
+
+[[type]]
+name = "symptom_log"
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "logged_on"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "severity"
+  kind = "enum"
+  values = ["mild", "moderate", "severe"]
+
+  [[type.property]]
+  name = "confidential"
+  kind = "boolean"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "mentions"
+
+[[type]]
+name = "practice_log"
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "logged_on"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "minutes_spent"
+  kind = "integer"
+
+  [[type.property]]
+  name = "focus_area"
+  kind = "string"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "part-of"
+
+  [[type.relationship]]
+  predicate = "about"
+
+[[type]]
+name = "reading_log"
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "logged_on"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "pages_read"
+  kind = "integer"
+
+  [[type.property]]
+  name = "minutes_spent"
+  kind = "integer"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "about"
+  required = true
+
+[[type]]
+name = "viewing_log"
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "logged_on"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "minutes_spent"
+  kind = "integer"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "about"
+  required = true
+
+[[type]]
+name = "listening_log"
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "logged_on"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "minutes_spent"
+  kind = "integer"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "about"
+  required = true
+
+[[type]]
+name = "garden_log"
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "logged_on"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "bed"
+  kind = "string"
+
+  [[type.property]]
+  name = "weather"
+  kind = "string"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "mentions"
+
+[[type]]
+name = "maintenance_log"
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "logged_on"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "performed_by"
+  kind = "string"
+
+  [[type.property]]
+  name = "amount_minor_units"
+  kind = "integer"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "about"
+
+[[type]]
+name = "expense_log"
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "logged_on"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "amount_minor_units"
+  kind = "integer"
+
+  [[type.property]]
+  name = "payment_method"
+  kind = "enum"
+  values = ["cash", "card", "transfer", "direct_debit"]
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "billed-to"
+
+  [[type.relationship]]
+  predicate = "about"
+
+# Work in flight.
+
+[[type]]
+name = "project"
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "started"
+  kind = "date"
+
+  [[type.property]]
+  name = "target_date"
+  kind = "date"
+
+  [[type.property]]
+  name = "priority"
+  kind = "enum"
+  values = ["low", "normal", "high", "urgent"]
+
+  [[type.property]]
+  name = "needs_rework"
+  kind = "boolean"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "part-of"
+
+  [[type.relationship]]
+  predicate = "blocked-by"
+
+  [[type.relationship]]
+  predicate = "mentions"
+
+[[type]]
+name = "task_list"
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "target_date"
+  kind = "date"
+
+  [[type.property]]
+  name = "priority"
+  kind = "enum"
+  values = ["low", "normal", "high", "urgent"]
+
+  [[type.property]]
+  name = "open_count"
+  kind = "integer"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "part-of"
+
+  [[type.relationship]]
+  predicate = "blocked-by"
+
+[[type]]
+name = "meeting"
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "held_on"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "attendee_count"
+  kind = "integer"
+
+  [[type.property]]
+  name = "agenda"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "attended-by"
+
+  [[type.relationship]]
+  predicate = "held-at"
+
+  [[type.relationship]]
+  predicate = "part-of"
+
+  [[type.relationship]]
+  predicate = "mentions"
+
+[[type]]
+name = "decision"
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "decided_on"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "alternatives"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "reversibility"
+  kind = "enum"
+  values = ["easy", "moderate", "hard", "one_way"]
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "supersedes"
+
+  [[type.relationship]]
+  predicate = "part-of"
+
+  [[type.relationship]]
+  predicate = "mentions"
+
+[[type]]
+name = "milestone"
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "target_date"
+  kind = "date"
+
+  [[type.property]]
+  name = "met_on"
+  kind = "date"
+
+  [[type.property]]
+  name = "priority"
+  kind = "enum"
+  values = ["low", "normal", "high", "urgent"]
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "part-of"
+
+  [[type.relationship]]
+  predicate = "blocked-by"
+
+# Things written for someone else to read.
+
+[[type]]
+name = "draft"
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "word_count"
+  kind = "integer"
+
+  [[type.property]]
+  name = "target_date"
+  kind = "date"
+
+  [[type.property]]
+  name = "needs_rework"
+  kind = "boolean"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "derived-from"
+
+  [[type.relationship]]
+  predicate = "supersedes"
+
+  [[type.relationship]]
+  predicate = "about"
+
+  [[type.relationship]]
+  predicate = "mentions"
+
+[[type]]
+name = "essay"
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "word_count"
+  kind = "integer"
+
+  [[type.property]]
+  name = "published_on"
+  kind = "date"
+
+  [[type.property]]
+  name = "needs_rework"
+  kind = "boolean"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "derived-from"
+
+  [[type.relationship]]
+  predicate = "supersedes"
+
+  [[type.relationship]]
+  predicate = "about"
+
+  [[type.relationship]]
+  predicate = "mentions"
+
+[[type]]
+name = "post"
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "word_count"
+  kind = "integer"
+
+  [[type.property]]
+  name = "published_on"
+  kind = "date"
+
+  [[type.property]]
+  name = "source_url"
+  kind = "string"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "derived-from"
+
+  [[type.relationship]]
+  predicate = "about"
+
+  [[type.relationship]]
+  predicate = "mentions"
+
+[[type]]
+name = "presentation"
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "held_on"
+  kind = "date"
+
+  [[type.property]]
+  name = "slide_count"
+  kind = "integer"
+
+  [[type.property]]
+  name = "needs_rework"
+  kind = "boolean"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "held-at"
+
+  [[type.relationship]]
+  predicate = "attended-by"
+
+  [[type.relationship]]
+  predicate = "derived-from"
+
+  [[type.relationship]]
+  predicate = "about"
+
+# Reference material — written once, consulted often.
+
+[[type]]
+name = "recipe"
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "servings"
+  kind = "integer"
+
+  [[type.property]]
+  name = "ingredients"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "minutes_spent"
+  kind = "integer"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "derived-from"
+
+  [[type.relationship]]
+  predicate = "mentions"
+
+[[type]]
+name = "procedure"
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "steps"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "needs_rework"
+  kind = "boolean"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "part-of"
+
+  [[type.relationship]]
+  predicate = "mentions"
+
+[[type]]
+name = "checklist"
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "steps"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "open_count"
+  kind = "integer"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "part-of"
+
+[[type]]
+name = "glossary_entry"
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "term"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "discipline"
+  kind = "string"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "about"
+  required = true
+
+  [[type.relationship]]
+  predicate = "mentions"
+
+[[type]]
+name = "cheatsheet"
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "discipline"
+  kind = "string"
+
+  [[type.property]]
+  name = "needs_rework"
+  kind = "boolean"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "about"
+
+  [[type.relationship]]
+  predicate = "mentions"
+
+# Learning.
+
+[[type]]
+name = "course"
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "provider"
+  kind = "string"
+
+  [[type.property]]
+  name = "started"
+  kind = "date"
+
+  [[type.property]]
+  name = "completed_on"
+  kind = "date"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "taught-by"
+
+  [[type.relationship]]
+  predicate = "about"
+
+[[type]]
+name = "lesson"
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "minutes_spent"
+  kind = "integer"
+
+  [[type.property]]
+  name = "completed_on"
+  kind = "date"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "part-of"
+
+  [[type.relationship]]
+  predicate = "taught-by"
+
+[[type]]
+name = "exercise_set"
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "question_count"
+  kind = "integer"
+
+  [[type.property]]
+  name = "completed_on"
+  kind = "date"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "part-of"
+
+  [[type.relationship]]
+  predicate = "about"
+
+[[type]]
+name = "study_plan"
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "target_date"
+  kind = "date"
+
+  [[type.property]]
+  name = "open_count"
+  kind = "integer"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "covers"
+
+  [[type.relationship]]
+  predicate = "part-of"
+
+# Intention and retrospect.
+
+[[type]]
+name = "goal"
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "target_date"
+  kind = "date"
+
+  [[type.property]]
+  name = "priority"
+  kind = "enum"
+  values = ["low", "normal", "high", "urgent"]
+
+  [[type.property]]
+  name = "measure"
+  kind = "string"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "part-of"
+
+  [[type.relationship]]
+  predicate = "blocked-by"
+
+[[type]]
+name = "review"
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "covers_from"
+  kind = "date"
+
+  [[type.property]]
+  name = "covers_to"
+  kind = "date"
+
+  [[type.property]]
+  name = "highlights"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "covers"
+
+  [[type.relationship]]
+  predicate = "mentions"
+
+[[type]]
+name = "plan"
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "target_date"
+  kind = "date"
+
+  [[type.property]]
+  name = "priority"
+  kind = "enum"
+  values = ["low", "normal", "high", "urgent"]
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "part-of"
+
+  [[type.relationship]]
+  predicate = "covers"
+
+[[type]]
+name = "habit"
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "cadence"
+  kind = "enum"
+  values = ["daily", "weekly", "monthly", "seasonal"]
+
+  [[type.property]]
+  name = "started"
+  kind = "date"
+
+  [[type.property]]
+  name = "target_count"
+  kind = "integer"
+
+  [[type.property]]
+  name = "skipped_dates"
+  kind = "list"
+  of = "date"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "about"
+
+# Household administration.
+
+[[type]]
+name = "account"
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "provider"
+  kind = "string"
+
+  [[type.property]]
+  name = "opened_on"
+  kind = "date"
+
+  [[type.property]]
+  name = "confidential"
+  kind = "boolean"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "mentions"
+
+[[type]]
+name = "subscription"
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "provider"
+  kind = "string"
+
+  [[type.property]]
+  name = "renews_on"
+  kind = "date"
+
+  [[type.property]]
+  name = "amount_minor_units"
+  kind = "integer"
+
+  [[type.property]]
+  name = "cadence"
+  kind = "enum"
+  values = ["daily", "weekly", "monthly", "seasonal"]
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "billed-to"
+
+  [[type.relationship]]
+  predicate = "mentions"
+
+[[type]]
+name = "appliance"
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "model"
+  kind = "string"
+
+  [[type.property]]
+  name = "purchased_on"
+  kind = "date"
+
+  [[type.property]]
+  name = "location_hint"
+  kind = "string"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "stored-at"
+
+  [[type.relationship]]
+  predicate = "mentions"
+
+[[type]]
+name = "warranty"
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "provider"
+  kind = "string"
+
+  [[type.property]]
+  name = "expires_on"
+  kind = "date"
+
+  [[type.property]]
+  name = "document_reference"
+  kind = "string"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "about"
+
+  [[type.relationship]]
+  predicate = "derived-from"
+
+[[type]]
+name = "bill"
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "provider"
+  kind = "string"
+
+  [[type.property]]
+  name = "due_on"
+  kind = "date"
+
+  [[type.property]]
+  name = "amount_minor_units"
+  kind = "integer"
+
+  [[type.property]]
+  name = "payment_method"
+  kind = "enum"
+  values = ["cash", "card", "transfer", "direct_debit"]
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "billed-to"
+
+  [[type.relationship]]
+  predicate = "about"
+
+# Gathered lists.
+
+[[type]]
+name = "reading_list"
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "open_count"
+  kind = "integer"
+
+  [[type.property]]
+  name = "theme"
+  kind = "string"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "covers"
+
+  [[type.relationship]]
+  predicate = "mentions"
+
+[[type]]
+name = "wishlist"
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "open_count"
+  kind = "integer"
+
+  [[type.property]]
+  name = "occasion"
+  kind = "string"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "mentions"
+
+[[type]]
+name = "bookmark"
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "source_url"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "publication"
+  kind = "string"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "about"
+
+  [[type.relationship]]
+  predicate = "mentions"
+
+[[type]]
+name = "collection"
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "theme"
+  kind = "string"
+
+  [[type.property]]
+  name = "item_count"
+  kind = "integer"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "stored-at"
+
+  [[type.relationship]]
+  predicate = "mentions"
+
+# The bottom type. Capture never blocks on classification.
+
+[[type]]
+name = "unfiled"
+capabilities = ["catch-all"]
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "source_url"
+  kind = "string"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "standing"
+  kind = "enum"
+  values = ["paused", "blocked", "supplanted", "retired"]
+  required = false
+
+  [[type.property]]
+  name = "created"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.property]]
+  name = "review_after"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "mentions"

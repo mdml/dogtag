@@ -1,7 +1,7 @@
 id = "lifecycle-declaration-is-mandatory"
 title = "A contract declares its lifecycle axis or its absence, and never leaves it to silence"
 milestone = "M2"
-status = "pending"
+status = "executable"
 contract = """
 Given a contract that declares whether the corpus has a lifecycle axis —
 either naming the property that carries it together with how the ordinary

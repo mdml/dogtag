@@ -1,7 +1,7 @@
 id = "contract-explain-renders-every-declaration"
 title = "The explained contract carries every declaration, in both renderings"
 milestone = "M2"
-status = "pending"
+status = "executable"
 contract = """
 Given a vault whose committed contract loads, carrying its declared types and
 their capabilities, each type's properties with their value kinds and whether

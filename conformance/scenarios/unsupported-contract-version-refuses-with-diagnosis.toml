@@ -1,7 +1,7 @@
 id = "unsupported-contract-version-refuses-with-diagnosis"
 title = "An unsupported contract version refuses the operation while diagnosis still runs"
 milestone = "M2"
-status = "pending"
+status = "executable"
 contract = """
 Given a vault whose committed contract declares a format version above the
 range the tool supports, and separately one declaring a version below that

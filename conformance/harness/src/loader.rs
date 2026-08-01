@@ -13,7 +13,8 @@ use std::path::{Path, PathBuf};
 
 use crate::error::HarnessError;
 use crate::schema::{
-    CorpusStatus, Profile, Scenario, is_kebab_case, parse_profile, parse_scenario,
+    CORPORA_EVER_BUILT, CorpusStatus, Profile, Scenario, is_kebab_case, parse_profile,
+    parse_scenario,
 };
 use crate::{profiles_dir, scenarios_dir};
 
@@ -55,8 +56,9 @@ pub fn load_scenarios_from(dir: &Path) -> Result<Vec<Scenario>, HarnessError> {
 /// directory name and is kebab-case; `persona` and `corpus_milestone` are
 /// non-empty; `distinguishing_axes` is non-empty; the declared `corpus`
 /// status matches the disk (`built` requires `corpus/` to exist, `scheduled`
-/// requires it not to). Roster completeness is asserted by tests against
-/// [`crate::REQUIRED_PROFILES`].
+/// requires it not to); and that no profile named in
+/// [`crate::CORPORA_EVER_BUILT`] has gone back to `scheduled`. Roster
+/// completeness is asserted by tests against [`crate::REQUIRED_PROFILES`].
 pub fn load_profiles() -> Result<Vec<Profile>, HarnessError> {
     load_profiles_from(&profiles_dir())
 }
@@ -178,8 +180,29 @@ fn load_profile_dir(subdir: &Path) -> Result<Profile, HarnessError> {
         .and_then(|s| s.to_str())
         .unwrap_or_default();
     validate_profile(&profile, dirname)?;
+    check_corpus_ratchet(&profile)?;
     check_corpus_consistency(&profile, &subdir.join("corpus"))?;
     Ok(profile)
+}
+
+/// A corpus that has been built never returns to `scheduled`.
+///
+/// The check is by name against [`CORPORA_EVER_BUILT`], so the harness's own
+/// synthetic loader tests — which use names no profile has — are unaffected,
+/// and so the only way to un-build a corpus is to delete its entry from that
+/// list in a commit somebody reviews.
+fn check_corpus_ratchet(profile: &Profile) -> Result<(), HarnessError> {
+    if profile.corpus == CorpusStatus::Scheduled
+        && CORPORA_EVER_BUILT.contains(&profile.name.as_str())
+    {
+        return Err(HarnessError::Invalid(format!(
+            "profile `{}` declares corpus = \"scheduled\", but a corpus that has been built never \
+             returns to scheduled: reverting the status removes the profile from every scenario \
+             at once. Removing `{}` from CORPORA_EVER_BUILT is the reviewable act.",
+            profile.name, profile.name
+        )));
+    }
+    Ok(())
 }
 
 /// A profile directory holds only `PROFILE.toml`, `PROFILE.md`, and (once

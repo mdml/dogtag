@@ -1,7 +1,7 @@
 id = "conforming-contract-loads-with-zero-diagnostics"
 title = "A conforming committed contract loads with zero diagnostics"
 milestone = "M2"
-status = "pending"
+status = "executable"
 contract = """
 Given a vault whose committed contract satisfies every rule the format states:
 its declared version is supported, it carries no key the version does not

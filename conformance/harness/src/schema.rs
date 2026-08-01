@@ -17,6 +17,18 @@ use serde::Deserialize;
 /// and a surplus profile is a fixture nothing specified.
 pub const REQUIRED_PROFILES: [&str; 4] = ["dense", "docs", "records", "starter"];
 
+/// Every profile whose corpus has ever been built. The list only grows.
+///
+/// `corpus = "scheduled"` is the one profile-side exemption channel the schema
+/// cannot close: it removes a profile from every scenario at once, and the
+/// loader's only other check is disk consistency — so deleting a corpus
+/// directory and reverting the status is a mechanically valid way to make a
+/// failing profile stop failing. Nothing else in the harness ratchets, so this
+/// list does: [`crate::load_profiles_from`] refuses a profile named here that
+/// declares `scheduled`, which turns "quietly unbuild the corpus" into
+/// "delete a line from this list", a named, greppable, reviewable act.
+pub const CORPORA_EVER_BUILT: &[&str] = &["dense", "starter"];
+
 /// A golden conformance scenario, one per file in `conformance/scenarios/`.
 ///
 /// `deny_unknown_fields` is the structural no-waiver enforcement: there is

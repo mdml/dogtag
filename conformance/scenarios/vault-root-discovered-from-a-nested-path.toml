@@ -1,7 +1,7 @@
 id = "vault-root-discovered-from-a-nested-path"
 title = "Discovery from a nested path resolves the nearest vault root, canonically"
 milestone = "M2"
-status = "pending"
+status = "executable"
 contract = """
 Given a vault whose root holds the committed contract, a directory nested
 some levels beneath that root, and a second path that reaches the same root

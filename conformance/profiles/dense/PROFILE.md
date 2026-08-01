@@ -1,7 +1,7 @@
 # Fixture profile: `dense`
 
 **Stands for:** the PKM enthusiast with an established corpus.
-**Corpus:** scheduled, built at M2 (the milestone that defines the committed vault-contract format).
+**Corpus:** built at M2 (the milestone that defines the committed vault-contract format).
 
 ## Distinguishing axes
 
@@ -21,6 +21,6 @@ At least two identity-bearing types, exactly one catch-all, at least one closed-
 
 The floor deliberately does not require every property value kind to be used: a kind nobody reaches for should be visible as unused, and mandating coverage would make this fixture, rather than a real corpus, the reason a kind stays in the lattice.
 
-## Why it is not built yet
+## What the corpus holds now
 
-The committed vault-contract format is an M2 decision. Writing this corpus before that format exists would freeze a guess and then defend it; the specification lands now, the contract lands with the format it must be written in, and the notes land with the document model at M3.
+`corpus/.dogtag/contract.toml` — a vault root and its committed contract, and nothing else. The notes land at M3, with the document model they must be written in.

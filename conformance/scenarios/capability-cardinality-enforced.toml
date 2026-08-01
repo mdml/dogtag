@@ -1,7 +1,7 @@
 id = "capability-cardinality-enforced"
 title = "Capability enumeration and cardinality are enforced when the contract loads"
 milestone = "M2"
-status = "pending"
+status = "executable"
 contract = """
 Given contracts that assign capabilities to their declared types, where the
 identity-bearing capability admits any number of types (0..n), the catch-all

@@ -1,7 +1,7 @@
 id = "contract-loads-with-provenance"
 title = "A committed contract loads with per-setting provenance"
 milestone = "M2"
-status = "pending"
+status = "executable"
 contract = """
 Given a vault whose committed contract declares its types, properties,
 relationships, capabilities, lifecycle declaration, and write policy, and a

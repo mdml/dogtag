@@ -1,7 +1,7 @@
 id = "incomplete-vault-root-halts-discovery"
 title = "A vault root missing its committed contract halts discovery instead of delegating upward"
 milestone = "M2"
-status = "pending"
+status = "executable"
 contract = """
 Given a vault whose root holds the committed contract, and beneath it a
 directory that carries the configuration location a vault root uses but does
