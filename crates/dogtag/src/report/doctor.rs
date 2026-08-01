@@ -108,6 +108,9 @@ const CLASSES: &[(VersionClass, &str)] = &[
 
 /// Why a record contributes no facts at all, per state.
 ///
+/// How the text names a run whose selection resolved no vault.
+const NO_ROOT: &str = "none resolved";
+
 /// A *loaded* record is absent from this table on purpose: a loaded record that
 /// declares no actor has said something, and "not evaluated" would be false.
 const RECORD_SILENCE: &[(&str, &str)] = &[
@@ -119,7 +122,9 @@ const RECORD_SILENCE: &[(&str, &str)] = &[
 ///
 /// The output ends in a newline and holds no colour, no timestamp and no
 /// absolute path but the vault root, so the same vault renders identically on
-/// every machine.
+/// every machine. The discovery and trust diagnostics it carries do name
+/// machine paths; that is the decision recorded in the compatibility record,
+/// not an exception taken here.
 pub fn doctor_text(report: &DoctorReport) -> String {
     let mut lines = vault_block(report);
     lines.extend(contract_block(report));
@@ -132,7 +137,7 @@ pub fn doctor_text(report: &DoctorReport) -> String {
 fn vault_block(report: &DoctorReport) -> Vec<String> {
     vec![
         "vault".to_owned(),
-        FIELD.row("root", &report.root),
+        FIELD.row("root", report.root.as_deref().unwrap_or(NO_ROOT)),
         FIELD.row("selected by", &report.selection.describe()),
     ]
 }

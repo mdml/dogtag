@@ -12,14 +12,13 @@
 //! still reported, and each section says *not evaluated* with the reason. The
 //! one thing it cannot report on is a vault it could not resolve at all.
 
-use dogtag::diagnostic::{Diagnostic, render_plain};
 use dogtag::installation::Installation;
-use dogtag::report::{DoctorReport, doctor_json, doctor_report, doctor_text};
+use dogtag::report::{DoctorReport, doctor_json, doctor_report, doctor_text, doctor_unresolved};
 use dogtag::vault::{inspect_root_trust, open};
 
 use crate::environment::Environment;
 use crate::output::{self, Rendering};
-use crate::select::{Selected, select};
+use crate::select::{Selected, Unresolved, select};
 use crate::{DoctorArgs, DoctorFormat, exit};
 
 /// Reports on the selected vault, and answers with the run's exit code.
@@ -27,7 +26,7 @@ pub fn run(environment: &Environment, args: &DoctorArgs) -> i32 {
     let installation = environment.installation();
     match select(environment, args.vault.requested(), &installation) {
         Ok(selected) => report(environment, args, selected, installation),
-        Err(diagnostics) => refuse(environment, &diagnostics, args.strict),
+        Err(refused) => unresolved(environment, args, &installation, refused),
     }
 }
 
@@ -62,16 +61,20 @@ fn write(environment: &Environment, format: DoctorFormat, report: &DoctorReport)
     }
 }
 
-/// The one thing `doctor` cannot report on: a vault it could not resolve.
+/// A run whose selection resolved no vault.
 ///
-/// There is no report to write, so nothing reaches standard output at all —
-/// a consumer piping `--format json` receives valid JSON or nothing, never a
-/// refusal it cannot parse. The diagnostics name what was looked for and what
-/// was not found.
-fn refuse(environment: &Environment, diagnostics: &[Diagnostic], strict: bool) -> i32 {
-    output::to_stderr(
-        environment,
-        Rendering::diagnostics(&render_plain(diagnostics)),
-    );
-    exit::code_for(diagnostics, strict)
+/// `doctor` never refuses: a selection that named nothing is exactly when a
+/// reader most needs what *is* known — whether an installation record exists,
+/// what it declares, and what was looked for. The report is written in the
+/// format that was asked for, with every vault-dependent section saying *not
+/// evaluated*, so a `--format json` consumer parses one shape either way.
+fn unresolved(
+    environment: &Environment,
+    args: &DoctorArgs,
+    installation: &Installation,
+    refused: Unresolved,
+) -> i32 {
+    let report = doctor_unresolved(installation, refused.selection, &refused.diagnostics);
+    write(environment, args.format, &report);
+    exit::code(report.counts(), args.strict)
 }

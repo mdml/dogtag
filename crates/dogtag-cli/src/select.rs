@@ -38,6 +38,19 @@ use dogtag::vault::{Resolved, VaultRoot, discover, root_at};
 
 use crate::environment::Environment;
 
+/// A selection that named no vault, and what refused it.
+///
+/// The selection is carried even here: *which vault was asked for* is known
+/// whether or not one was found, and it is the first thing a reader of a
+/// failed run needs. Discarding it was what left `doctor` with nothing to
+/// report and no choice but to refuse.
+pub struct Unresolved {
+    /// Which route was taken, and the argument that drove it.
+    pub selection: Selection,
+    /// The diagnostics that refused it.
+    pub diagnostics: Vec<Diagnostic>,
+}
+
 /// A resolved vault, and the decision that resolved it.
 pub struct Selected {
     /// The root, verified by the SDK.
@@ -85,7 +98,7 @@ pub fn select(
     environment: &Environment,
     flag: Option<&str>,
     installation: &Installation,
-) -> Result<Selected, Vec<Diagnostic>> {
+) -> Result<Selected, Unresolved> {
     match given(flag, environment) {
         Some((argument, source)) => explicit(argument, source, environment, installation),
         None => discovered(environment),
@@ -114,7 +127,7 @@ fn explicit(
     source: Source,
     environment: &Environment,
     installation: &Installation,
-) -> Result<Selected, Vec<Diagnostic>> {
+) -> Result<Selected, Unresolved> {
     let (route, resolved) = if is_path(argument) {
         (
             source.path,
@@ -123,13 +136,22 @@ fn explicit(
     } else {
         (source.name, registered(argument, installation))
     };
+    let selection = Selection::new(route, Some(argument.to_owned()));
     // Neither route walks, but either can resolve through a symlink and hand
     // back a root the caller did not type. That info is the SDK's, and this is
     // where it reaches the report.
-    let (root, diagnostics) = resolved?.into_parts();
+    let (root, diagnostics) = match resolved {
+        Ok(resolved) => resolved.into_parts(),
+        Err(diagnostics) => {
+            return Err(Unresolved {
+                selection,
+                diagnostics,
+            });
+        }
+    };
     Ok(Selected {
         root,
-        selection: Selection::new(route, Some(argument.to_owned())),
+        selection,
         diagnostics,
     })
 }
@@ -177,15 +199,19 @@ fn registered(name: &str, installation: &Installation) -> Result<Resolved, Vec<D
 }
 
 /// The vault the current directory is inside.
-fn discovered(environment: &Environment) -> Result<Selected, Vec<Diagnostic>> {
+fn discovered(environment: &Environment) -> Result<Selected, Unresolved> {
     let found = discover(environment.current_dir());
+    let selection = Selection::new(SelectionRoute::Discovery, None);
     match found.root {
         Some(root) => Ok(Selected {
             root,
-            selection: Selection::new(SelectionRoute::Discovery, None),
+            selection,
             diagnostics: found.diagnostics,
         }),
-        None => Err(found.diagnostics),
+        None => Err(Unresolved {
+            selection,
+            diagnostics: found.diagnostics,
+        }),
     }
 }
 

@@ -138,7 +138,9 @@ struct DoctorWire<'a> {
 
 #[derive(Serialize)]
 struct VaultWire<'a> {
-    root: &'a str,
+    /// `null` when no vault resolved: the key is always present, so a consumer
+    /// reads one shape whether or not the run found a vault.
+    root: Option<&'a str>,
     selection: SelectionWire<'a>,
 }
 
@@ -348,7 +350,7 @@ struct ProvenanceWire<'a> {
 
 fn vault_wire(report: &DoctorReport) -> VaultWire<'_> {
     VaultWire {
-        root: &report.root,
+        root: report.root.as_deref(),
         selection: SelectionWire {
             how: report.selection.how().as_str(),
             requested: report.selection.requested(),
