@@ -569,7 +569,7 @@ mod tests {
     use super::super::{Selection, SelectionRoute, doctor_report};
     use super::*;
     use crate::contract::UnresolvedReason;
-    use crate::diagnostic::{KernelDiagnostic, Position, Span};
+    use crate::diagnostic::{KernelDiagnostic, Position, Span, VaultPath};
     use crate::installation::parse_installation;
     use crate::vault::open;
     use serde_json::Value;
@@ -853,7 +853,7 @@ mod tests {
     #[test]
     fn a_diagnostic_renders_its_identifier_location_evidence_and_help() {
         let tree = Tree::new("json-diagnostics");
-        let file = FileRef::InVault(".dogtag/contract.toml".to_owned());
+        let file = FileRef::InVault(VaultPath::kernel(".dogtag/contract.toml"));
         let planted = Diagnostic::kernel(KernelDiagnostic::ContractMultipleCatchAll, "two")
             .at(Location::in_file(
                 file.clone(),

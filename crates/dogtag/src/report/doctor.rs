@@ -210,6 +210,9 @@ fn version_text(facts: &VersionFacts) -> String {
     let range = format!("supported {}..={}", facts.min, facts.max);
     match (facts.found, facts.classification) {
         (Some(found), Some(class)) => format!("{found} ({}; {range})", class_text(class)),
+        (None, Some(class)) => {
+            format!("beyond `0..={}` ({}; {range})", u32::MAX, class_text(class))
+        }
         _ => format!("not declared ({range})"),
     }
 }
@@ -374,6 +377,17 @@ mod tests {
             &format!("dialect         not evaluated ({reason})\n"),
         );
         assert_holds(&rendered, "  actor         A Maintainer\n");
+        assert_holds(&rendered, "error[compat.contract-too-new]");
+    }
+
+    #[test]
+    fn a_version_no_u32_holds_is_reported_as_too_new_rather_than_as_undeclared() {
+        let tree = Tree::new("text-beyond-domain");
+        let rendered = text_of(&tree, Body::new("contract_version = 4294967296\n"), RECORD);
+        assert_holds(
+            &rendered,
+            "  version       beyond `0..=4294967295` (too new; supported 1..=1)\n",
+        );
         assert_holds(&rendered, "error[compat.contract-too-new]");
     }
 

@@ -10,17 +10,21 @@
 //! - [`location`] holds the two file references and spans.
 //! - [`order`] holds the deterministic total order.
 //! - [`render`] holds the colourless plain-text rendering.
+//! - [`vault_path`] holds the spelling of an in-vault path, and the only two
+//!   doors that produce one.
 
 pub mod id;
 pub mod location;
 pub mod order;
 pub mod render;
+pub mod vault_path;
 
 use core::fmt;
 
 pub use id::{DiagnosticId, InvalidExternalId, KernelDiagnostic};
 pub use location::{FileRef, Location, Position, Span};
 pub use render::render_plain;
+pub use vault_path::VaultPath;
 
 /// How much a diagnostic matters.
 ///
@@ -242,7 +246,7 @@ mod tests {
 
     fn contract_location() -> Location {
         Location::in_file(
-            FileRef::InVault(".dogtag/contract.toml".to_owned()),
+            FileRef::InVault(VaultPath::kernel(".dogtag/contract.toml")),
             Span::at(Position::new(4, 3, 31)),
         )
     }

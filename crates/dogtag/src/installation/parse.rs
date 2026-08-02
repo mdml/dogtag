@@ -131,8 +131,30 @@ struct Written {
 
 /// The version the record declares, and where it is written.
 struct Declared {
-    version: u32,
+    version: Version,
     span: Range<usize>,
+}
+
+/// A declared version, whether or not a `u32` holds it.
+///
+/// The domain the record declares is every whole number 0 or above, and
+/// classification is total over it, so a literal too large for a `u32` is
+/// *above the supported range* rather than outside the domain. It travels as
+/// the file's own bytes because a message may not restate it as a number it is
+/// not.
+enum Version {
+    Held(u32),
+    Beyond(String),
+}
+
+impl Version {
+    /// The version as a message names it.
+    fn found(&self) -> String {
+        match self {
+            Self::Held(version) => version.to_string(),
+            Self::Beyond(literal) => literal.clone(),
+        }
+    }
 }
 
 /// A registry entry, and the span of the name that identifies it.
@@ -236,23 +258,23 @@ fn walk(
     supported: RangeInclusive<u32>,
 ) -> Installation {
     let mut sink = Sink::new(text);
-    let Some(declared) = declared_version(&mut sink, document.get_ref()) else {
+    let Some(declared) = declared_version(&mut sink, text, document.get_ref()) else {
         return sink.refused();
     };
-    if !supported_here(&mut sink, &declared, supported) {
+    let Some(version) = usable_version(&mut sink, &declared, supported) else {
         return sink.refused();
-    }
+    };
     let root = Scope {
         section: &ROOT,
         table: document.get_ref(),
         header: document.span(),
     };
-    let parsed = body(&mut sink, &root, declared.version);
+    let parsed = body(&mut sink, &root, version);
     sink.finish(parsed)
 }
 
 /// The version the record declares, or nothing when it declares none usably.
-fn declared_version(sink: &mut Sink<'_>, root: &DeTable<'_>) -> Option<Declared> {
+fn declared_version(sink: &mut Sink<'_>, text: &Text, root: &DeTable<'_>) -> Option<Declared> {
     let Some(value) = document::get(root, VERSION_KEY) else {
         sink.push(version_missing());
         return None;
@@ -265,10 +287,24 @@ fn declared_version(sink: &mut Sink<'_>, root: &DeTable<'_>) -> Option<Declared>
     match version_from(integer) {
         Some(version) => {
             sink.remember(VERSION_KEY.to_owned(), span.clone());
-            Some(Declared { version, span })
+            Some(Declared {
+                version: Version::Held(version),
+                span,
+            })
         }
-        None => version_invalid(sink, out_of_domain(integer), span),
+        None if negative(integer) => version_invalid(sink, out_of_domain(integer), span),
+        None => Some(Declared {
+            version: Version::Beyond(text.as_str()[span.clone()].to_owned()),
+            span,
+        }),
     }
+}
+
+/// Whether the declared integer is below the domain rather than above it.
+///
+/// [`DeInteger::as_str`] keeps the sign, so this is the whole question.
+fn negative(integer: &DeInteger<'_>) -> bool {
+    integer.as_str().starts_with('-')
 }
 
 /// The declared version as a `u32`, or nothing when it is not one.
@@ -283,8 +319,7 @@ fn version_from(integer: &DeInteger<'_>) -> Option<u32> {
 
 fn out_of_domain(integer: &DeInteger<'_>) -> String {
     format!(
-        "`{VERSION_KEY}` must be an integer from 0 to {}, but is `{}`",
-        u32::MAX,
+        "`{VERSION_KEY}` must be a whole number 0 or above, but is `{}`",
         integer.as_str()
     )
 }
@@ -307,24 +342,32 @@ fn version_invalid(sink: &mut Sink<'_>, message: String, span: Range<usize>) -> 
     None
 }
 
-/// Whether the declared version is read any further, noting why when it is not.
-fn supported_here(
+/// The version the body is walked against, or nothing when the record is not
+/// read any further, noting why either way.
+fn usable_version(
     sink: &mut Sink<'_>,
     declared: &Declared,
     supported: RangeInclusive<u32>,
-) -> bool {
-    let class = compat::classify(declared.version, supported.clone());
-    if let Some(note) = compat_note(class, declared.version, &supported) {
+) -> Option<u32> {
+    let class = match declared.version {
+        Version::Held(version) => compat::classify(version, supported.clone()),
+        // Above every range this SDK can support, whatever the range is.
+        Version::Beyond(_) => VersionClass::TooNew,
+    };
+    if let Some(note) = compat_note(class, &declared.version.found(), &supported) {
         let at = sink.at(declared.span.clone());
         sink.push(note.at(at));
     }
-    class.is_usable()
+    match declared.version {
+        Version::Held(version) if class.is_usable() => Some(version),
+        _ => None,
+    }
 }
 
 /// The compatibility diagnostic a classification calls for, if it calls for one.
 fn compat_note(
     class: VersionClass,
-    found: u32,
+    found: &str,
     supported: &RangeInclusive<u32>,
 ) -> Option<Diagnostic> {
     match class {
@@ -335,7 +378,7 @@ fn compat_note(
     }
 }
 
-fn below_floor(found: u32, supported: &RangeInclusive<u32>) -> Diagnostic {
+fn below_floor(found: &str, supported: &RangeInclusive<u32>) -> Diagnostic {
     Diagnostic::kernel(
         KernelDiagnostic::CompatInstallationBelowSupportedFloor,
         format!(
@@ -349,7 +392,7 @@ fn below_floor(found: u32, supported: &RangeInclusive<u32>) -> Diagnostic {
     )
 }
 
-fn too_new(found: u32, supported: &RangeInclusive<u32>) -> Diagnostic {
+fn too_new(found: &str, supported: &RangeInclusive<u32>) -> Diagnostic {
     Diagnostic::kernel(
         KernelDiagnostic::CompatInstallationTooNew,
         format!(
@@ -360,7 +403,7 @@ fn too_new(found: u32, supported: &RangeInclusive<u32>) -> Diagnostic {
     .with_help("upgrade dogtag to a release that reads this record's format")
 }
 
-fn newer_available(found: u32, supported: &RangeInclusive<u32>) -> Diagnostic {
+fn newer_available(found: &str, supported: &RangeInclusive<u32>) -> Diagnostic {
     Diagnostic::kernel(
         KernelDiagnostic::CompatNewerInstallationFormatAvailable,
         format!(
@@ -748,10 +791,13 @@ mod tests {
     }
 
     #[test]
-    fn a_version_beyond_a_u32_is_refused() {
-        assert_eq!(
-            only("installation_version = 4294967296\n"),
-            "installation.version-invalid"
+    fn a_version_beyond_a_u32_is_classified_rather_than_refused_as_a_non_version() {
+        let installation = refusal("installation_version = 4294967296\n");
+        assert_eq!(ids(&installation), ["compat.installation-too-new"]);
+        assert!(
+            installation.diagnostics()[0]
+                .message
+                .contains("version 4294967296")
         );
     }
 

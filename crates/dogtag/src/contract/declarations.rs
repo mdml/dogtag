@@ -21,7 +21,7 @@ use crate::document;
 use super::model::{
     Capability, PropertyDecl, PropertyKind, RelationshipDecl, ScalarKind, TypeDecl,
 };
-use super::sink::{Claim, KeyPath, Repeat, Report, Section, Seen, Sink};
+use super::sink::{Claim, KeyPath, Named, Repeat, Report, Section, Seen, Sink};
 
 /// Every key `[[type]]` defines at contract version 1.
 const TYPE_KEYS: &[&str] = &["capabilities", "name", "property", "relationship"];
@@ -118,13 +118,18 @@ fn capabilities(sink: &mut Sink<'_>, section: &Section<'_, '_>) -> Vec<Capabilit
         return Vec::new();
     };
     sink.written(leaf.key, value.span());
+    let mut seen = Seen::new();
     array
         .iter()
-        .filter_map(|entry| capability(sink, entry))
+        .filter_map(|entry| capability(sink, entry, &mut seen))
         .collect()
 }
 
-fn capability(sink: &mut Sink<'_>, value: &Spanned<DeValue<'_>>) -> Option<Capability> {
+fn capability(
+    sink: &mut Sink<'_>,
+    value: &Spanned<DeValue<'_>>,
+    seen: &mut Seen,
+) -> Option<Capability> {
     // The provenance of the array as a whole is recorded by the caller, so this
     // read deliberately addresses nothing and records nothing.
     let spelled = sink.string(value, KeyPath::nameless().leaf("capabilities"))?;
@@ -137,7 +142,17 @@ fn capability(sink: &mut Sink<'_>, value: &Spanned<DeValue<'_>>) -> Option<Capab
         ));
         let at = sink.location(value.span());
         sink.report(KernelDiagnostic::ContractUnknownCapability, report, at);
+        return None;
     }
+    let claim = Claim {
+        message: format!("the type declares `{spelled}` twice"),
+        kind: KernelDiagnostic::ContractDuplicateCapability,
+        named: Named {
+            text: spelled,
+            span: value.span(),
+        },
+    };
+    sink.keep(seen, claim)?;
     found
 }
 
@@ -698,6 +713,26 @@ mod tests {
         assert_eq!(
             help,
             Some("the capabilities are `identity-bearing`, `catch-all`, `closed-write`")
+        );
+    }
+
+    #[test]
+    fn one_type_declaring_a_capability_twice_points_at_both() {
+        let read = read("[[type]]\nname = \"a\"\ncapabilities = [\"catch-all\", \"catch-all\"]\n");
+        assert_eq!(ids(&read), ["contract.duplicate-capability"]);
+        assert_eq!(read.diagnostics.as_slice()[0].related.len(), 1);
+        assert_eq!(read.types[0].capabilities(), [Capability::CatchAll]);
+    }
+
+    #[test]
+    fn a_repeated_unknown_capability_is_unknown_each_time_rather_than_a_repeat() {
+        // Nothing is claimed for a name the format does not define, so the
+        // narrower fault is reported for every occurrence and never replaced by
+        // the wider one.
+        let read = read("[[type]]\nname = \"a\"\ncapabilities = [\"nope\", \"nope\"]\n");
+        assert_eq!(
+            ids(&read),
+            ["contract.unknown-capability", "contract.unknown-capability"]
         );
     }
 

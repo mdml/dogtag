@@ -37,10 +37,12 @@ pub fn compare(left: &Diagnostic, right: &Diagnostic) -> Ordering {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::diagnostic::{DiagnosticList, FileRef, KernelDiagnostic, Location, Position, Span};
+    use crate::diagnostic::{
+        DiagnosticList, FileRef, KernelDiagnostic, Location, Position, Span, VaultPath,
+    };
 
-    fn vault(path: &str) -> FileRef {
-        FileRef::InVault(path.to_owned())
+    fn vault(path: &'static str) -> FileRef {
+        FileRef::InVault(VaultPath::kernel(path))
     }
 
     fn contract() -> FileRef {

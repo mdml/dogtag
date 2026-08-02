@@ -126,11 +126,11 @@ impl Provenance {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::diagnostic::{FileRef, Position, Span};
+    use crate::diagnostic::{FileRef, Position, Span, VaultPath};
 
     fn contract_location() -> Location {
         Location::in_file(
-            FileRef::InVault(".dogtag/contract.toml".to_owned()),
+            FileRef::InVault(VaultPath::kernel(".dogtag/contract.toml")),
             Span::at(Position::new(4, 9, 31)),
         )
     }
