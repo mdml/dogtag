@@ -15,7 +15,7 @@ The next installed prerelease, `0.1.0-beta.1`, opens a real vault, explains its 
 - [ ] Publish and install `0.1.0-beta.1` from the public release.
 - [ ] Complete the cutover: seven days of parallel running before the incumbent configuration check is retired.
 
-**Stopped at the merge gate.** GitHub Actions is not assigning runners for this repository, so required checks cannot execute — which is what the last two boxes are waiting on, since neither a publication nor the cutover clock may start from a commit no required check has passed. The implementation is written on a branch and verified locally under `just gate`; nothing pushes, merges, tags, or publishes until required checks run and pass. See [the release and cutover record](decisions/engineering/2026-07-31-m2-release-and-cutover.md).
+**The merge gate cleared 2026-08-02.** The runner backlog ended, required checks executed and passed on the merge, and the M2 implementation — including everything the 2026-08-01 review pass changed — is on `main`, so the publication-gating section of [the release and cutover record](decisions/engineering/2026-07-31-m2-release-and-cutover.md) is spent. The last two boxes are now the whole of M2: tag `v0.1.0-beta.1` from the green merge commit, inspect and publish the draft release, verify the installation from the public release on both platforms, and let the seven-day parallel run the cutover requires do its work.
 
 ## Next — M3, read and validate
 
