@@ -13,6 +13,7 @@ Stdlib only (unittest). Run directly, or via `just check`.
 import shutil
 import sys
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
 
@@ -134,8 +135,17 @@ class PinCheckerTest(unittest.TestCase):
         self.assert_rejected("coverage-baseline.toml")
 
     def test_a_semver_compatible_sdk_version_bump_is_caught(self) -> None:
-        """Cargo resolves 0.1.1 against a ^0.1.0-beta.0 requirement silently."""
-        self.edit("Cargo.toml", 'version = "0.1.0-beta.0"', 'version = "0.1.1"')
+        """Cargo resolves a compatible bump against the caret pin silently.
+
+        The current version is read from the tree, not hardcoded: this test
+        must keep failing-the-right-way across every release, and a literal
+        would break the suite on each legitimate bump instead.
+        """
+        manifest = tomllib.loads((self.root / "Cargo.toml").read_text())
+        current = manifest["workspace"]["package"]["version"]
+        bumped = "0.1.9999"
+        self.assertNotEqual(current, bumped)
+        self.edit("Cargo.toml", f'version = "{current}"', f'version = "{bumped}"')
         self.assert_rejected("bump both together")
 
 
