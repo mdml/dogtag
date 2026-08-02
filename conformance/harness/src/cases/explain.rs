@@ -308,13 +308,14 @@ fn lifecycle_detail(lifecycle: &LifecycleDecl, markdown: &str, json: &str) -> Ch
 
 /// The JSON carries provenance for every recorded leaf, and for nothing else.
 fn provenance_covers_every_leaf(contract: &Contract, rendered: &Rendered) -> Checked {
-    let recorded: Vec<String> = contract
-        .provenance()
-        .entries()
-        .map(|entry| entry.key.clone())
-        .collect();
+    // Derived from the resolved contract, not from `contract.provenance()`.
+    // The JSON's provenance array is *built* from that map, so comparing the
+    // two could only ever catch serde dropping a field: it proved the renderer
+    // copied the map and never that the map covers the model. A leaf the
+    // parser forgets to record is invisible to that shape and reported by this
+    // one.
     require_same_names(
-        &recorded,
+        &super::provenance::contract_keys(contract),
         &scan::json_strings(&rendered.json, "key"),
         "the JSON's provenance",
     )
