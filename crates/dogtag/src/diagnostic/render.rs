@@ -83,11 +83,11 @@ fn location_text(location: &Location) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::diagnostic::{FileRef, KernelDiagnostic, Position, Severity, Span};
+    use crate::diagnostic::{FileRef, KernelDiagnostic, Position, Severity, Span, VaultPath};
     use crate::text::headline_lines;
 
     fn contract() -> FileRef {
-        FileRef::InVault(".dogtag/contract.toml".to_owned())
+        FileRef::InVault(VaultPath::kernel(".dogtag/contract.toml"))
     }
 
     fn at(line: u32, column: u32, offset: usize) -> Location {

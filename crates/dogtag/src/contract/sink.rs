@@ -14,7 +14,9 @@ use core::ops::Range;
 use toml::Spanned;
 use toml::de::{DeArray, DeTable, DeValue};
 
-use crate::diagnostic::{Diagnostic, DiagnosticList, FileRef, KernelDiagnostic, Location, Related};
+use crate::diagnostic::{
+    Diagnostic, DiagnosticList, FileRef, KernelDiagnostic, Location, Related, VaultPath,
+};
 use crate::document::{self, TypeMismatch};
 use crate::encoding::Text;
 use crate::provenance::{Provenance, ProvenanceEntry, Source};
@@ -25,7 +27,7 @@ use super::CONTRACT_PATH;
 /// names, whatever path the bytes were read from. A machine path never reaches
 /// structured output.
 pub(crate) fn contract_file() -> FileRef {
-    FileRef::InVault(CONTRACT_PATH.to_owned())
+    FileRef::InVault(VaultPath::kernel(CONTRACT_PATH))
 }
 
 /// The dotted provenance path of a declaration.

@@ -51,10 +51,15 @@ pub(crate) struct Declared {
 pub(crate) enum DeclaredVersion {
     /// A version the supported range can be asked about.
     Found(Declared),
+    /// A whole number 0 or above that no `u32` holds. It is above every range
+    /// this SDK can support, so it is the version gate's refusal rather than
+    /// the parser's; the literal travels because a message may not restate it
+    /// as a number it is not.
+    Beyond(String),
     /// `contract.version-missing`, when the key is absent, or
     /// `contract.version-invalid` when its value is not an integer the domain
-    /// admits — every whole number a `u32` holds, so a negative and an
-    /// over-large one are both refused here rather than silently wrapping.
+    /// admits — the domain is every whole number 0 or above, so a negative is
+    /// refused here and an over-large one is classified instead.
     Refused(Diagnostic),
 }
 
@@ -75,15 +80,24 @@ pub(crate) fn version(text: &Text, root: &DeTable<'_>) -> DeclaredVersion {
             version: found,
             at: value.span(),
         }),
-        None => DeclaredVersion::Refused(invalid(text, out_of_domain(integer), value.span())),
+        None if negative(integer) => {
+            DeclaredVersion::Refused(invalid(text, out_of_domain(integer), value.span()))
+        }
+        None => DeclaredVersion::Beyond(text.as_str()[value.span()].to_owned()),
     }
 }
 
+/// Whether the declared integer is below the domain rather than above it.
+///
+/// [`DeInteger::as_str`] keeps the sign, so this is the whole question: a
+/// literal that is not negative and does not fit a `u32` is above every
+/// supported range, and above is classified rather than refused.
+fn negative(integer: &DeInteger<'_>) -> bool {
+    integer.as_str().starts_with('-')
+}
+
 fn out_of_domain(integer: &DeInteger<'_>) -> String {
-    format!(
-        "`contract_version` is `{integer}`, which is outside `0..={}`",
-        u32::MAX
-    )
+    format!("`contract_version` is `{integer}`, which is not a whole number 0 or above")
 }
 
 fn as_u32(integer: &DeInteger<'_>) -> Option<u32> {
@@ -248,22 +262,44 @@ mod tests {
     use crate::contract::sink::tests::{root_of, text_of};
     use crate::diagnostic::DiagnosticList;
 
-    /// What `source` declares where `contract_version` belongs. The diagnostic
-    /// is boxed so this helper's own signature stays narrow.
-    fn declared(source: &str) -> Result<Declared, Box<Diagnostic>> {
+    /// How the first pass answered for `source`.
+    fn first_pass(source: &str) -> DeclaredVersion {
         let text = text_of(source);
         let document = root_of(&text);
-        match version(&text, document.get_ref()) {
-            DeclaredVersion::Found(found) => Ok(found),
-            DeclaredVersion::Refused(diagnostic) => Err(Box::new(diagnostic)),
+        version(&text, document.get_ref())
+    }
+
+    /// The version `source` declares, when it declares one a `u32` holds.
+    fn declared(source: &str) -> Option<Declared> {
+        match first_pass(source) {
+            DeclaredVersion::Found(found) => Some(found),
+            _ => None,
+        }
+    }
+
+    /// The diagnostic that refused `source`, when one did.
+    fn refusal(source: &str) -> Option<Diagnostic> {
+        match first_pass(source) {
+            DeclaredVersion::Refused(diagnostic) => Some(diagnostic),
+            _ => None,
+        }
+    }
+
+    /// The literal `source` declares where no `u32` holds it.
+    fn beyond(source: &str) -> Option<String> {
+        match first_pass(source) {
+            DeclaredVersion::Beyond(literal) => Some(literal),
+            _ => None,
         }
     }
 
     /// The version `source` declares, or the identifier that refused it.
     fn declared_version(source: &str) -> Result<u32, String> {
-        declared(source)
-            .map(|found| found.version)
-            .map_err(|diagnostic| diagnostic.id.as_str().to_owned())
+        match (declared(source), refusal(source)) {
+            (Some(found), _) => Ok(found.version),
+            (None, Some(diagnostic)) => Err(diagnostic.id.as_str().to_owned()),
+            (None, None) => Err("beyond the domain".to_owned()),
+        }
     }
 
     struct Read {
@@ -296,6 +332,7 @@ mod tests {
     #[test]
     fn a_declared_version_is_read_with_its_span() {
         let declared = declared("contract_version = 1\n").expect("a declared version");
+        assert!(refusal("contract_version = 1\n").is_none());
         assert_eq!(declared.version, 1);
         assert_eq!(declared.at, 19..20);
         assert!(format!("{declared:?}").contains("version: 1"));
@@ -324,20 +361,41 @@ mod tests {
     }
 
     #[test]
-    fn a_negative_or_over_large_version_is_invalid() {
+    fn a_negative_version_is_below_the_domain_and_invalid() {
         assert_eq!(
             declared_version("contract_version = -1\n"),
             Err("contract.version-invalid".to_owned())
         );
         assert_eq!(
-            declared_version("contract_version = 4294967296\n"),
+            declared_version("contract_version = -0\n"),
             Err("contract.version-invalid".to_owned())
         );
     }
 
     #[test]
+    fn a_version_beyond_a_u32_is_carried_as_the_file_writes_it() {
+        // Not refused here: it is in the domain the format declares, so the
+        // version gate classifies it. The literal is the file's own bytes,
+        // radix prefix and digit separators included.
+        assert_eq!(
+            beyond("contract_version = 4294967296\n").as_deref(),
+            Some("4294967296")
+        );
+        assert_eq!(
+            beyond("contract_version = 0xFFFF_FFFF_F\n").as_deref(),
+            Some("0xFFFF_FFFF_F")
+        );
+        assert_eq!(beyond("contract_version = 1\n"), None);
+        assert_eq!(
+            declared_version("contract_version = 4294967296\n"),
+            Err("beyond the domain".to_owned())
+        );
+        assert!(declared("contract_version = 4294967296\n").is_none());
+    }
+
+    #[test]
     fn an_invalid_version_diagnostic_points_at_the_value() {
-        let diagnostic = *declared("contract_version = -1\n").expect_err("invalid");
+        let diagnostic = refusal("contract_version = -1\n").expect("invalid");
         let span = diagnostic.location.and_then(|at| at.span).expect("a span");
         assert_eq!((span.start.line, span.start.column), (1, 20));
         assert!(diagnostic.help.is_some());

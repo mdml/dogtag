@@ -51,7 +51,8 @@ pub enum KernelDiagnostic {
     ContractMalformedToml,
     /// The contract declares no `contract_version`.
     ContractVersionMissing,
-    /// `contract_version` is not an integer, is negative, or is beyond a `u32`.
+    /// `contract_version` is not an integer, or is negative. A version above the
+    /// domain is the version gate's refusal rather than this one.
     ContractVersionInvalid,
     /// The contract declares a key the version it declares does not define.
     ContractUnknownKey,
@@ -77,6 +78,8 @@ pub enum KernelDiagnostic {
     ContractPropertyKindConflict,
     /// A type declares a capability the format does not define.
     ContractUnknownCapability,
+    /// One type declares the same capability twice.
+    ContractDuplicateCapability,
     /// No type declares the catch-all capability.
     ContractMissingCatchAll,
     /// More than one type declares the catch-all capability.
@@ -131,7 +134,8 @@ pub enum KernelDiagnostic {
     InstallationMalformedToml,
     /// The record declares no `installation_version`.
     InstallationVersionMissing,
-    /// `installation_version` is not an integer, is negative, or is beyond a `u32`.
+    /// `installation_version` is not an integer, or is negative. A version above
+    /// the domain is the version gate's refusal rather than this one.
     InstallationVersionInvalid,
     /// The record declares a key the version it declares does not define. This is what refuses
     /// a local record that tries to supply a contract-owned setting: the authority partition is
@@ -290,6 +294,11 @@ const REGISTRY: &[(KernelDiagnostic, &str, Severity)] = &[
     (
         KernelDiagnostic::ContractUnknownCapability,
         "contract.unknown-capability",
+        Severity::Error,
+    ),
+    (
+        KernelDiagnostic::ContractDuplicateCapability,
+        "contract.duplicate-capability",
         Severity::Error,
     ),
     (
@@ -700,6 +709,7 @@ macro_rules! contract_variants {
             | KernelDiagnostic::ContractDuplicatePredicate
             | KernelDiagnostic::ContractPropertyKindConflict
             | KernelDiagnostic::ContractUnknownCapability
+            | KernelDiagnostic::ContractDuplicateCapability
             | KernelDiagnostic::ContractMissingCatchAll
             | KernelDiagnostic::ContractMultipleCatchAll
             | KernelDiagnostic::ContractUnknownPropertyKind
@@ -812,6 +822,7 @@ fn expected_contract_id(kind: KernelDiagnostic) -> &'static str {
         ContractDuplicatePredicate => "contract.duplicate-predicate",
         ContractPropertyKindConflict => "contract.property-kind-conflict",
         ContractUnknownCapability => "contract.unknown-capability",
+        ContractDuplicateCapability => "contract.duplicate-capability",
         ContractMissingCatchAll => "contract.missing-catch-all",
         ContractMultipleCatchAll => "contract.multiple-catch-all",
         ContractUnknownPropertyKind => "contract.unknown-property-kind",

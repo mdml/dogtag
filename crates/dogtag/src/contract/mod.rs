@@ -181,20 +181,18 @@ fn from_text(text: &Text) -> ContractLoad {
 fn resolve(text: &Text, root: &toml::de::DeTable<'_>) -> ContractLoad {
     let declared = match parse::version(text, root) {
         parse::DeclaredVersion::Found(declared) => declared,
+        parse::DeclaredVersion::Beyond(literal) => {
+            // Above every range this SDK can declare, whatever the range is.
+            return unusable_version(VersionClass::TooNew, &literal, None);
+        }
         parse::DeclaredVersion::Refused(diagnostic) => {
             return refuse(diagnostic, UnresolvedReason::Invalid);
         }
     };
     let class = compat::classify(declared.version, SUPPORTED_CONTRACT_VERSIONS);
     if !class.is_usable() {
-        let unusable = ContractUnresolved {
-            reason: UnresolvedReason::VersionUnusable(class),
-            version: Some(declared.version),
-        };
-        return ContractLoad {
-            contract: Err(unusable),
-            diagnostics: vec![incompatible(class, declared.version)],
-        };
+        let found = declared.version;
+        return unusable_version(class, &found.to_string(), Some(found));
     }
     let mut sink = Sink::new(text, declared.version);
     sink.record(newer_format_available(class, declared.version));
@@ -211,6 +209,18 @@ fn resolve(text: &Text, root: &toml::de::DeTable<'_>) -> ContractLoad {
     ContractLoad {
         contract,
         diagnostics: diagnostics.sorted(),
+    }
+}
+
+/// The refusal a version outside the supported range is, whether or not a
+/// `u32` holds the version it declared.
+fn unusable_version(class: VersionClass, found: &str, version: Option<u32>) -> ContractLoad {
+    ContractLoad {
+        contract: Err(ContractUnresolved {
+            reason: UnresolvedReason::VersionUnusable(class),
+            version,
+        }),
+        diagnostics: vec![incompatible(class, found)],
     }
 }
 
@@ -267,7 +277,7 @@ fn malformed(text: &Text, error: &toml::de::Error) -> Diagnostic {
     .at(at)
 }
 
-fn incompatible(class: VersionClass, found: u32) -> Diagnostic {
+fn incompatible(class: VersionClass, found: &str) -> Diagnostic {
     let (start, end) = (
         SUPPORTED_CONTRACT_VERSIONS.start(),
         SUPPORTED_CONTRACT_VERSIONS.end(),
@@ -671,6 +681,24 @@ mod tests {
             UnresolvedReason::VersionUnusable(VersionClass::TooNew)
         );
         assert_eq!(unresolved.version, Some(2));
+    }
+
+    #[test]
+    fn a_version_beyond_a_u32_is_classified_rather_than_refused_by_the_parser() {
+        // The format's domain is every whole number 0 or above, and
+        // classification is total over it: a version no `u32` holds is above
+        // every supported range, so it is the version gate that refuses it.
+        let load = parse_contract(
+            &CONFORMING.replace("contract_version = 1", "contract_version = 4294967296"),
+        );
+        assert_eq!(ids(&load), ["compat.contract-too-new"]);
+        assert!(load.diagnostics[0].message.contains("version 4294967296"));
+        let unresolved = load.contract.expect_err("unresolved");
+        assert_eq!(
+            unresolved.reason,
+            UnresolvedReason::VersionUnusable(VersionClass::TooNew)
+        );
+        assert_eq!(unresolved.version, None, "no `u32` holds it");
     }
 
     #[test]

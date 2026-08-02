@@ -248,6 +248,17 @@ impl VersionFacts {
             classification: found.map(|version| compat::classify(version, supported.clone())),
         }
     }
+
+    /// The classification of a version no `u32` holds, which is the one case
+    /// where the class is known and the number cannot be reported.
+    fn unrepresentable(class: VersionClass, supported: &RangeInclusive<u32>) -> Self {
+        Self {
+            found: None,
+            min: *supported.start(),
+            max: *supported.end(),
+            classification: Some(class),
+        }
+    }
 }
 
 /// What reading the contract established, whether or not it resolved.
@@ -297,8 +308,22 @@ impl ContractFacts {
             present: unresolved.reason != UnresolvedReason::Missing,
             state: "unresolved",
             reason: Some(unresolved.reason.describe()),
-            version: VersionFacts::new(unresolved.version, &SUPPORTED_CONTRACT_VERSIONS),
+            version: declared_contract_version(unresolved),
         }
+    }
+}
+
+/// What the contract declared where a version belongs.
+///
+/// A version outside the supported range that no `u32` holds is classified
+/// without being representable, so the classification is kept and the number
+/// is reported as undeclared rather than as a number the file does not carry.
+fn declared_contract_version(unresolved: &ContractUnresolved) -> VersionFacts {
+    match (unresolved.version, unresolved.reason) {
+        (None, UnresolvedReason::VersionUnusable(class)) => {
+            VersionFacts::unrepresentable(class, &SUPPORTED_CONTRACT_VERSIONS)
+        }
+        (found, _) => VersionFacts::new(found, &SUPPORTED_CONTRACT_VERSIONS),
     }
 }
 

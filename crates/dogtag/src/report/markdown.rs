@@ -429,7 +429,7 @@ mod tests {
         assert_no_line, rendered, shown,
     };
     use super::*;
-    use crate::diagnostic::{FileRef, Position, Span};
+    use crate::diagnostic::{FileRef, Position, Span, VaultPath};
 
     fn markdown(tree: &Tree, body: Body<'_>, provenance: bool) -> String {
         let (root, contract) = rendered(tree, body);
@@ -438,7 +438,7 @@ mod tests {
 
     fn location(span: Option<Span>) -> Location {
         Location {
-            file: FileRef::InVault(".dogtag/contract.toml".to_owned()),
+            file: FileRef::InVault(VaultPath::kernel(".dogtag/contract.toml")),
             span,
         }
     }

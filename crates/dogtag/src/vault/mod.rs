@@ -40,7 +40,7 @@ use std::borrow::Cow;
 use std::io;
 use std::path::{Path, PathBuf};
 
-use crate::diagnostic::{Diagnostic, KernelDiagnostic};
+use crate::diagnostic::{Diagnostic, KernelDiagnostic, VaultPath};
 
 pub use discover::{Resolved, discover, root_at};
 pub use open::{Opened, open};
@@ -109,11 +109,16 @@ impl VaultRoot {
     /// `None` when `path` is not inside the root, and the empty string for the
     /// root itself.
     ///
+    /// It is also the **only public door** to a [`VaultPath`], and so to
+    /// [`crate::diagnostic::FileRef::InVault`]: a consumer that wants to point
+    /// a diagnostic at a file in a vault has to hold the root that file is in,
+    /// and the stripping is what proves the path was under it.
+    ///
     /// The comparison is lexical: `path` is expected to be canonical already,
     /// because a root is, and because re-resolving a path here would make this
     /// a filesystem operation rather than a rendering.
-    pub fn relative(&self, path: &Path) -> Option<String> {
-        path.strip_prefix(&self.path).ok().map(forward_slashes)
+    pub fn relative(&self, path: &Path) -> Option<VaultPath> {
+        VaultPath::under(&self.path, path)
     }
 
     /// The root as a reader sees it.
@@ -124,16 +129,6 @@ impl VaultRoot {
     pub fn display(&self) -> Cow<'_, str> {
         self.path.to_string_lossy()
     }
-}
-
-/// A relative path written with forward slashes, whatever the platform's
-/// separator is.
-fn forward_slashes(relative: &Path) -> String {
-    relative
-        .components()
-        .map(|component| component.as_os_str().to_string_lossy())
-        .collect::<Vec<_>>()
-        .join("/")
 }
 
 /// What [`discover`] resolved, and what it found on the way.
@@ -197,15 +192,14 @@ mod tests {
     #[test]
     fn a_path_inside_the_root_is_relative_to_it_with_forward_slashes() {
         let contract = root().contract_path();
-        assert_eq!(root().relative(&contract).as_deref(), Some(SENTINEL));
+        let spelled = root().relative(&contract).expect("inside the root");
+        assert_eq!(spelled.as_str(), SENTINEL);
     }
 
     #[test]
     fn the_root_itself_is_the_empty_relative_path() {
-        assert_eq!(
-            root().relative(Path::new("/data/vaults/work")),
-            Some(String::new())
-        );
+        let spelled = root().relative(Path::new("/data/vaults/work"));
+        assert_eq!(spelled.as_ref().map(VaultPath::as_str), Some(""));
     }
 
     #[test]

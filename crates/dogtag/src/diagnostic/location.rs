@@ -18,14 +18,17 @@
 
 use core::fmt;
 
+use super::VaultPath;
 use crate::installation::RECORD_RELATIVE_PATH;
 
 /// The file a diagnostic is about.
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum FileRef {
     /// A path relative to the vault root, always with forward slashes — for
-    /// example `.dogtag/contract.toml`.
-    InVault(String),
+    /// example `.dogtag/contract.toml`. The payload is opaque because the
+    /// spelling is the guarantee; see [`VaultPath`] for what producing one
+    /// proves and what it does not.
+    InVault(VaultPath),
     /// The local installation record, reported unexpanded.
     InstallationRecord,
 }
@@ -46,7 +49,7 @@ impl FileRef {
     /// The path as it is rendered to a reader.
     pub fn display_path(&self) -> &str {
         match self {
-            Self::InVault(path) => path,
+            Self::InVault(path) => path.as_str(),
             Self::InstallationRecord => Self::INSTALLATION_RECORD_PATH,
         }
     }
@@ -170,7 +173,7 @@ mod tests {
     use core::cmp::Ordering;
 
     fn contract() -> FileRef {
-        FileRef::InVault(".dogtag/contract.toml".to_owned())
+        FileRef::InVault(VaultPath::kernel(".dogtag/contract.toml"))
     }
 
     #[test]
@@ -257,8 +260,8 @@ mod tests {
 
     #[test]
     fn in_vault_files_sort_by_path() {
-        let a = FileRef::InVault(".dogtag/a.toml".to_owned());
-        let b = FileRef::InVault(".dogtag/b.toml".to_owned());
+        let a = FileRef::InVault(VaultPath::kernel(".dogtag/a.toml"));
+        let b = FileRef::InVault(VaultPath::kernel(".dogtag/b.toml"));
         assert!(a < b);
         assert_eq!(a.cmp(&b), Ordering::Less);
     }

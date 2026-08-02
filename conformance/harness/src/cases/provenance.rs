@@ -358,6 +358,11 @@ mod tests {
 
     /// ...and it points at no file, because a value nobody wrote is written
     /// nowhere.
+    ///
+    /// *Which* file it points at is not what is wrong, so the reference here is
+    /// the one an external crate can name without a vault: an in-vault path is
+    /// spelled by [`dogtag::vault::VaultRoot::relative`] and there is no root in
+    /// scope, and inventing one would say something this assertion never reads.
     #[test]
     fn a_default_pointing_at_a_file_is_refused() {
         let mut provenance = Provenance::new();
@@ -366,7 +371,7 @@ mod tests {
             Source::Default {
                 contract_version: 1,
             },
-            Location::whole_file(FileRef::InVault(".dogtag/contract.toml".to_owned())),
+            Location::whole_file(FileRef::InstallationRecord),
         ));
         let detail = a_default_names_the_contract_version(&no_axis(), &provenance)
             .expect_err("a default carrying a location points at a file");
