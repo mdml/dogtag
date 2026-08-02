@@ -8,7 +8,7 @@ use dogtag::vault::Opened;
 use crate::transform::set_contract_version;
 
 use super::corpus::Corpus;
-use super::expect::{Checked, require, require_contains, require_only};
+use super::expect::{Checked, Subject, rendered, require, require_contains, require_only};
 
 /// The two out-of-range versions and the identifier each must yield.
 ///
@@ -23,6 +23,17 @@ const OUT_OF_RANGE: &[(u32, &str)] = &[
 /// The three contract-dependent sections, each of which must say it was not
 /// evaluated rather than being blank or omitted.
 const SECTIONS: &[&str] = &["types", "lifecycle", "dialect"];
+
+/// The supported range as a reader sees it written, from the constant rather
+/// than from a literal: a release that widens the range must widen what this
+/// case demands of the message in the same edit.
+fn supported_range() -> String {
+    format!(
+        "{}..={}",
+        SUPPORTED_CONTRACT_VERSIONS.start(),
+        SUPPORTED_CONTRACT_VERSIONS.end()
+    )
+}
 
 /// `unsupported-contract-version-refuses-with-diagnosis`.
 pub fn unsupported_version_refuses(corpus: &Corpus) -> Checked {
@@ -41,12 +52,32 @@ fn refuses(corpus: &Corpus, version: u32, id: &str) -> Checked {
     // Exactly one: the refusal is the version's, not the parser's. An
     // out-of-range contract must not also produce a series of complaints about
     // keys this build does not recognize.
-    require_only(
-        opened.diagnostics(),
-        id,
-        &format!("a contract declaring version {version}"),
-    )?;
+    let declaring = format!("a contract declaring version {version}");
+    let subject = Subject::new(&declaring);
+    require_only(opened.diagnostics(), id, subject)?;
+    message_names_the_version_and_the_range(&rendered(opened.diagnostics()), version, subject)?;
     diagnosis_still_runs(&opened, version)
+}
+
+/// The refusal's *message* carries both facts the scenario asks it to name:
+/// the version the contract declares, and the range this release reads.
+///
+/// The identifier says which of the two refusals it is; only the message says
+/// what a reader would have to change, and an identifier assertion alone
+/// leaves a message reduced to "unsupported contract version" conforming.
+///
+/// The two numbers are asserted rather than the prose around them, so a
+/// reworded message stays conforming and an emptied one does not. Neither
+/// needle can be satisfied by accident from the identifier the rendering leads
+/// with: no diagnostic identifier in this namespace carries a digit.
+fn message_names_the_version_and_the_range(
+    reported: &str,
+    version: u32,
+    of: Subject<'_>,
+) -> Checked {
+    let subject = format!("the refusal of {of}");
+    require_contains(reported, &version.to_string(), &subject)?;
+    require_contains(reported, &supported_range(), &subject)
 }
 
 /// `doctor` never refuses: the resolved root, the installation state and the
@@ -55,24 +86,49 @@ fn refuses(corpus: &Corpus, version: u32, id: &str) -> Checked {
 fn diagnosis_still_runs(opened: &Opened, version: u32) -> Checked {
     let report = doctor_report(opened, Selection::new(SelectionRoute::Discovery, None), &[]);
     let json = doctor_json(&report);
-    let subject = format!("the doctor report for a version-{version} contract");
+    let diagnosed = format!("the doctor report for a version-{version} contract");
+    let subject = Subject::new(&diagnosed);
     // The resolved root, so a reader confronting a broken vault can still see
     // which vault it is.
-    require_contains(&json, &opened.root().display(), &subject)?;
+    require_contains(&json, &opened.root().display(), subject)?;
     // The installation state, which does not depend on the contract at all.
-    require_contains(&json, "\"state\": \"absent\"", &subject)?;
-    // The version found, and where it sits relative to what this build reads.
-    require_contains(&json, &format!("\"found\": {version}"), &subject)?;
+    require_contains(&json, "\"state\": \"absent\"", subject)?;
+    version_is_reported(&json, version, subject)?;
+    require_contains(&json, "\"state\": \"unresolved\"", subject)?;
+    sections_are_not_evaluated(&json, &doctor_text(&report), subject)
+}
+
+/// The version found, the range this release reads, and where the one sits
+/// relative to the other.
+///
+/// The range is asserted **here** as well as in the diagnostic's message
+/// because the structured report carries it as an object of its own, which is
+/// where a consumer diffing two runs reads it. Asserted only of the message,
+/// that object could be deleted outright with this suite still green.
+fn version_is_reported(json: &str, version: u32, subject: Subject<'_>) -> Checked {
+    require_contains(json, &format!("\"found\": {version}"), subject)?;
+    // Every run of whitespace folded to one space, so the needle is one
+    // legible object rather than one sensitive to how deeply the report
+    // happens to indent it.
+    let folded = json.split_whitespace().collect::<Vec<&str>>().join(" ");
+    require_contains(&folded, &supported_object(), subject)?;
     let class = classify(version, SUPPORTED_CONTRACT_VERSIONS).as_str();
-    require_contains(&json, &format!("\"classification\": \"{class}\""), &subject)?;
-    require_contains(&json, "\"state\": \"unresolved\"", &subject)?;
-    sections_are_not_evaluated(&json, &doctor_text(&report), &subject)
+    require_contains(json, &format!("\"classification\": \"{class}\""), subject)
+}
+
+/// The supported range as the structured report writes it, whitespace folded.
+fn supported_object() -> String {
+    format!(
+        "\"supported\": {{ \"min\": {}, \"max\": {} }}",
+        SUPPORTED_CONTRACT_VERSIONS.start(),
+        SUPPORTED_CONTRACT_VERSIONS.end()
+    )
 }
 
 /// Each section is an object carrying `"evaluated": false` and a non-empty
 /// reason — never a `null`, and never an omission, because a consumer cannot
 /// tell an omitted section from a section its own reader forgot.
-fn sections_are_not_evaluated(json: &str, text: &str, subject: &str) -> Checked {
+fn sections_are_not_evaluated(json: &str, text: &str, subject: Subject<'_>) -> Checked {
     require(
         json.matches("\"evaluated\": false").count() == SECTIONS.len(),
         || {
@@ -133,12 +189,53 @@ mod tests {
         );
     }
 
+    /// A message reduced to the bare fact of the refusal names neither the
+    /// version it found nor the range it reads, and the failure says which of
+    /// the two facts is missing rather than only that something is.
+    #[test]
+    fn a_refusal_that_names_neither_the_version_nor_the_range_fails_the_case() {
+        let bare = message_names_the_version_and_the_range(
+            "compat.contract-too-new: unsupported contract version",
+            2,
+            Subject::new("a contract declaring version 2"),
+        )
+        .expect_err("a message naming neither fact names the version least of all");
+        assert!(
+            bare.contains("the refusal of a contract declaring version 2 must carry `2`"),
+            "the failure names the subject and the version: {bare}"
+        );
+        let half = message_names_the_version_and_the_range(
+            "compat.contract-too-new: the contract declares version 2",
+            2,
+            Subject::new("a contract declaring version 2"),
+        )
+        .expect_err("a message that stops before the range names only half of it");
+        assert!(
+            half.contains("must carry `1..=1`"),
+            "the failure names the range: {half}"
+        );
+    }
+
+    /// A structured report that drops the `supported` object still carries the
+    /// version and the classification, which is exactly the shape an assertion
+    /// on those two alone would accept.
+    #[test]
+    fn a_report_that_drops_the_supported_range_fails_the_case() {
+        let json = "\"found\": 2,\n\"classification\": \"too-new\"\n";
+        let detail = version_is_reported(json, 2, Subject::new(SUBJECT))
+            .expect_err("a report carrying no supported range does not name one");
+        assert!(
+            detail.contains("must carry `\"supported\": { \"min\": 1, \"max\": 1 }`"),
+            "the failure names the object and the range: {detail}"
+        );
+    }
+
     /// A section that is simply missing is a section a consumer's own reader
     /// might have dropped, so the count is asserted rather than the presence.
     #[test]
     fn a_report_missing_a_section_is_refused_on_the_count() {
         let json = "\"types\": { \"evaluated\": false, \"reason\": \"version 2\" }\n";
-        let detail = sections_are_not_evaluated(json, NOT_EVALUATED_TEXT, SUBJECT)
+        let detail = sections_are_not_evaluated(json, NOT_EVALUATED_TEXT, Subject::new(SUBJECT))
             .expect_err("one section of three is not all of them");
         assert!(
             detail.contains("must mark all 3 sections not evaluated"),
@@ -155,7 +252,7 @@ mod tests {
     #[test]
     fn a_section_with_an_empty_reason_is_refused() {
         let json = NOT_EVALUATED.replace("\"version 2\"", "\"\"");
-        let detail = sections_are_not_evaluated(&json, NOT_EVALUATED_TEXT, SUBJECT)
+        let detail = sections_are_not_evaluated(&json, NOT_EVALUATED_TEXT, Subject::new(SUBJECT))
             .expect_err("an empty reason is not a reason");
         assert!(
             detail.contains("carries an empty reason"),
@@ -167,7 +264,7 @@ mod tests {
     /// reader reads them in.
     #[test]
     fn a_text_rendering_missing_a_section_is_refused() {
-        let detail = sections_are_not_evaluated(NOT_EVALUATED, "", SUBJECT)
+        let detail = sections_are_not_evaluated(NOT_EVALUATED, "", Subject::new(SUBJECT))
             .expect_err("a rendering with no sections carries none of them");
         assert!(
             detail.contains("types           not evaluated ("),
