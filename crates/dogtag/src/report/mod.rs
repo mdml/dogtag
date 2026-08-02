@@ -64,7 +64,7 @@ use crate::contract::{
     Capability, Contract, ContractUnresolved, LifecycleDecl, LinkDialect, UnresolvedReason,
 };
 use crate::diagnostic::{Diagnostic, DiagnosticList, SeverityCounts};
-use crate::installation::{Installation, InstallationRecord};
+use crate::installation::{Installation, InstallationRecord, VaultEntry};
 use crate::vault::{Opened, VaultRoot};
 
 pub use doctor::doctor_text;
@@ -206,6 +206,25 @@ impl Selection {
         self.requested.as_deref()
     }
 
+    /// The registry name this selection resolved through, if it resolved
+    /// through one at all.
+    ///
+    /// A name route's argument *is* the registered name, so the entry that
+    /// answered it can be looked up by the name rather than re-derived by
+    /// comparing paths. That matters because the two are not comparable: a
+    /// registered path is stored literally, and the root it resolved to is
+    /// canonical, so any symlinked component made a lexical comparison fail
+    /// and the report claimed no entry for a vault it had reached *through*
+    /// one.
+    fn registry_name(&self) -> Option<&str> {
+        match self.how {
+            SelectionRoute::FlagName | SelectionRoute::EnvironmentName => self.requested(),
+            SelectionRoute::Discovery
+            | SelectionRoute::FlagPath
+            | SelectionRoute::EnvironmentPath => None,
+        }
+    }
+
     /// The route as a reader sees it, with the argument filled in.
     ///
     /// A route whose argument was not supplied renders its placeholder rather
@@ -345,7 +364,7 @@ struct InstallationFacts {
 
 impl InstallationFacts {
     /// The record's facts, holding only the entry for the vault being reported.
-    fn new(installation: &Installation, root: &VaultRoot) -> Self {
+    fn new(installation: &Installation, root: &VaultRoot, selection: &Selection) -> Self {
         let record = installation.record();
         Self {
             state: installation.state().as_str(),
@@ -353,7 +372,7 @@ impl InstallationFacts {
             actor: record
                 .and_then(InstallationRecord::actor)
                 .map(|actor| actor.name().to_owned()),
-            entry: record.and_then(|record| registered_as(record, root)),
+            entry: record.and_then(|record| entry_for(record, root, selection)),
         }
     }
 
@@ -390,15 +409,31 @@ impl InstallationFacts {
 /// answering this cannot become a filesystem operation. A `doctor` run opens
 /// exactly two files, and resolving registry paths would reach a third thing —
 /// a directory outside the vault, that the reader did not ask about.
+fn entry_for(
+    record: &InstallationRecord,
+    root: &VaultRoot,
+    selection: &Selection,
+) -> Option<RegistryEntry> {
+    match selection.registry_name() {
+        Some(name) => record.entry(name).map(named_entry),
+        None => registered_as(record, root),
+    }
+}
+
+/// One registry entry as the report names it.
+fn named_entry(entry: &VaultEntry) -> RegistryEntry {
+    RegistryEntry {
+        name: entry.name().to_owned(),
+        path: entry.path().to_string_lossy().into_owned(),
+    }
+}
+
 fn registered_as(record: &InstallationRecord, root: &VaultRoot) -> Option<RegistryEntry> {
     record
         .vaults()
         .iter()
         .find(|entry| entry.path() == root.path())
-        .map(|entry| RegistryEntry {
-            name: entry.name().to_owned(),
-            path: entry.path().to_string_lossy().into_owned(),
-        })
+        .map(named_entry)
 }
 
 /// The answers that exist only because a contract resolved.
@@ -501,13 +536,14 @@ pub fn doctor_report(opened: &Opened, selection: Selection, extra: &[Diagnostic]
     collected.extend(opened.diagnostics().iter().cloned());
     collected.extend(extra.iter().cloned());
     let counts = collected.counts();
+    let installation = InstallationFacts::new(opened.installation(), opened.root(), &selection);
     DoctorReport {
         root: Some(opened.root().display().into_owned()),
         selection,
         contract: opened
             .contract()
             .map_or_else(ContractFacts::unresolved, ContractFacts::resolved),
-        installation: InstallationFacts::new(opened.installation(), opened.root()),
+        installation,
         sections: Sections::new(opened.contract()),
         counts,
         diagnostics: collected.sorted(),
@@ -731,6 +767,32 @@ mod tests {
             !entry.path.contains("elsewhere"),
             "the other registered vault must not reach the report"
         );
+    }
+
+    #[test]
+    fn a_name_route_reports_the_entry_that_answered_it_however_the_path_is_spelled() {
+        // A registered path is stored literally and the root it resolves to is
+        // canonical, so comparing the two lexically fails for any entry whose
+        // path is spelled differently — and the report then claimed no entry
+        // for a vault it had reached *through* one. The name that resolved it
+        // is the answer, and it needs no filesystem call to be right.
+        let tree = Tree::new("model-registry-by-name");
+        let root = tree.vault(CLEAN);
+        let record = format!(
+            "installation_version = 1\n\n[[vault]]\nname = \"work\"\npath = \"{}/../{}\"\n",
+            root.path().display(),
+            root.path()
+                .file_name()
+                .expect("the fixture root has a name")
+                .to_string_lossy()
+        );
+        let opened = open(root, parse_installation(&record));
+        let by_name = doctor_report(&opened, requested(SelectionRoute::FlagName, "work"), &[]);
+        let entry = by_name
+            .installation
+            .entry
+            .expect("the name that resolved this vault names its entry");
+        assert_eq!(entry.name, "work");
     }
 
     #[test]

@@ -167,7 +167,11 @@ fn a_default_names_the_contract_version(contract: &Contract, merged: &Provenance
 }
 
 /// Every leaf key the contract declares, per the version-1 key space.
-fn contract_keys(contract: &Contract) -> Vec<String> {
+///
+/// Derived from the **resolved model**, never from the provenance map, which is
+/// what lets an assertion prove the map covers the contract rather than merely
+/// that a renderer copied it. Shared with the explain case for that reason.
+pub(super) fn contract_keys(contract: &Contract) -> Vec<String> {
     let mut keys = vec!["contract_version".to_owned(), "dialect.links".to_owned()];
     keys.extend(lifecycle_keys(contract.lifecycle()));
     keys.extend(
