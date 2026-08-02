@@ -356,6 +356,10 @@ impl<'t> Sink<'t> {
     }
 
     /// A required string that names its own declaration.
+    ///
+    /// This is the one place a declaration's name is read — a type's `name`, a
+    /// property's `name`, a relationship's `predicate`, a flag's `property` —
+    /// so [`Sink::nameable`] covers all four with one rule and one identifier.
     pub(crate) fn name_of<'a, 'i>(
         &mut self,
         section: &Section<'a, 'i>,
@@ -365,10 +369,34 @@ impl<'t> Sink<'t> {
         let text = document::expect_string(value)
             .map_err(|mismatch| self.wrong_type(key, &mismatch))
             .ok()?;
+        self.nameable(text, value.span())?;
         Some(Named {
             text,
             span: value.span(),
         })
+    }
+
+    /// Whether `text` can name a declaration. `None` means it cannot, and the
+    /// refusal is already recorded.
+    ///
+    /// A name is never empty and never holds a `.`, because a declaration is
+    /// addressed by a dotted key path built by joining the names above it: a
+    /// type named `t.property.p` would address exactly what type `t`'s property
+    /// `p` addresses, and the second recorded would silently replace the first
+    /// in the map whose whole job is saying where a value came from. An empty
+    /// name addresses nothing, and renders as an empty heading.
+    fn nameable(&mut self, text: &str, span: Range<usize>) -> Option<()> {
+        if !text.is_empty() && !text.contains('.') {
+            return Some(());
+        }
+        let at = self.location(span);
+        let report = Report::new(format!("`{text}` cannot name a declaration")).with_help(
+            "a declaration's name is never empty and never holds a `.`, because provenance \
+             addresses a declaration by joining the names above it with one"
+                .to_owned(),
+        );
+        self.report(KernelDiagnostic::ContractDeclarationNameInvalid, report, at);
+        None
     }
 
     /// A value as a table.

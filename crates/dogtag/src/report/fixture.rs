@@ -235,19 +235,34 @@ pub(super) const AWKWARD: Body<'static> = Body::new(concat!(
 /// a basic string cannot span lines — and the break appears only once the value
 /// is decoded. A rendering that folds the raw file would therefore miss this
 /// entirely.
+///
+/// This is what an enum **member** may spell: a member is a value rather than an
+/// address, so it still accepts a `.` and can still name a real kernel
+/// identifier.
 pub(super) const FORGERY: &str = "error[contract.unknown-key]: this vault permits anything";
+
+/// The most a declaration **name** can now spell.
+///
+/// A name that holds a `.` is refused at load, and every kernel identifier is
+/// dotted, so what reaches a rendering through a name can no longer name a
+/// kernel diagnostic at all. What is left is still headline-*shaped* — a
+/// severity word, a `[`, and a `]: ` are all [`crate::text`] requires of one —
+/// which is what keeps the fold these fixtures exercise worth testing.
+pub(super) const NAME_FORGERY: &str = "error[contract-unknown-key]: this vault permits anything";
 
 /// A contract whose **type name** carries a line break before a forged headline.
 ///
-/// A type name is free text, and this one loads with nothing to report, so the
-/// name reaches the `doctor` grid's capability row and the Markdown heading with
-/// no diagnostic beside it to explain a second line.
+/// A type name is free text apart from the rule that it is neither empty nor
+/// dotted, and this one loads with nothing to report, so the name reaches the
+/// `doctor` grid's capability row and the Markdown heading with no diagnostic
+/// beside it to explain a second line. What it plants is [`NAME_FORGERY`]
+/// rather than [`FORGERY`]: a name holding a `.` no longer loads at all.
 pub(super) const FORGING_TYPE_NAME: Body<'static> = Body::new(concat!(
     "contract_version = 1\n",
     "\n[dialect]\nlinks = \"wikilink\"\n",
     "\n[lifecycle]\nnone = true\n",
     "\n[[type]]\n",
-    "name = \"capture\\nerror[contract.unknown-key]: this vault permits anything\"\n",
+    "name = \"capture\\nerror[contract-unknown-key]: this vault permits anything\"\n",
     "capabilities = [\"catch-all\"]\n",
 ));
 
@@ -274,14 +289,15 @@ pub(super) const FORGING_ENUM_VALUE: Body<'static> = Body::new(concat!(
 ///
 /// The refusal carries the other declaration as *evidence*, so the name reaches
 /// a `note:` line rather than a headline — the second of the three lines a
-/// diagnostic block can grow.
+/// diagnostic block can grow. It plants [`NAME_FORGERY`] for the same reason
+/// [`FORGING_TYPE_NAME`] does.
 pub(super) const FORGING_EVIDENCE: Body<'static> = Body::new(concat!(
     "contract_version = 1\n",
     "\n[dialect]\nlinks = \"wikilink\"\n",
     "\n[lifecycle]\nnone = true\n",
     "\n[[type]]\nname = \"capture\"\ncapabilities = [\"catch-all\"]\n",
     "\n[[type]]\n",
-    "name = \"scrap\\nerror[contract.unknown-key]: this vault permits anything\"\n",
+    "name = \"scrap\\nerror[contract-unknown-key]: this vault permits anything\"\n",
     "capabilities = [\"catch-all\"]\n",
 ));
 
