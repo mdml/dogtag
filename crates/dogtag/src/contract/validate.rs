@@ -426,6 +426,40 @@ mod tests {
     }
 
     #[test]
+    fn a_type_name_holding_a_dot_is_refused() {
+        // `t.property.p` would address exactly what type `t`'s property `p`
+        // addresses, and provenance keeps one entry per key.
+        let source = contract("").replace("\"capture\"", "\"t.property.p\"");
+        let diagnostics = read(&source);
+        assert_eq!(ids(&diagnostics), ["contract.declaration-name-invalid"]);
+        assert!(diagnostics.as_slice()[0].message.contains("`t.property.p`"));
+    }
+
+    #[test]
+    fn an_empty_type_name_is_refused() {
+        let source = contract("").replace("\"capture\"", "\"\"");
+        let diagnostics = read(&source);
+        assert_eq!(ids(&diagnostics), ["contract.declaration-name-invalid"]);
+        assert!(diagnostics.as_slice()[0].help.is_some());
+    }
+
+    #[test]
+    fn the_name_rule_reaches_a_property_name_too() {
+        // `name_of` is the one place a declaration's name is read, so the rule
+        // covers a property, a relationship predicate and a flag with it.
+        let source = contract("\n[[type.property]]\nname = \"a.b\"\nkind = \"string\"\n");
+        assert_eq!(ids(&read(&source)), ["contract.declaration-name-invalid"]);
+    }
+
+    #[test]
+    fn an_enum_member_holding_a_dot_still_loads() {
+        // A member is a value rather than an address: nothing joins it into a
+        // key path, so the rule that constrains names does not reach it.
+        let body = "\n[[type.property]]\nname = \"status\"\nkind = \"enum\"\nvalues = [\"a.b\"]\n";
+        assert!(read(&contract(body)).is_empty());
+    }
+
+    #[test]
     fn a_contract_with_no_type_says_only_that() {
         let source = "[dialect]\nlinks = \"wikilink\"\n\n[lifecycle]\nnone = true\n";
         assert_eq!(ids(&read(source)), ["contract.no-types"]);

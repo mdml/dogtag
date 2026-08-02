@@ -289,8 +289,8 @@ fn lifecycle_text(lifecycle: &LifecycleDecl) -> String {
 mod tests {
     use super::super::fixture::{
         ABSENT_ORDINARY, AWKWARD, Body, CLEAN, FORGERY, FORGING_ENUM_VALUE, FORGING_EVIDENCE,
-        FORGING_TYPE_NAME, NAMED_ORDINARY, RECORD, Tree, assert_holds, no_record, opened,
-        registering, shown,
+        FORGING_TYPE_NAME, NAME_FORGERY, NAMED_ORDINARY, RECORD, Tree, assert_holds, no_record,
+        opened, registering, shown,
     };
     use super::super::{Selection, SelectionRoute, doctor_report};
     use super::*;
@@ -505,7 +505,7 @@ mod tests {
         );
         assert_holds(
             &rendered,
-            &format!("  catch-all          capture {FORGERY}\n"),
+            &format!("  catch-all          capture {NAME_FORGERY}\n"),
         );
         assert_holds(&rendered, "no diagnostics\n");
     }
@@ -534,7 +534,7 @@ mod tests {
         assert_holds(&rendered, "error[contract.multiple-catch-all]:");
         assert_holds(
             &rendered,
-            &format!("  note: the type `scrap {FORGERY}` also declares it ("),
+            &format!("  note: the type `scrap {NAME_FORGERY}` also declares it ("),
         );
     }
 

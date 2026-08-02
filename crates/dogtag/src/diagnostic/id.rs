@@ -59,6 +59,14 @@ pub enum KernelDiagnostic {
     ContractMissingKey,
     /// A contract value has a TOML type the declared version does not allow.
     ContractValueWrongType,
+    /// A declaration's name is empty, or holds a `.`.
+    ///
+    /// Provenance is addressed by a dotted key path built by joining declaration
+    /// names, so a type named `t.property.p` addresses the same key as type `t`'s
+    /// property `p` — and the second silently replaces the first in the map whose
+    /// whole job is saying where a value came from. An empty name addresses
+    /// nothing at all.
+    ContractDeclarationNameInvalid,
     /// Two types share a name.
     ContractDuplicateType,
     /// Two properties on one type share a name.
@@ -252,6 +260,11 @@ const REGISTRY: &[(KernelDiagnostic, &str, Severity)] = &[
     (
         KernelDiagnostic::ContractValueWrongType,
         "contract.value-wrong-type",
+        Severity::Error,
+    ),
+    (
+        KernelDiagnostic::ContractDeclarationNameInvalid,
+        "contract.declaration-name-invalid",
         Severity::Error,
     ),
     (
@@ -645,79 +658,119 @@ fn expected_id(kind: KernelDiagnostic) -> &'static str {
     }
 }
 
+/// Every `discovery.*` variant, as one pattern.
+///
+/// The four group macros are macros rather than functions because it is the
+/// *patterns* an exhaustiveness check reads. A function could only answer
+/// whether a variant is in its area, and an answer is not a pattern — which is
+/// exactly why a match guard over such a function compiles while checking
+/// nothing. Each group is its own item, so no one of them grows toward a size
+/// that would have to be split again.
+#[cfg(test)]
+macro_rules! discovery_variants {
+    () => {
+        KernelDiagnostic::DiscoveryNoVaultFound
+            | KernelDiagnostic::DiscoveryIncompleteVaultRoot
+            | KernelDiagnostic::DiscoveryNotAVaultRoot
+            | KernelDiagnostic::DiscoveryPathUnreadable
+            | KernelDiagnostic::DiscoveryNestedVault
+            | KernelDiagnostic::DiscoveryRootResolvedThroughSymlink
+            | KernelDiagnostic::DiscoveryRootOutsideHome
+            | KernelDiagnostic::DiscoveryRootGroupOrWorldWritable
+    };
+}
+
+/// Every `contract.*` variant, as one pattern.
+#[cfg(test)]
+macro_rules! contract_variants {
+    () => {
+        KernelDiagnostic::ContractUnreadable
+            | KernelDiagnostic::ContractInvalidUtf8
+            | KernelDiagnostic::ContractByteOrderMark
+            | KernelDiagnostic::ContractCarriageReturnLineEnding
+            | KernelDiagnostic::ContractMalformedToml
+            | KernelDiagnostic::ContractVersionMissing
+            | KernelDiagnostic::ContractVersionInvalid
+            | KernelDiagnostic::ContractUnknownKey
+            | KernelDiagnostic::ContractMissingKey
+            | KernelDiagnostic::ContractValueWrongType
+            | KernelDiagnostic::ContractDeclarationNameInvalid
+            | KernelDiagnostic::ContractDuplicateType
+            | KernelDiagnostic::ContractDuplicateProperty
+            | KernelDiagnostic::ContractDuplicatePredicate
+            | KernelDiagnostic::ContractPropertyKindConflict
+            | KernelDiagnostic::ContractUnknownCapability
+            | KernelDiagnostic::ContractMissingCatchAll
+            | KernelDiagnostic::ContractMultipleCatchAll
+            | KernelDiagnostic::ContractUnknownPropertyKind
+            | KernelDiagnostic::ContractInvalidEnumValues
+            | KernelDiagnostic::ContractInvalidListOf
+            | KernelDiagnostic::ContractMissingLifecycle
+            | KernelDiagnostic::ContractLifecycleIncomplete
+            | KernelDiagnostic::ContractLifecycleNoneWithAxis
+            | KernelDiagnostic::ContractLifecycleAxisUndeclared
+            | KernelDiagnostic::ContractLifecycleAxisNotEnum
+            | KernelDiagnostic::ContractLifecycleOrdinaryInvalid
+            | KernelDiagnostic::ContractLifecycleOrdinaryValueUndeclared
+            | KernelDiagnostic::ContractLifecycleOrdinaryValueOptional
+            | KernelDiagnostic::ContractLifecycleOrdinaryAbsentRequired
+            | KernelDiagnostic::ContractFlagPropertyUndeclared
+            | KernelDiagnostic::ContractFlagPropertyNotBoolean
+            | KernelDiagnostic::ContractDuplicateFlag
+            | KernelDiagnostic::ContractMissingDialect
+            | KernelDiagnostic::ContractUnknownLinkDialect
+            | KernelDiagnostic::ContractNoTypes
+    };
+}
+
+/// Every `installation.*` variant, as one pattern.
+#[cfg(test)]
+macro_rules! installation_variants {
+    () => {
+        KernelDiagnostic::InstallationUnreadable
+            | KernelDiagnostic::InstallationInvalidUtf8
+            | KernelDiagnostic::InstallationByteOrderMark
+            | KernelDiagnostic::InstallationCarriageReturnLineEnding
+            | KernelDiagnostic::InstallationMalformedToml
+            | KernelDiagnostic::InstallationVersionMissing
+            | KernelDiagnostic::InstallationVersionInvalid
+            | KernelDiagnostic::InstallationUnknownKey
+            | KernelDiagnostic::InstallationMissingKey
+            | KernelDiagnostic::InstallationValueWrongType
+            | KernelDiagnostic::InstallationDuplicateVaultName
+            | KernelDiagnostic::InstallationVaultNameInvalid
+            | KernelDiagnostic::InstallationVaultPathNotAbsolute
+            | KernelDiagnostic::InstallationUnknownVaultName
+            | KernelDiagnostic::InstallationVaultPathNotARoot
+    };
+}
+
+/// Every `compat.*` variant, as one pattern.
+#[cfg(test)]
+macro_rules! compat_variants {
+    () => {
+        KernelDiagnostic::CompatContractBelowSupportedFloor
+            | KernelDiagnostic::CompatContractTooNew
+            | KernelDiagnostic::CompatNewerFormatAvailable
+            | KernelDiagnostic::CompatInstallationBelowSupportedFloor
+            | KernelDiagnostic::CompatInstallationTooNew
+            | KernelDiagnostic::CompatNewerInstallationFormatAvailable
+    };
+}
+
 /// The area each variant belongs to.
 ///
-/// This is an **exhaustive match**, so adding a variant without placing it in an
-/// area fails to compile. That is what makes keeping the registry complete a
-/// compiler obligation rather than a review one.
+/// The four groups above name every variant exactly once, and this is an
+/// **exhaustive match** over them, so adding a variant without placing it in an
+/// area fails to compile — naming the group that must grow. That is what makes
+/// keeping the registry complete a compiler obligation rather than a review one.
 #[cfg(test)]
 fn expected_area(kind: KernelDiagnostic) -> &'static str {
-    use KernelDiagnostic::*;
     match kind {
-        DiscoveryNoVaultFound
-        | DiscoveryIncompleteVaultRoot
-        | DiscoveryNotAVaultRoot
-        | DiscoveryPathUnreadable
-        | DiscoveryNestedVault
-        | DiscoveryRootResolvedThroughSymlink
-        | DiscoveryRootOutsideHome
-        | DiscoveryRootGroupOrWorldWritable => "discovery",
-        ContractUnreadable
-        | ContractInvalidUtf8
-        | ContractByteOrderMark
-        | ContractCarriageReturnLineEnding
-        | ContractMalformedToml
-        | ContractVersionMissing
-        | ContractVersionInvalid
-        | ContractUnknownKey
-        | ContractMissingKey
-        | ContractValueWrongType
-        | ContractDuplicateType
-        | ContractDuplicateProperty
-        | ContractDuplicatePredicate
-        | ContractPropertyKindConflict
-        | ContractUnknownCapability
-        | ContractMissingCatchAll
-        | ContractMultipleCatchAll
-        | ContractUnknownPropertyKind
-        | ContractInvalidEnumValues
-        | ContractInvalidListOf
-        | ContractMissingLifecycle
-        | ContractLifecycleIncomplete
-        | ContractLifecycleNoneWithAxis
-        | ContractLifecycleAxisUndeclared
-        | ContractLifecycleAxisNotEnum
-        | ContractLifecycleOrdinaryInvalid
-        | ContractLifecycleOrdinaryValueUndeclared
-        | ContractLifecycleOrdinaryValueOptional
-        | ContractLifecycleOrdinaryAbsentRequired
-        | ContractFlagPropertyUndeclared
-        | ContractFlagPropertyNotBoolean
-        | ContractDuplicateFlag
-        | ContractMissingDialect
-        | ContractUnknownLinkDialect
-        | ContractNoTypes => "contract",
-        InstallationUnreadable
-        | InstallationInvalidUtf8
-        | InstallationByteOrderMark
-        | InstallationCarriageReturnLineEnding
-        | InstallationMalformedToml
-        | InstallationVersionMissing
-        | InstallationVersionInvalid
-        | InstallationUnknownKey
-        | InstallationMissingKey
-        | InstallationValueWrongType
-        | InstallationDuplicateVaultName
-        | InstallationVaultNameInvalid
-        | InstallationVaultPathNotAbsolute
-        | InstallationUnknownVaultName
-        | InstallationVaultPathNotARoot => "installation",
-        CompatContractBelowSupportedFloor
-        | CompatContractTooNew
-        | CompatNewerFormatAvailable
-        | CompatInstallationBelowSupportedFloor
-        | CompatInstallationTooNew
-        | CompatNewerInstallationFormatAvailable => "compat",
+        discovery_variants!() => "discovery",
+        contract_variants!() => "contract",
+        installation_variants!() => "installation",
+        compat_variants!() => "compat",
     }
 }
 
@@ -753,6 +806,7 @@ fn expected_contract_id(kind: KernelDiagnostic) -> &'static str {
         ContractUnknownKey => "contract.unknown-key",
         ContractMissingKey => "contract.missing-key",
         ContractValueWrongType => "contract.value-wrong-type",
+        ContractDeclarationNameInvalid => "contract.declaration-name-invalid",
         ContractDuplicateType => "contract.duplicate-type",
         ContractDuplicateProperty => "contract.duplicate-property",
         ContractDuplicatePredicate => "contract.duplicate-predicate",
