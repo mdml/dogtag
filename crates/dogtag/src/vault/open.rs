@@ -144,16 +144,21 @@ mod tests {
 
     /// A contract whose lifecycle axis names its ordinary state, with a flag,
     /// a relationship, and the other link dialect.
+    ///
+    /// The axis sits on `project` rather than on the catch-all: a named
+    /// ordinary state requires its axis on every type declaring it, and at
+    /// contract version 2 the catch-all may require nothing.
     const NAMED_ORDINARY: &str = concat!(
         "contract_version = 2\n",
         "\n[dialect]\nlinks = \"markdown\"\n",
         "\n[lifecycle]\naxis = \"status\"\nordinary = { value = \"active\" }\n",
         "\n[[flag]]\nproperty = \"pinned\"\n",
         "\n[[type]]\nname = \"note\"\ncapabilities = [\"catch-all\"]\n",
-        "\n  [[type.property]]\n  name = \"status\"\n  kind = \"enum\"\n",
-        "  values = [\"active\", \"archived\"]\n  required = true\n",
         "\n  [[type.property]]\n  name = \"pinned\"\n  kind = \"boolean\"\n",
         "\n  [[type.relationship]]\n  predicate = \"involves\"\n",
+        "\n[[type]]\nname = \"project\"\n",
+        "\n  [[type.property]]\n  name = \"status\"\n  kind = \"enum\"\n",
+        "  values = [\"active\", \"archived\"]\n  required = true\n",
     );
 
     /// A contract whose ordinary state is the **absence** of a value.

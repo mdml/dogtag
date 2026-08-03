@@ -581,13 +581,15 @@ mod tests {
     #[test]
     fn a_property_table_renders_a_row_per_declaration_in_declaration_order() {
         let tree = Tree::new("markdown-properties");
+        // `project`'s two, whose declaration order is not alphabetical, so a
+        // rendering that sorted them would be caught here.
         assert_holds(
             &markdown(&tree, NAMED_ORDINARY, false),
             concat!(
                 "| property | kind | required |\n",
                 "| --- | --- | --- |\n",
                 "| `status` | enum (`active`, `archived`) | yes |\n",
-                "| `tags` | list of string | no |\n",
+                "| `due` | date (RFC 3339 full-date) | no |\n",
             ),
         );
     }
@@ -772,7 +774,7 @@ mod tests {
         assert_holds(&document, "| --- | --- | --- | --- |\n");
         assert_holds(
             &document,
-            "| `status` | enum (`active`, `archived`) | yes | `.dogtag/contract.toml:18:14` \
+            "| `status` | enum (`active`, `archived`) | yes | `.dogtag/contract.toml:32:14` \
              (contract) |\n",
         );
         assert_holds(

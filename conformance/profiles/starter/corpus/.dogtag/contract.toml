@@ -1,5 +1,10 @@
 # .dogtag/contract.toml — the committed vault contract of the `starter` conformance fixture.
 # `starter` is the normative initialization profile: this file is the definition of what a fresh install must stamp.
+#
+# The catch-all type `note` declares no `status`, and at contract version 2 it cannot: a named
+# ordinary state requires its axis on every type that declares it, and a version-2 catch-all may
+# declare nothing a note must carry. So an untyped note in this corpus simply has no lifecycle
+# state, and every note that carries one is typed.
 
 contract_version = 2
 
@@ -13,12 +18,6 @@ ordinary = { value = "active" }
 [[type]]
 name = "note"
 capabilities = ["catch-all"]
-
-  [[type.property]]
-  name = "status"
-  kind = "enum"
-  values = ["active", "archived"]
-  required = true
 
   [[type.property]]
   name = "tags"
