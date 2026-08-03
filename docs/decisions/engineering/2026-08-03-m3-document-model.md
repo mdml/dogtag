@@ -1,6 +1,6 @@
 # The public document model: membership, frontmatter, typing, and links
 
-- Status: accepted
+- Status: accepted (amended 2026-08-03 — see [Amendments](#amendments))
 - Date: 2026-08-03
 
 ## Context
@@ -79,3 +79,11 @@ M3 mints two diagnostic areas, per [the M3 surfaces record](2026-08-03-m3-surfac
 - **`type` is the format's one reserved frontmatter word.** A corpus whose vocabulary wants `type` to mean something else cannot have it; every other key name remains the corpus's own.
 - **The catch-all binding gives `docs` its viability** and gives capture its no-blocking property, at the cost that a typo'd `type` key's *absence* (the key misspelled entirely, e.g. `tyep:`) binds the note to the catch-all and reports the real key at `info` — the one place the typo story is soft, stated here so nobody rediscovers it as a surprise.
 - **Body content is untouched at M3 beyond link extraction.** No heading structure, no fences, no tasks — the body stays prose until a milestone needs otherwise.
+
+## Amendments
+
+The Decision above stands as written; these later entries change parts of it, and the original text is left intact so the change is legible.
+
+- **2026-08-03 — "plain scalars" fences off implicit typing, not YAML plain style; quoted scalars are permitted.** The Decision's subset names "plain scalars," which read as YAML's plain *style* would make a wikilink value unwritable — `[[x]]` at the start of a plain scalar parses as nested flow sequences, so the one value the dialect most needs would have no legal spelling. That reading was never the intent: the subset's refusals are anchors, aliases, tags, multi-document streams, non-string keys, and duplicate keys, and its rule for scalars is that the declared kind — never the parser's guess — decides what a value means. A single- or double-quoted scalar carries the same bytes with none of those hazards, so **quoting is spelling, never typing**: `"[[Some Note]]"`, `'https://…'`, and a quoted `"true"` for a string property are all ordinary, and a quoted scalar validates against its declared kind exactly as an unquoted one does. Block scalars (`|`, `>`) remain outside the subset — nothing in frontmatter needs them and their chomping rules are exactly the incidental complexity the subset exists to exclude. Surfaced by the slice-9 authoring lane, which could not write a conforming corpus under the strict reading — the packet-defect channel working as intended.
+
+- **2026-08-03 — mapping keys are read as byte strings, always.** The Decision refuses non-string keys but never says what makes a key a string. Under stock YAML loaders a record field named `on`, `no`, or `off` becomes a *boolean* key via implicit typing — which would make the subset refuse a declaration-conforming note for a reason no record states, on exactly the kind of ordinary field name (`on` beside `reached_on`) a record kind invites. The rule the Decision already applies to values extends to keys: implicit typing never runs, a key is its bytes, and the non-string-key refusal covers only a key that is *structurally* not a scalar string — an explicitly tagged non-string, or a sequence or mapping used as a key. Surfaced by the same slice-9 lane, which dodged the trap by renaming a field it should not have had to rename.
