@@ -993,11 +993,11 @@ mod tests {
         assert_eq!(types.len(), 3);
         assert_eq!(types[0]["name"], Value::from("note"));
         assert_eq!(types[0]["capabilities"][0], Value::from("catch-all"));
+        assert_eq!(types[0]["properties"][0]["of"], Value::from("string"));
         assert_eq!(
-            types[0]["properties"][0]["values"][0],
+            types[1]["properties"][1]["values"][0],
             Value::from("active")
         );
-        assert_eq!(types[0]["properties"][1]["of"], Value::from("string"));
         assert_eq!(
             types[2]["relationships"][0]["predicate"],
             Value::from("involves")
@@ -1037,7 +1037,9 @@ mod tests {
         let (root, declared) = rendered(&tree, TAGGED);
         let json = parsed(&contract_json(&root, &declared));
         assert_eq!(json["contract"]["tags"]["property"], Value::from("labels"));
-        let namespaces = json["contract"]["types"][0]["tag_namespaces"]
+        // `log`, the second type: the catch-all declares no namespace, because
+        // a required one is what contract version 2 forbids it.
+        let namespaces = json["contract"]["types"][1]["tag_namespaces"]
             .as_array()
             .expect("an array");
         assert_eq!(namespaces.len(), 2);
@@ -1168,10 +1170,10 @@ mod tests {
             );
         }
         let json = parsed(&rendered_json);
-        let values = json["contract"]["types"][0]["properties"][0]["values"]
+        let values = json["contract"]["types"][1]["properties"][0]["values"]
             .as_array()
             .expect("an array");
-        let declared_values = declared.types()[0].properties()[0]
+        let declared_values = declared.types()[1].properties()[0]
             .kind()
             .values()
             .expect("an enum");

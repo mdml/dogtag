@@ -7,7 +7,7 @@
 toolchain = "nightly-2026-07-30"
 
 [global]
-# Measured on the pinned toolchain: 99.3290% lines and 98.7234% branches.
+# Measured on the pinned toolchain: 99.3365% lines and 98.7342% branches.
 # Recorded floored to two decimals, so the ratchet compares against a number a
 # clean run reproduces rather than one that rounds up past it.
 #
@@ -27,9 +27,12 @@ toolchain = "nightly-2026-07-30"
 # raises the covered fraction rather than merely enlarging the denominator.
 # They rose once more with the tag vocabulary, for the same reason: the walk,
 # the model and both renderings are reached from tests exhaustively, so the new
-# lines are covered lines.
-line = 99.32
-branch = 98.72
+# lines are covered lines. The version-2 catch-all rule raised them again: it
+# is one branch per requirement kind and one per version, and every arm — each
+# kind of requirement, several at once, none at all, and the same contract at
+# version 1 — is reached from a named test.
+line = 99.33
+branch = 98.73
 
 [thresholds]
 line = 95.0

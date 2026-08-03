@@ -3210,7 +3210,6 @@ capabilities = ["catch-all"]
   [[type.property]]
   name = "title"
   kind = "string"
-  required = true
 
   [[type.property]]
   name = "summary"
@@ -3234,7 +3233,6 @@ capabilities = ["catch-all"]
   [[type.property]]
   name = "created"
   kind = "date"
-  required = true
 
   [[type.property]]
   name = "updated"

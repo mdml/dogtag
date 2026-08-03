@@ -6,7 +6,7 @@
 ## Distinguishing axes
 
 - **The initialization profile's own defaults, unmodified.** This fixture is exactly what a fresh install stamps — no hand-tuning on top. That makes it double duty: a conformance profile *and* a standing test that the product's own defaults conform to the product's own rules. If a scenario passes everywhere but here, initialization is shipping a corpus the validator rejects.
-- **Lifecycle where the ordinary state is a named value.** The contract names a lifecycle axis whose ordinary state is an explicit named value on every note. This is the opposite encoding from `dense`, deliberately: the two profiles differ on the sharpest axis available, and if the same scenario can filter by the declared axis in both without either vocabulary reaching the core, the configuration seam is real.
+- **Lifecycle where the ordinary state is a named value.** The contract names a lifecycle axis whose ordinary state is an explicit named value on every note that carries the axis. This is the opposite encoding from `dense`, deliberately: the two profiles differ on the sharpest axis available, and if the same scenario can filter by the declared axis in both without either vocabulary reaching the core, the configuration seam is real. The catch-all type does *not* carry the axis, and at contract version 2 it cannot: a named ordinary state requires its axis on every type that declares it, and a version-2 catch-all may declare nothing a note must carry. An untyped note in this corpus therefore has no lifecycle state, and every note that carries one is typed.
 
 ## What the fixture is
 

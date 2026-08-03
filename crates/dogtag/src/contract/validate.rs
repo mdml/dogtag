@@ -68,7 +68,8 @@ fn declarers<'a>(
         .filter_map(move |declared| Some((declared, declared.property(name)?)))
 }
 
-/// Catch-all cardinality: exactly one type carries it.
+/// Catch-all cardinality: exactly one type carries it — and, at a version whose
+/// rules say so, what that one type is allowed to declare.
 ///
 /// A contract that resolved no type at all has already been told so, and a
 /// second complaint about its capabilities would be one fault reported twice.
@@ -82,21 +83,12 @@ fn capabilities(sink: &mut Sink<'_>, types: &[TypeDecl]) {
         .collect();
     match carriers.split_first() {
         None => missing_catch_all(sink),
-        // Contract version 2 adds a third capability rule here — the catch-all
-        // type may declare no `required = true` property, relationship, or tag
-        // namespace — and it is **not implemented**. Both committed conformance
-        // fixtures declare exactly that shape at version 2 (`starter`'s `note`
-        // requires the lifecycle axis its named-ordinary encoding obliges it to
-        // require; `dense`'s `unfiled` requires `title` and `created`), so the
-        // rule as written refuses them and takes seven standing scenarios red
-        // across both profiles. Repairing `starter` is not a mechanical edit:
-        // its catch-all declares the axis, and a named ordinary state requires
-        // that axis on every type declaring it, so the catch-all rule, the
-        // lifecycle rule and `starter`'s design cannot all three hold. That is
-        // a decision about the normative `init` output rather than a defect in
-        // this walk, and it is recorded for the maintainer rather than guessed
-        // at here.
-        Some((_, [])) => {}
+        // The requiring rule reads *the* catch-all, so it runs only where the
+        // contract has settled on one. Adding it to a cardinality fault would
+        // report one broken contract twice and pass judgement on a type the
+        // file has not yet said is the catch-all — the same "one fault, one
+        // diagnostic" posture the guard below this match keeps.
+        Some((only, [])) => catch_all_requires(sink, only),
         Some((first, rest)) => multiple_catch_all(sink, first, rest),
     }
 }
@@ -124,6 +116,107 @@ fn multiple_catch_all(sink: &mut Sink<'_>, first: &TypeDecl, rest: &[&TypeDecl])
 
 fn capability_site(sink: &Sink<'_>, declared: &TypeDecl) -> Location {
     located(sink, &format!("type.{}.capabilities", declared.name()))
+}
+
+/// The catch-all type requires nothing, at a version whose rules say so.
+///
+/// Every untyped note binds to the catch-all, so a requiring catch-all has
+/// `contract explain` render "accepts anything" beside requirements every
+/// untyped note instantly fails. The rule is version-scoped rather than
+/// universal: a version-1 contract that loaded clean must keep loading, and a
+/// version-1 corpus in this shape collects missing-required findings on its
+/// untyped notes instead.
+///
+/// The record says the diagnostic points at "the capability and the offending
+/// declaration". A catch-all requiring three properties has three offending
+/// declarations and one fault, so this anchors at the capability — the half
+/// that makes a requirement misleading rather than merely strict — and names
+/// each requirement as related evidence, the shape [`multiple_catch_all`]
+/// already sets for a fault with several occurrences of one cause.
+fn catch_all_requires(sink: &mut Sink<'_>, declared: &TypeDecl) {
+    if sink.schema().rules.catch_all_may_require {
+        return;
+    }
+    let evidence = requirements(sink, declared);
+    if evidence.is_empty() {
+        return;
+    }
+    let message = format!(
+        "the catch-all type `{}` requires {} of its declarations",
+        declared.name(),
+        evidence.len()
+    );
+    let mut diagnostic = Diagnostic::kernel(KernelDiagnostic::ContractCatchAllRequires, message)
+        .at(capability_site(sink, declared))
+        .with_help(
+            "every untyped note binds to the catch-all, so it can require nothing an untyped \
+             note need not carry; move the requirement to a type notes opt into"
+                .to_owned(),
+        );
+    for related in evidence {
+        diagnostic = diagnostic.with_related(related);
+    }
+    sink.push(diagnostic);
+}
+
+/// One declaration a type requires: the table that declares it, and its name
+/// within that table.
+///
+/// The table's own name does two jobs, which is what keeps them from drifting
+/// apart: it addresses the `required` leaf in provenance, and it names the
+/// declaration to the reader.
+struct Requirement<'a> {
+    table: &'a str,
+    name: &'a str,
+}
+
+impl Requirement<'_> {
+    /// The evidence line naming this requirement, pointing at the leaf that
+    /// declares it.
+    fn evidence(&self, sink: &Sink<'_>, owner: &TypeDecl) -> Related {
+        let Self { table, name } = *self;
+        let at = located(
+            sink,
+            &format!("type.{}.{table}.{name}.required", owner.name()),
+        );
+        Related::new(format!("`{name}` is a required {table}")).at(at)
+    }
+}
+
+/// Everything one type requires, named as the evidence that says so:
+/// properties, then relationships, then tag namespaces, each in declaration
+/// order. Emission order is the contract's own so that the evidence a reader
+/// sees does not depend on a walk order the file never shows them.
+fn requirements(sink: &Sink<'_>, declared: &TypeDecl) -> Vec<Related> {
+    let properties = declared
+        .properties()
+        .iter()
+        .filter(|property| property.required())
+        .map(|property| Requirement {
+            table: "property",
+            name: property.name(),
+        });
+    let relationships = declared
+        .relationships()
+        .iter()
+        .filter(|relationship| relationship.required())
+        .map(|relationship| Requirement {
+            table: "relationship",
+            name: relationship.predicate(),
+        });
+    let namespaces = declared
+        .tag_namespaces()
+        .iter()
+        .filter(|namespace| namespace.required())
+        .map(|namespace| Requirement {
+            table: "tag-namespace",
+            name: namespace.prefix(),
+        });
+    properties
+        .chain(relationships)
+        .chain(namespaces)
+        .map(|found| found.evidence(sink, declared))
+        .collect()
 }
 
 /// Each flag names a declared property whose kind is `boolean`.
@@ -566,6 +659,169 @@ mod tests {
         assert_eq!(diagnostics.as_slice()[0].related.len(), 2);
     }
 
+    /// A contract declaring one catch-all type, which each case below completes
+    /// with that type's own declarations. It carries no `contract_version`, so
+    /// the same bytes can be read at either version's schema and the answers
+    /// compared — which is the whole of "the rule is version-scoped".
+    const CATCH_ALL: &str = concat!(
+        "[dialect]\nlinks = \"wikilink\"\n",
+        "\n[lifecycle]\nnone = true\n",
+        "\n[[type]]\nname = \"capture\"\ncapabilities = [\"catch-all\"]\n",
+    );
+
+    /// A property every note of the declaring type must carry.
+    const REQUIRED_PROPERTY: &str =
+        "\n  [[type.property]]\n  name = \"title\"\n  kind = \"string\"\n  required = true\n";
+
+    /// A relationship every note of the declaring type must claim.
+    const REQUIRED_RELATIONSHIP: &str =
+        "\n  [[type.relationship]]\n  predicate = \"mentions\"\n  required = true\n";
+
+    /// A tag namespace every note of the declaring type must have a tag in,
+    /// with the tag property it reads and the `[tags]` table naming it.
+    const REQUIRED_NAMESPACE: &str = concat!(
+        "\n  [[type.property]]\n  name = \"labels\"\n  kind = \"list\"\n  of = \"string\"\n",
+        "\n  [[type.tag-namespace]]\n  prefix = \"log/\"\n  required = true\n  open = true\n",
+        "\n[tags]\nproperty = \"labels\"\n",
+    );
+
+    /// The one diagnostic `diagnostics` holds, or a panic naming what it holds
+    /// instead.
+    fn only(diagnostics: &DiagnosticList) -> &Diagnostic {
+        assert_eq!(ids(diagnostics), ["contract.catch-all-requires"]);
+        &diagnostics.as_slice()[0]
+    }
+
+    #[test]
+    fn a_catch_all_requiring_a_property_is_refused_at_version_2() {
+        let source = [CATCH_ALL, REQUIRED_PROPERTY].concat();
+        let diagnostics = read_at(&schema::VERSION_2, &source);
+        let reported = only(&diagnostics);
+        assert!(reported.message.contains("`capture`"));
+        assert_eq!(
+            reported.related.len(),
+            1,
+            "one offending declaration, named once"
+        );
+        assert_eq!(
+            reported.related[0].message,
+            "`title` is a required property"
+        );
+    }
+
+    #[test]
+    fn the_refusal_points_at_the_capability_and_at_the_declaration() {
+        // The fault is the pairing, so the diagnostic is anchored where the
+        // type says it accepts anything, and the evidence is where it says a
+        // note must carry something.
+        let source = [CATCH_ALL, REQUIRED_PROPERTY].concat();
+        let diagnostics = read_at(&schema::VERSION_2, &source);
+        let reported = only(&diagnostics);
+        let at = reported.location.as_ref().expect("a location");
+        let capabilities = source.find("[\"catch-all\"]").expect("the capability list");
+        assert_eq!(
+            at.span.as_ref().map(|span| span.start.offset),
+            Some(capabilities),
+            "the diagnostic points at the capability"
+        );
+        let evidence = reported.related[0].location.as_ref().expect("a location");
+        let required = source.find("required = true").expect("the required leaf");
+        assert_eq!(
+            evidence.span.as_ref().map(|span| span.start.offset),
+            Some(required + "required = ".len()),
+            "the evidence points at the leaf that requires it"
+        );
+    }
+
+    #[test]
+    fn a_catch_all_requiring_a_relationship_is_refused_at_version_2() {
+        let source = [CATCH_ALL, REQUIRED_RELATIONSHIP].concat();
+        let diagnostics = read_at(&schema::VERSION_2, &source);
+        assert_eq!(
+            only(&diagnostics).related[0].message,
+            "`mentions` is a required relationship"
+        );
+    }
+
+    #[test]
+    fn a_catch_all_requiring_a_tag_namespace_is_refused_at_version_2() {
+        let source = [CATCH_ALL, REQUIRED_NAMESPACE].concat();
+        let diagnostics = read_at(&schema::VERSION_2, &source);
+        assert_eq!(
+            only(&diagnostics).related[0].message,
+            "`log/` is a required tag-namespace"
+        );
+    }
+
+    #[test]
+    fn every_requirement_is_named_by_one_diagnostic_in_declaration_order() {
+        let source = [
+            CATCH_ALL,
+            REQUIRED_PROPERTY,
+            REQUIRED_RELATIONSHIP,
+            REQUIRED_NAMESPACE,
+        ]
+        .concat();
+        let diagnostics = read_at(&schema::VERSION_2, &source);
+        let reported = only(&diagnostics);
+        assert_eq!(
+            reported.message,
+            "the catch-all type `capture` requires 3 of its declarations"
+        );
+        let named: Vec<&str> = reported
+            .related
+            .iter()
+            .map(|related| related.message.as_str())
+            .collect();
+        assert_eq!(
+            named,
+            [
+                "`title` is a required property",
+                "`mentions` is a required relationship",
+                "`log/` is a required tag-namespace",
+            ]
+        );
+    }
+
+    #[test]
+    fn the_same_catch_all_still_loads_at_version_1() {
+        // Validity is part of a version's schema, and version 1's is frozen: a
+        // contract that loaded clean at `0.1.0-beta.1` keeps loading, or the
+        // upgrade promise the floor policy exists to keep is broken. The same
+        // bytes, two schemas, two answers.
+        let source = [CATCH_ALL, REQUIRED_PROPERTY, REQUIRED_RELATIONSHIP].concat();
+        assert!(read_at(&schema::VERSION_1, &source).is_empty());
+        assert_eq!(
+            ids(&read_at(&schema::VERSION_2, &source)),
+            ["contract.catch-all-requires"]
+        );
+    }
+
+    #[test]
+    fn a_catch_all_requiring_nothing_is_accepted_at_version_2() {
+        let optional = concat!(
+            "\n  [[type.property]]\n  name = \"title\"\n  kind = \"string\"\n",
+            "\n  [[type.relationship]]\n  predicate = \"mentions\"\n",
+        );
+        assert!(read_at(&schema::VERSION_2, &[CATCH_ALL, optional].concat()).is_empty());
+    }
+
+    #[test]
+    fn two_catch_all_types_are_not_also_told_what_they_require() {
+        // One fault, one diagnostic: the requiring rule reads *the* catch-all,
+        // and a contract that declares two has not said which one that is.
+        let second = concat!(
+            "\n[[type]]\nname = \"note\"\ncapabilities = [\"catch-all\"]\n",
+            "\n  [[type.property]]\n  name = \"body\"\n  kind = \"string\"\n",
+            "  required = true\n",
+        );
+        let source = [CATCH_ALL, REQUIRED_PROPERTY, second].concat();
+        assert_eq!(
+            ids(&read_at(&schema::VERSION_2, &source)),
+            ["contract.multiple-catch-all"]
+        );
+    }
+
     #[test]
     fn a_type_name_holding_a_dot_is_refused() {
         // `t.property.p` would address exactly what type `t`'s property `p`
@@ -606,34 +862,35 @@ mod tests {
         assert_eq!(ids(&read(source)), ["contract.no-types"]);
     }
 
-    fn flagged(property: &str, kind: &str, extra: &str) -> String {
-        let body =
-            format!("\n[[type.property]]\nname = \"{property}\"\nkind = \"{kind}\"\n{extra}");
+    /// A contract declaring a flag named `leaned_on`, over a type declaring
+    /// `property` with `kind`.
+    fn flagged(property: &str, kind: &str) -> String {
+        let body = format!("\n[[type.property]]\nname = \"{property}\"\nkind = \"{kind}\"\n");
         format!("[[flag]]\nproperty = \"leaned_on\"\n\n{}", contract(&body))
     }
 
     #[test]
     fn a_flag_naming_a_boolean_property_is_accepted() {
-        assert!(read(&flagged("leaned_on", "boolean", "")).is_empty());
+        assert!(read(&flagged("leaned_on", "boolean")).is_empty());
     }
 
     #[test]
     fn a_flag_naming_no_declared_property_is_refused() {
-        let diagnostics = read(&flagged("other", "boolean", ""));
+        let diagnostics = read(&flagged("other", "boolean"));
         assert_eq!(ids(&diagnostics), ["contract.flag-property-undeclared"]);
         assert!(diagnostics.as_slice()[0].location.is_some());
     }
 
     #[test]
     fn a_flag_naming_a_property_that_is_not_boolean_is_refused() {
-        let diagnostics = read(&flagged("leaned_on", "string", ""));
+        let diagnostics = read(&flagged("leaned_on", "string"));
         assert_eq!(ids(&diagnostics), ["contract.flag-property-not-boolean"]);
         assert!(diagnostics.as_slice()[0].message.contains("`string`"));
     }
 
-    /// A contract whose lifecycle declares `axis` with `ordinary`, over a type
-    /// declaring the axis property with `{required}`.
-    fn axis(ordinary: &str, kind: &str, required: &str) -> String {
+    /// A contract whose lifecycle declares an axis with `ordinary`, over a type
+    /// declaring the axis property with `required`.
+    fn axis(ordinary: &str, kind: &str, required: bool) -> String {
         format!(
             concat!(
                 "[dialect]\n",
@@ -659,17 +916,17 @@ mod tests {
 
     #[test]
     fn an_absent_ordinary_state_over_an_optional_axis_is_accepted() {
-        assert!(read(&axis("{ absent = true }", "enum", "false")).is_empty());
+        assert!(read(&axis("{ absent = true }", "enum", false)).is_empty());
     }
 
     #[test]
     fn a_named_ordinary_state_over_a_required_axis_is_accepted() {
-        assert!(read(&axis("{ value = \"current\" }", "enum", "true")).is_empty());
+        assert!(read(&axis("{ value = \"current\" }", "enum", true)).is_empty());
     }
 
     #[test]
     fn an_axis_naming_no_declared_property_is_refused() {
-        let source = axis("{ absent = true }", "enum", "false")
+        let source = axis("{ absent = true }", "enum", false)
             .replace("\"status\"\n  kind", "\"other\"\n  kind");
         let diagnostics = read(&source);
         assert_eq!(ids(&diagnostics), ["contract.lifecycle-axis-undeclared"]);
@@ -678,14 +935,14 @@ mod tests {
 
     #[test]
     fn an_axis_that_is_not_an_enum_is_refused() {
-        let source = axis("{ absent = true }", "string", "false")
+        let source = axis("{ absent = true }", "string", false)
             .replace("  values = [\"draft\", \"current\"]\n", "");
         assert_eq!(ids(&read(&source)), ["contract.lifecycle-axis-not-enum"]);
     }
 
     #[test]
     fn a_named_ordinary_state_outside_the_axis_enum_is_refused() {
-        let diagnostics = read(&axis("{ value = \"shipped\" }", "enum", "true"));
+        let diagnostics = read(&axis("{ value = \"shipped\" }", "enum", true));
         assert_eq!(
             ids(&diagnostics),
             ["contract.lifecycle-ordinary-value-undeclared"]
@@ -696,7 +953,7 @@ mod tests {
 
     #[test]
     fn a_named_ordinary_state_over_an_optional_axis_is_refused() {
-        let diagnostics = read(&axis("{ value = \"current\" }", "enum", "false"));
+        let diagnostics = read(&axis("{ value = \"current\" }", "enum", false));
         assert_eq!(
             ids(&diagnostics),
             ["contract.lifecycle-ordinary-value-optional"]
@@ -706,7 +963,7 @@ mod tests {
 
     #[test]
     fn an_absent_ordinary_state_over_a_required_axis_is_refused() {
-        let diagnostics = read(&axis("{ absent = true }", "enum", "true"));
+        let diagnostics = read(&axis("{ absent = true }", "enum", true));
         assert_eq!(
             ids(&diagnostics),
             ["contract.lifecycle-ordinary-absent-required"]
@@ -718,7 +975,7 @@ mod tests {
     fn the_axis_must_agree_on_every_type_that_declares_it() {
         let source = format!(
             "{}{}",
-            axis("{ value = \"current\" }", "enum", "true"),
+            axis("{ value = \"current\" }", "enum", true),
             concat!(
                 "\n[[type]]\n",
                 "name = \"person\"\n",

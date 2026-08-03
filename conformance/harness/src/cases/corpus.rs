@@ -226,8 +226,11 @@ pub const NO_AXIS: &str = concat!(
 );
 
 /// The same contract declaring a life axis whose ordinary state is the absence
-/// of a value, over a type that carries a property, a relationship and a flag —
+/// of a value, over types that carry a property, a relationship and a flag —
 /// so every section of a rendering of it has something in it.
+///
+/// The required property sits on `clipping` rather than on the catch-all,
+/// because contract version 2 lets the catch-all require nothing.
 #[cfg(test)]
 pub const WITH_AXIS: &str = concat!(
     "contract_version = 2\n",
@@ -235,11 +238,12 @@ pub const WITH_AXIS: &str = concat!(
     "\n[lifecycle]\naxis = \"status\"\nordinary = { absent = true }\n",
     "\n[[flag]]\nproperty = \"leaned_on\"\n",
     "\n[[type]]\nname = \"capture\"\ncapabilities = [\"catch-all\"]\n",
-    "\n  [[type.property]]\n  name = \"title\"\n  kind = \"string\"\n  required = true\n",
     "\n  [[type.property]]\n  name = \"leaned_on\"\n  kind = \"boolean\"\n",
     "\n  [[type.property]]\n  name = \"status\"\n  kind = \"enum\"\n",
     "  values = [\"archived\"]\n  required = false\n",
     "\n  [[type.relationship]]\n  predicate = \"mentions\"\n",
+    "\n[[type]]\nname = \"clipping\"\n",
+    "\n  [[type.property]]\n  name = \"title\"\n  kind = \"string\"\n  required = true\n",
 );
 
 #[cfg(test)]

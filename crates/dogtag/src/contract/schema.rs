@@ -101,6 +101,26 @@ pub(crate) struct TagVocabulary {
     pub(crate) namespace_required: bool,
 }
 
+/// The validity rules one contract version imposes on what a contract may
+/// *say*, as distinct from which keys it may spell and what an omission
+/// resolves to.
+///
+/// Validity is part of a version's schema. A contract that loaded clean at the
+/// version it declares must keep loading forever, so a rule added by a later
+/// version is scoped to that version and above rather than applied to every
+/// contract this release reads — otherwise the upgrade promise the floor policy
+/// exists to keep would break on the first bump that tightened anything.
+pub(crate) struct Rules {
+    /// Whether the catch-all type may declare something a note must carry.
+    ///
+    /// Version 1 allows it and version 2 refuses it: every untyped note binds
+    /// to the catch-all, so a requiring catch-all renders "accepts anything"
+    /// beside requirements every untyped note instantly fails. A version-1
+    /// corpus in that shape simply collects missing-required findings on its
+    /// untyped notes instead.
+    pub(crate) catch_all_may_require: bool,
+}
+
 /// One contract version's schema.
 pub(crate) struct Schema {
     /// The version this is the schema of, which every message about a key or a
@@ -110,6 +130,8 @@ pub(crate) struct Schema {
     pub(crate) keys: Keys,
     /// What an omission resolves to.
     pub(crate) defaults: Defaults,
+    /// What a contract at this version may say.
+    pub(crate) rules: Rules,
     /// The tag vocabulary, at a version that defines it.
     ///
     /// `None` is the whole of "this version has no tag vocabulary", and it
@@ -212,11 +234,25 @@ const VERSION_1_DEFAULTS: Defaults = Defaults {
 /// version 1 has no row for a leaf it never reads.
 const VERSION_2_DEFAULTS: Defaults = VERSION_1_DEFAULTS;
 
+/// What contract version 1 lets a contract say.
+///
+/// Version 1's validity is frozen: a contract that loaded clean at
+/// `0.1.0-beta.1` keeps loading. Every rule version 2 adds is off here.
+const VERSION_1_RULES: Rules = Rules {
+    catch_all_may_require: true,
+};
+
+/// What contract version 2 lets a contract say.
+const VERSION_2_RULES: Rules = Rules {
+    catch_all_may_require: false,
+};
+
 /// Contract version 1.
 pub(crate) static VERSION_1: Schema = Schema {
     version: 1,
     keys: VERSION_1_KEYS,
     defaults: VERSION_1_DEFAULTS,
+    rules: VERSION_1_RULES,
     tags: None,
 };
 
@@ -225,6 +261,7 @@ pub(crate) static VERSION_2: Schema = Schema {
     version: 2,
     keys: VERSION_2_KEYS,
     defaults: VERSION_2_DEFAULTS,
+    rules: VERSION_2_RULES,
     tags: Some(VERSION_2_TAGS),
 };
 
@@ -300,6 +337,15 @@ mod tests {
         assert_eq!(defaults.type_capabilities, []);
         assert!(!defaults.property_required);
         assert!(!defaults.relationship_required);
+    }
+
+    #[test]
+    fn version_1_keeps_the_validity_it_had_at_the_first_release() {
+        // Validity is part of a version's schema. Version 2 refuses a
+        // requiring catch-all; version 1 must not, or a vault that loaded
+        // clean at `0.1.0-beta.1` stops loading on upgrade.
+        assert!(VERSION_1.rules.catch_all_may_require);
+        assert!(!VERSION_2.rules.catch_all_may_require);
     }
 
     #[test]

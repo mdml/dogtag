@@ -57,6 +57,12 @@ impl<'a> Body<'a> {
 /// can have — the catch-all, an identity-bearing one, and one declaring no
 /// capability at all — a relationship, and two leaves that are defaulted rather
 /// than written, which is what makes the `default` provenance source reachable.
+///
+/// **The catch-all does not carry the axis**, and at contract version 2 it
+/// cannot: a named ordinary state requires the axis on every type declaring it,
+/// and the catch-all may require nothing. So in a version-2 corpus encoding its
+/// lifecycle this way, an untyped note simply has no lifecycle state — the two
+/// rules composed, which this fixture is the standing demonstration of.
 pub(super) const NAMED_ORDINARY: Body<'static> = Body::new(
     r#"contract_version = 2
 
@@ -70,12 +76,6 @@ ordinary = { value = "active" }
 [[type]]
 name = "note"
 capabilities = ["catch-all"]
-
-  [[type.property]]
-  name = "status"
-  kind = "enum"
-  values = ["active", "archived"]
-  required = true
 
   [[type.property]]
   name = "tags"
@@ -209,12 +209,18 @@ pub(super) const CLEAN: Body<'static> = Body::new(concat!(
 /// and an open namespace — a `required` that is written beside one that is
 /// defaulted, and one member holding a column rule, so a namespace's vocabulary
 /// is held up against the same escaping every other corpus value is.
+///
+/// The namespaces sit on `log` rather than on the catch-all, because a required
+/// namespace is one of the three things contract version 2 forbids the catch-all
+/// to declare. `capture` is the catch-all and declares nothing, which also gives
+/// the rendering a type with no namespace table beside one that has one.
 pub(super) const TAGGED: Body<'static> = Body::new(concat!(
     "contract_version = 2\n",
     "\n[dialect]\nlinks = \"wikilink\"\n",
     "\n[lifecycle]\nnone = true\n",
     "\n[tags]\nproperty = \"labels\"\n",
-    "\n[[type]]\nname = \"log\"\ncapabilities = [\"catch-all\"]\n",
+    "\n[[type]]\nname = \"capture\"\ncapabilities = [\"catch-all\"]\n",
+    "\n[[type]]\nname = \"log\"\n",
     "\n  [[type.property]]\n  name = \"labels\"\n  kind = \"list\"\n  of = \"string\"\n",
     "\n  [[type.tag-namespace]]\n",
     "  prefix = \"log/\"\n",
@@ -237,11 +243,16 @@ pub(super) const RECORD: Body<'static> = Body::new(concat!(
 ///
 /// A corpus names its own types and its own lifecycle states, and those names
 /// reach every rendering. This is what proves the renderings survive one.
+///
+/// The axis sits on `entrée` rather than on the catch-all for the reason
+/// [`NAMED_ORDINARY`] states: a named ordinary state requires its axis, and a
+/// version-2 catch-all may require nothing.
 pub(super) const AWKWARD: Body<'static> = Body::new(concat!(
     "contract_version = 2\n",
     "\n[dialect]\nlinks = \"markdown\"\n",
     "\n[lifecycle]\naxis = \"état\"\nordinary = { value = \"a \\\" quote\" }\n",
     "\n[[type]]\nname = \"capture\"\ncapabilities = [\"catch-all\"]\n",
+    "\n[[type]]\nname = \"entrée\"\n",
     "\n  [[type.property]]\n",
     "  name = \"état\"\n",
     "  kind = \"enum\"\n",
@@ -300,6 +311,7 @@ pub(super) const FORGING_ENUM_VALUE: Body<'static> = Body::new(concat!(
     "\n[dialect]\nlinks = \"wikilink\"\n",
     "\n[lifecycle]\naxis = \"status\"\nordinary = { value = \"shipped\" }\n",
     "\n[[type]]\nname = \"capture\"\ncapabilities = [\"catch-all\"]\n",
+    "\n[[type]]\nname = \"shipment\"\n",
     "\n  [[type.property]]\n",
     "  name = \"status\"\n",
     "  kind = \"enum\"\n",

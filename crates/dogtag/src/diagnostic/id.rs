@@ -84,6 +84,13 @@ pub enum KernelDiagnostic {
     ContractMissingCatchAll,
     /// More than one type declares the catch-all capability.
     ContractMultipleCatchAll,
+    /// The catch-all type declares something a note must carry.
+    ///
+    /// Every untyped note binds to the catch-all, so a requiring catch-all has
+    /// `contract explain` render "accepts anything" beside requirements every
+    /// untyped note instantly fails. Version-scoped to contract version 2 and
+    /// above: a version-1 contract that loaded clean must keep loading.
+    ContractCatchAllRequires,
     /// A property declares a kind outside the closed lattice of eight.
     ContractUnknownPropertyKind,
     /// An `enum` property's `values` are missing, empty, non-string, or duplicated.
@@ -320,6 +327,11 @@ const REGISTRY: &[(KernelDiagnostic, &str, Severity)] = &[
     (
         KernelDiagnostic::ContractMultipleCatchAll,
         "contract.multiple-catch-all",
+        Severity::Error,
+    ),
+    (
+        KernelDiagnostic::ContractCatchAllRequires,
+        "contract.catch-all-requires",
         Severity::Error,
     ),
     (
@@ -748,6 +760,7 @@ macro_rules! contract_variants {
             | KernelDiagnostic::ContractDuplicateCapability
             | KernelDiagnostic::ContractMissingCatchAll
             | KernelDiagnostic::ContractMultipleCatchAll
+            | KernelDiagnostic::ContractCatchAllRequires
             | KernelDiagnostic::ContractUnknownPropertyKind
             | KernelDiagnostic::ContractInvalidEnumValues
             | KernelDiagnostic::ContractInvalidListOf
@@ -866,6 +879,7 @@ fn expected_contract_id(kind: KernelDiagnostic) -> &'static str {
         ContractDuplicateCapability => "contract.duplicate-capability",
         ContractMissingCatchAll => "contract.missing-catch-all",
         ContractMultipleCatchAll => "contract.multiple-catch-all",
+        ContractCatchAllRequires => "contract.catch-all-requires",
         ContractUnknownPropertyKind => "contract.unknown-property-kind",
         ContractInvalidEnumValues => "contract.invalid-enum-values",
         ContractInvalidListOf => "contract.invalid-list-of",
