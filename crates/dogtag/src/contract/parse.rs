@@ -26,7 +26,8 @@ use crate::provenance::Provenance;
 
 use super::model::{Contract, Dialect, FlagDecl, LifecycleDecl, LinkDialect, TypeDecl};
 use super::sink::{Claim, KeyPath, Report, Section, Seen, Sink, contract_file};
-use super::{declarations, lifecycle, validate};
+use super::vocabulary::TagsDecl;
+use super::{declarations, lifecycle, tags, validate};
 
 /// The version a contract declares, and where it declares it.
 #[derive(Debug)]
@@ -129,12 +130,16 @@ fn invalid(text: &Text, message: String, at: Range<usize>) -> Diagnostic {
 pub(crate) struct Parts {
     pub(crate) dialect: Option<Dialect>,
     pub(crate) lifecycle: Option<LifecycleDecl>,
+    pub(crate) tags: Option<TagsDecl>,
     pub(crate) flags: Vec<FlagDecl>,
     pub(crate) types: Vec<TypeDecl>,
 }
 
 impl Parts {
     /// The resolved contract, when every mandatory construct was declared.
+    ///
+    /// `tags` is not among them: the tag vocabulary is optional at the one
+    /// version that defines it, and absent at the one that does not.
     pub(crate) fn assemble(
         self,
         contract_version: u32,
@@ -144,6 +149,7 @@ impl Parts {
             contract_version,
             dialect: self.dialect?,
             lifecycle: self.lifecycle?,
+            tags: self.tags,
             flags: self.flags,
             types: self.types,
             provenance,
@@ -165,6 +171,7 @@ pub(crate) fn body(sink: &mut Sink<'_>, root: &DeTable<'_>) -> Parts {
     let parts = Parts {
         dialect: dialect(sink, root),
         lifecycle: lifecycle::declaration(sink, root),
+        tags: tags::table(sink, root),
         flags: flags(sink, root),
         types: declarations::types(sink, root),
     };

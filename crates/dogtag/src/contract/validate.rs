@@ -19,7 +19,7 @@
 use crate::diagnostic::{Diagnostic, KernelDiagnostic, Location, Related};
 
 use super::model::{
-    Capability, FlagDecl, LifecycleDecl, Ordinary, PropertyDecl, PropertyKind, TypeDecl,
+    Capability, FlagDecl, LifecycleDecl, Ordinary, PropertyDecl, PropertyKind, ScalarKind, TypeDecl,
 };
 use super::parse::Parts;
 use super::sink::{Report, Sink};
@@ -36,6 +36,7 @@ pub(crate) fn run(sink: &mut Sink<'_>, parts: &Parts) {
         return;
     }
     flags(sink, &parts.flags, &parts.types);
+    tags(sink, parts);
     if let Some(declared) = &parts.lifecycle {
         lifecycle(sink, declared, &parts.types);
     }
@@ -81,6 +82,20 @@ fn capabilities(sink: &mut Sink<'_>, types: &[TypeDecl]) {
         .collect();
     match carriers.split_first() {
         None => missing_catch_all(sink),
+        // Contract version 2 adds a third capability rule here — the catch-all
+        // type may declare no `required = true` property, relationship, or tag
+        // namespace — and it is **not implemented**. Both committed conformance
+        // fixtures declare exactly that shape at version 2 (`starter`'s `note`
+        // requires the lifecycle axis its named-ordinary encoding obliges it to
+        // require; `dense`'s `unfiled` requires `title` and `created`), so the
+        // rule as written refuses them and takes seven standing scenarios red
+        // across both profiles. Repairing `starter` is not a mechanical edit:
+        // its catch-all declares the axis, and a named ordinary state requires
+        // that axis on every type declaring it, so the catch-all rule, the
+        // lifecycle rule and `starter`'s design cannot all three hold. That is
+        // a decision about the normative `init` output rather than a defect in
+        // this walk, and it is recorded for the maintainer rather than guessed
+        // at here.
         Some((_, [])) => {}
         Some((first, rest)) => multiple_catch_all(sink, first, rest),
     }
@@ -136,6 +151,127 @@ fn flag_property(sink: &mut Sink<'_>, flag: &FlagDecl, types: &[TypeDecl]) {
     ))
     .with_help("a flag is a boolean property, so that it cannot be a point on an axis".to_owned());
     sink.report(KernelDiagnostic::ContractFlagPropertyNotBoolean, report, at);
+}
+
+/// A type that declares at least one tag namespace, and where its first one is
+/// written — which is what every rule about that type's namespaces points at.
+struct Carrier<'a> {
+    declared: &'a TypeDecl,
+    key: String,
+}
+
+fn carriers(types: &[TypeDecl]) -> Vec<Carrier<'_>> {
+    types
+        .iter()
+        .filter_map(|declared| {
+            let first = declared.tag_namespaces().first()?;
+            Some(Carrier {
+                declared,
+                key: format!(
+                    "type.{}.tag-namespace.{}.prefix",
+                    declared.name(),
+                    first.prefix()
+                ),
+            })
+        })
+        .collect()
+}
+
+/// The tag vocabulary as the whole-contract rules read it: the property
+/// `[tags]` names, and every type that declares a namespace over it.
+struct Vocabulary<'a> {
+    property: &'a str,
+    carriers: Vec<Carrier<'a>>,
+}
+
+/// The tag vocabulary reads across the whole contract: a type declaring a
+/// namespace declares the property `[tags]` names, and that property is a list
+/// of string.
+///
+/// Bound to the types that declare a namespace, exactly as the record binds it.
+/// A `[tags]` table naming a property nothing declares, in a corpus where no
+/// type declares a namespace, is not a fault this rule reaches.
+fn tags(sink: &mut Sink<'_>, parts: &Parts) {
+    let carriers = carriers(&parts.types);
+    let Some(declared) = &parts.tags else {
+        for carrier in &carriers {
+            tags_table_missing(sink, carrier);
+        }
+        return;
+    };
+    if carriers.is_empty() {
+        return;
+    }
+    let vocabulary = Vocabulary {
+        property: declared.property(),
+        carriers,
+    };
+    for carrier in &vocabulary.carriers {
+        tag_property(sink, &vocabulary, carrier);
+    }
+    tag_property_kind(sink, &vocabulary, &parts.types);
+}
+
+fn tags_table_missing(sink: &mut Sink<'_>, carrier: &Carrier<'_>) {
+    let at = located(sink, &carrier.key);
+    let report = Report::new(format!(
+        "the type `{}` declares a tag namespace, and the contract declares no `[tags]` table",
+        carrier.declared.name()
+    ))
+    .with_help(
+        "`[tags]` names the property a corpus carries its tags on, and a namespace describes that \
+         property's vocabulary"
+            .to_owned(),
+    );
+    sink.report(KernelDiagnostic::ContractTagsTableMissing, report, at);
+}
+
+fn tag_property(sink: &mut Sink<'_>, vocabulary: &Vocabulary<'_>, carrier: &Carrier<'_>) {
+    let property = vocabulary.property;
+    if carrier.declared.property(property).is_some() {
+        return;
+    }
+    let at = located(sink, &carrier.key);
+    let report = Report::new(format!(
+        "the type `{}` declares a tag namespace but not `{property}`, which `[tags]` names",
+        carrier.declared.name()
+    ))
+    .with_help(
+        "a namespace describes the tags a note of its type carries, so the type declares the tag \
+         property itself"
+            .to_owned(),
+    );
+    sink.report(KernelDiagnostic::ContractTagPropertyUndeclared, report, at);
+}
+
+/// One name declares one kind corpus-wide, so the tag property's shape has one
+/// answer and this rule asks it once.
+fn tag_property_kind(sink: &mut Sink<'_>, vocabulary: &Vocabulary<'_>, types: &[TypeDecl]) {
+    let property = vocabulary.property;
+    let Some(kind) = kind_of(types, property) else {
+        // No type declares it at all, which the rule above already reported
+        // against every type that needed it.
+        return;
+    };
+    if matches!(
+        kind,
+        PropertyKind::List {
+            of: ScalarKind::String
+        }
+    ) {
+        return;
+    }
+    let at = located(sink, "tags.property");
+    let report = Report::new(format!(
+        "`[tags]` names `{property}`, whose declared kind is {}",
+        kind.describe()
+    ))
+    .with_help("the tag property is a `list` of `string`, one tag per element".to_owned());
+    sink.report(
+        KernelDiagnostic::ContractTagPropertyNotListOfString,
+        report,
+        at,
+    );
 }
 
 /// The lifecycle axis, and the consistency of its ordinary state.
@@ -280,9 +416,13 @@ mod tests {
     use crate::diagnostic::DiagnosticList;
 
     fn read(source: &str) -> DiagnosticList {
+        read_at(&schema::VERSION_1, source)
+    }
+
+    fn read_at(schema: &'static schema::Schema, source: &str) -> DiagnosticList {
         let text = text_of(source);
         let document = root_of(&text);
-        let mut sink = Sink::new(&text, &schema::VERSION_1);
+        let mut sink = Sink::new(&text, schema);
         parse::body(&mut sink, document.get_ref());
         let (diagnostics, _) = sink.finish();
         diagnostics
@@ -600,6 +740,120 @@ mod tests {
     #[test]
     fn a_corpus_declaring_no_axis_reaches_no_lifecycle_rule() {
         assert!(read(&contract("")).is_empty());
+    }
+
+    /// A version-2 contract declaring one catch-all type, which each tag case
+    /// below completes with the type's own declarations and, after them, the
+    /// `[tags]` table when it declares one. A root table may follow an array of
+    /// tables, so both halves compose into one source.
+    const TAGGED: &str = concat!(
+        "contract_version = 2\n",
+        "\n[dialect]\nlinks = \"wikilink\"\n",
+        "\n[lifecycle]\nnone = true\n",
+        "\n[[type]]\nname = \"log\"\ncapabilities = [\"catch-all\"]\n",
+    );
+
+    /// The `[tags]` table naming `labels`.
+    const TAGS: &str = "\n[tags]\nproperty = \"labels\"\n";
+
+    /// The tag property, declared as the list of string the format requires.
+    const LABELS: &str =
+        "\n  [[type.property]]\n  name = \"labels\"\n  kind = \"list\"\n  of = \"string\"\n";
+
+    /// One open namespace over it.
+    const NAMESPACE: &str = "\n  [[type.tag-namespace]]\n  prefix = \"log/\"\n  open = true\n";
+
+    #[test]
+    fn a_type_declaring_a_namespace_over_a_declared_list_of_string_is_accepted() {
+        assert!(
+            read_at(
+                &schema::VERSION_2,
+                &[TAGGED, LABELS, NAMESPACE, TAGS].concat()
+            )
+            .is_empty()
+        );
+    }
+
+    #[test]
+    fn a_namespace_in_a_contract_with_no_tags_table_is_refused() {
+        let diagnostics = read_at(&schema::VERSION_2, &[TAGGED, LABELS, NAMESPACE].concat());
+        assert_eq!(ids(&diagnostics), ["contract.tags-table-missing"]);
+        let reported = &diagnostics.as_slice()[0];
+        assert!(reported.message.contains("the type `log`"));
+        assert!(
+            reported
+                .location
+                .as_ref()
+                .is_some_and(|at| at.span.is_some())
+        );
+    }
+
+    #[test]
+    fn a_namespace_on_a_type_that_does_not_declare_the_tag_property_is_refused() {
+        let diagnostics = read_at(&schema::VERSION_2, &[TAGGED, NAMESPACE, TAGS].concat());
+        assert_eq!(ids(&diagnostics), ["contract.tag-property-undeclared"]);
+        assert!(diagnostics.as_slice()[0].message.contains("`labels`"));
+    }
+
+    #[test]
+    fn a_tag_property_declared_as_something_other_than_a_list_of_string_is_refused() {
+        let scalar = "\n  [[type.property]]\n  name = \"labels\"\n  kind = \"string\"\n";
+        let diagnostics = read_at(
+            &schema::VERSION_2,
+            &[TAGGED, scalar, NAMESPACE, TAGS].concat(),
+        );
+        assert_eq!(
+            ids(&diagnostics),
+            ["contract.tag-property-not-list-of-string"]
+        );
+        assert!(diagnostics.as_slice()[0].message.contains("`string`"));
+    }
+
+    #[test]
+    fn a_list_of_something_other_than_string_is_refused_as_the_tag_property() {
+        let dates =
+            "\n  [[type.property]]\n  name = \"labels\"\n  kind = \"list\"\n  of = \"date\"\n";
+        let diagnostics = read_at(
+            &schema::VERSION_2,
+            &[TAGGED, dates, NAMESPACE, TAGS].concat(),
+        );
+        assert_eq!(
+            ids(&diagnostics),
+            ["contract.tag-property-not-list-of-string"]
+        );
+    }
+
+    #[test]
+    fn a_tag_property_no_type_declares_is_reported_once_rather_than_twice() {
+        // The per-type rule already says the declaring type is missing it, and
+        // a kind rule over a kind nobody declared would be a second complaint
+        // about one fault.
+        let elsewhere = "\n[[type]]\nname = \"other\"\n";
+        let diagnostics = read_at(
+            &schema::VERSION_2,
+            &[TAGGED, NAMESPACE, TAGS, elsewhere].concat(),
+        );
+        assert_eq!(ids(&diagnostics), ["contract.tag-property-undeclared"]);
+    }
+
+    #[test]
+    fn a_tags_table_over_a_corpus_declaring_no_namespace_reaches_no_rule() {
+        // The record binds the rule to types that declare a namespace, so a
+        // `[tags]` naming a property nothing declares is not this rule's
+        // business.
+        assert!(read_at(&schema::VERSION_2, &[TAGGED, TAGS].concat()).is_empty());
+    }
+
+    #[test]
+    fn a_tags_table_that_did_not_resolve_is_not_also_called_absent() {
+        // The table is written, so concluding "the contract declares no
+        // `[tags]` table" would contradict the file in front of the reader.
+        let broken = "\n[tags]\nproperty = 4\n";
+        let diagnostics = read_at(
+            &schema::VERSION_2,
+            &[TAGGED, LABELS, NAMESPACE, broken].concat(),
+        );
+        assert_eq!(ids(&diagnostics), ["contract.value-wrong-type"]);
     }
 
     #[test]

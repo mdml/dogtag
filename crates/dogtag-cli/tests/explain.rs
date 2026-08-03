@@ -124,7 +124,7 @@ fn the_json_is_one_document_that_always_carries_provenance() {
         "not one JSON document: {finished:?}"
     );
     for fragment in [
-        "\"schema_version\": 1",
+        "\"schema_version\": 2",
         "\"report\": \"contract\"",
         "\"contract_version\": 2",
         "\"links\": \"wikilink\"",

@@ -19,6 +19,7 @@
 
 use core::fmt;
 
+use super::vocabulary::{TagNamespaceDecl, TagsDecl};
 use crate::provenance::Provenance;
 
 /// A committed vault contract that loaded.
@@ -31,6 +32,7 @@ pub struct Contract {
     pub(crate) contract_version: u32,
     pub(crate) dialect: Dialect,
     pub(crate) lifecycle: LifecycleDecl,
+    pub(crate) tags: Option<TagsDecl>,
     pub(crate) flags: Vec<FlagDecl>,
     pub(crate) types: Vec<TypeDecl>,
     pub(crate) provenance: Provenance,
@@ -52,6 +54,15 @@ impl Contract {
     /// one.
     pub fn lifecycle(&self) -> &LifecycleDecl {
         &self.lifecycle
+    }
+
+    /// The tag vocabulary the corpus declares, when it declares one.
+    ///
+    /// `None` covers two cases a caller never has to tell apart: a version-2
+    /// corpus that declares no `[tags]` table, and a version-1 corpus, whose
+    /// format has no tag vocabulary to declare.
+    pub fn tags(&self) -> Option<&TagsDecl> {
+        self.tags.as_ref()
     }
 
     /// The declared flags, in declaration order.
@@ -250,6 +261,7 @@ pub struct TypeDecl {
     pub(crate) capabilities: Vec<Capability>,
     pub(crate) properties: Vec<PropertyDecl>,
     pub(crate) relationships: Vec<RelationshipDecl>,
+    pub(crate) tag_namespaces: Vec<TagNamespaceDecl>,
 }
 
 impl TypeDecl {
@@ -271,6 +283,16 @@ impl TypeDecl {
     /// The relationships the type declares, in declaration order.
     pub fn relationships(&self) -> &[RelationshipDecl] {
         &self.relationships
+    }
+
+    /// The tag namespaces the type declares, in declaration order.
+    ///
+    /// Empty for every type of a version-1 contract, whose format defines no
+    /// namespace to declare, and for a version-2 type that describes none of
+    /// its tagging — which the record calls ordinary tagging, undescribed and
+    /// unenforced.
+    pub fn tag_namespaces(&self) -> &[TagNamespaceDecl] {
+        &self.tag_namespaces
     }
 
     /// Whether the type declares `capability`.
@@ -538,6 +560,7 @@ impl RelationshipDecl {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::contract::NamespaceMembership;
 
     pub(super) fn sample() -> Contract {
         Contract {
@@ -549,6 +572,9 @@ mod tests {
                 axis: "status".to_owned(),
                 ordinary: Ordinary::Absent,
             },
+            tags: Some(TagsDecl {
+                property: "labels".to_owned(),
+            }),
             flags: vec![FlagDecl {
                 property: "leaned_on".to_owned(),
             }],
@@ -579,6 +605,20 @@ mod tests {
                 predicate: "works-at".to_owned(),
                 required: false,
             }],
+            tag_namespaces: vec![
+                TagNamespaceDecl {
+                    prefix: "role/".to_owned(),
+                    required: true,
+                    membership: NamespaceMembership::Closed {
+                        values: vec!["founder".to_owned(), "advisor".to_owned()],
+                    },
+                },
+                TagNamespaceDecl {
+                    prefix: "topic/".to_owned(),
+                    required: false,
+                    membership: NamespaceMembership::Open,
+                },
+            ],
         }
     }
 
@@ -588,6 +628,7 @@ mod tests {
             capabilities: vec![Capability::CatchAll, Capability::ClosedWrite],
             properties: Vec::new(),
             relationships: Vec::new(),
+            tag_namespaces: Vec::new(),
         }
     }
 

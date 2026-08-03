@@ -36,8 +36,11 @@
 //! - **Provenance is opt-in and annotates nothing when it is off.** The
 //!   Markdown's job is instructing an agent, and a source annotation on every
 //!   line makes it materially worse at that.
-//! - **Declaration order is the emission order**, for types, properties and
-//!   relationships alike. Never alphabetical.
+//! - **Declaration order is the emission order**, for types, properties,
+//!   relationships and tag namespaces alike. Never alphabetical.
+//! - **A tag namespace renders under the type that declares it**, as a third
+//!   table beside the other two. The nesting is bounded by the construct: a
+//!   namespace carries a flat vocabulary and nothing below it.
 //!
 //! A corpus names its own types and its own lifecycle states, and those names
 //! reach this output. A heading, a paragraph and a table row are each one
@@ -48,8 +51,8 @@
 
 use super::yes_no;
 use crate::contract::{
-    CONTRACT_PATH, Contract, LifecycleDecl, LinkDialect, Ordinary, PropertyDecl, PropertyKind,
-    RelationshipDecl, ScalarKind, TypeDecl,
+    CONTRACT_PATH, Contract, LifecycleDecl, LinkDialect, NamespaceMembership, Ordinary,
+    PropertyDecl, PropertyKind, RelationshipDecl, ScalarKind, TagNamespaceDecl, TypeDecl,
 };
 use crate::diagnostic::Location;
 use crate::provenance::{ProvenanceEntry, Source};
@@ -110,6 +113,8 @@ impl Render<'_> {
         blocks.extend(self.annotations(&lifecycle_keys(self.contract.lifecycle())));
         blocks.push("## Flags".to_owned());
         blocks.extend(self.flag_blocks());
+        blocks.push("## Tags".to_owned());
+        blocks.extend(self.tags_blocks());
         blocks.push("## Dialect".to_owned());
         blocks.push(dialect_text(self.contract.dialect().links()).to_owned());
         blocks.extend(self.annotations(&["dialect.links".to_owned()]));
@@ -143,51 +148,100 @@ impl Render<'_> {
     fn declaration_blocks(&self, declared: &TypeDecl) -> Vec<String> {
         let properties = self.properties(declared);
         let relationships = self.relationships(declared);
-        if declared.properties().is_empty() && declared.relationships().is_empty() {
-            return vec![format!("{properties}\n{relationships}")];
+        let mut blocks = if declared.properties().is_empty() && declared.relationships().is_empty()
+        {
+            vec![format!("{properties}\n{relationships}")]
+        } else {
+            vec![properties, relationships]
+        };
+        blocks.extend(self.namespace_block(declared));
+        blocks
+    }
+
+    /// A type's tag-namespace table, when it declares any.
+    ///
+    /// Silence when it declares none, unlike the statements of absence the two
+    /// tables above make. The tag vocabulary is a construct only contract
+    /// version 2 defines, so "this type declares no tag namespaces" under every
+    /// heading of a version-1 contract would state something about a construct
+    /// that version does not have — and a version-2 type carrying the tag
+    /// property without a namespace is ordinary tagging, which the format
+    /// describes nowhere and this rendering therefore describes nowhere.
+    fn namespace_block(&self, declared: &TypeDecl) -> Vec<String> {
+        if declared.tag_namespaces().is_empty() {
+            return Vec::new();
         }
-        vec![properties, relationships]
+        let rows = declared
+            .tag_namespaces()
+            .iter()
+            .map(|namespace| self.namespace_row(declared, namespace))
+            .collect();
+        vec![table(
+            self.header(&["tag namespace", "membership", "required"]),
+            rows,
+        )]
+    }
+
+    /// One tag namespace's row.
+    fn namespace_row(&self, declared: &TypeDecl, namespace: &TagNamespaceDecl) -> Vec<String> {
+        self.row(Row {
+            name: namespace.prefix(),
+            between: Some(membership_text(namespace.membership())),
+            required: namespace.required(),
+            source: required_key(declared, "tag-namespace", namespace.prefix()),
+        })
+    }
+
+    /// The property a corpus carries its tags on, or the statement that it
+    /// declares no tag vocabulary.
+    fn tags_blocks(&self) -> Vec<String> {
+        let Some(tags) = self.contract.tags() else {
+            return vec!["This contract declares no tag vocabulary.".to_owned()];
+        };
+        let mut blocks = vec![format!(
+            "Tags are carried by the property `{}`, one tag per element.",
+            one_line(tags.property())
+        )];
+        blocks.extend(self.annotations(&["tags.property".to_owned()]));
+        blocks
     }
 
     /// A type's property table, or the statement that it declares none.
     fn properties(&self, declared: &TypeDecl) -> String {
-        if declared.properties().is_empty() {
-            return "This type declares no properties.".to_owned();
-        }
         let rows = declared
             .properties()
             .iter()
             .map(|property| self.property_row(declared, property))
             .collect();
-        table(self.header(&["property", "kind", "required"]), rows)
+        self.declarations(rows, &["property", "kind", "required"], "properties")
     }
 
     /// A type's relationship table, or the statement that it declares none.
     fn relationships(&self, declared: &TypeDecl) -> String {
-        if declared.relationships().is_empty() {
-            return "This type declares no relationships.".to_owned();
-        }
         let rows = declared
             .relationships()
             .iter()
             .map(|relationship| self.relationship_row(declared, relationship))
             .collect();
-        table(self.header(&["relationship", "required"]), rows)
+        self.declarations(rows, &["relationship", "required"], "relationships")
+    }
+
+    /// A table over `rows`, or the statement that the type declares no `plural`.
+    fn declarations(&self, rows: Vec<Vec<String>>, columns: &[&str], plural: &str) -> String {
+        if rows.is_empty() {
+            return format!("This type declares no {plural}.");
+        }
+        table(self.header(columns), rows)
     }
 
     /// One property's row.
     fn property_row(&self, declared: &TypeDecl, property: &PropertyDecl) -> Vec<String> {
-        let mut row = vec![
-            cell(&format!("`{}`", property.name())),
-            cell(&kind_text(property.kind())),
-            yes_no(property.required()).to_owned(),
-        ];
-        row.extend(self.source_cells(&format!(
-            "type.{}.property.{}.required",
-            declared.name(),
-            property.name()
-        )));
-        row
+        self.row(Row {
+            name: property.name(),
+            between: Some(kind_text(property.kind())),
+            required: property.required(),
+            source: required_key(declared, "property", property.name()),
+        })
     }
 
     /// One relationship's row.
@@ -196,16 +250,25 @@ impl Render<'_> {
         declared: &TypeDecl,
         relationship: &RelationshipDecl,
     ) -> Vec<String> {
-        let mut row = vec![
-            cell(&format!("`{}`", relationship.predicate())),
-            yes_no(relationship.required()).to_owned(),
-        ];
-        row.extend(self.source_cells(&format!(
-            "type.{}.relationship.{}.required",
-            declared.name(),
-            relationship.predicate()
-        )));
-        row
+        self.row(Row {
+            name: relationship.predicate(),
+            between: None,
+            required: relationship.required(),
+            source: required_key(declared, "relationship", relationship.predicate()),
+        })
+    }
+
+    /// One declaration's row: its quoted name, whatever its own table carries
+    /// between, whether it is required, and where that `required` came from.
+    ///
+    /// Every table in this rendering has that shape, which is what lets three
+    /// tables share one row builder rather than three that drift.
+    fn row(&self, row: Row<'_>) -> Vec<String> {
+        let mut cells = vec![cell(&format!("`{}`", row.name))];
+        cells.extend(row.between.as_deref().map(cell));
+        cells.push(yes_no(row.required).to_owned());
+        cells.extend(self.source_cells(&row.source));
+        cells
     }
 
     /// A table's header, which gains a source column only under provenance.
@@ -273,6 +336,22 @@ impl Render<'_> {
     }
 }
 
+/// One row of a declaration table, before the source column is decided.
+struct Row<'a> {
+    /// The declaration's own name, rendered quoted in the first column.
+    name: &'a str,
+    /// What this table carries between the name and `required`, if anything.
+    between: Option<String>,
+    required: bool,
+    /// The provenance key of the `required` the row renders.
+    source: String,
+}
+
+/// The provenance key of one declaration's `required` leaf.
+fn required_key(declared: &TypeDecl, collection: &str, name: &str) -> String {
+    format!("type.{}.{collection}.{name}.required", declared.name())
+}
+
 /// A type's heading, naming what it declares rather than what it is called.
 fn heading(declared: &TypeDecl) -> String {
     format!(
@@ -311,6 +390,19 @@ fn kind_text(kind: &PropertyKind) -> String {
 fn enum_text(values: &[String]) -> String {
     let members: Vec<String> = values.iter().map(|value| format!("`{value}`")).collect();
     format!("enum ({})", members.join(", "))
+}
+
+/// A namespace's membership: its closed vocabulary in declaration order, or
+/// that it declares none.
+///
+/// A member is quoted and `open` is not, so a closed vocabulary whose one
+/// member happens to be the word `open` still reads as the vocabulary it is.
+fn membership_text(membership: &NamespaceMembership) -> String {
+    let Some(values) = membership.values() else {
+        return "open".to_owned();
+    };
+    let members: Vec<String> = values.iter().map(|value| format!("`{value}`")).collect();
+    members.join(", ")
 }
 
 /// A scalar kind's reading.
@@ -425,8 +517,8 @@ fn cell(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::super::fixture::{
-        ABSENT_ORDINARY, AWKWARD, Body, CLEAN, FIXTURES, KINDS, NAMED_ORDINARY, Tree, assert_holds,
-        assert_no_line, rendered, shown,
+        ABSENT_ORDINARY, AWKWARD, Body, CLEAN, FIXTURES, KINDS, NAMED_ORDINARY, TAGGED, Tree,
+        assert_holds, assert_no_line, rendered, shown,
     };
     use super::*;
     use crate::diagnostic::{FileRef, Position, Span, VaultPath};
@@ -578,6 +670,64 @@ mod tests {
             &document,
             "`confidential` — a boolean property, orthogonal to the life axis.\n",
         );
+    }
+
+    #[test]
+    fn a_contract_with_no_tag_vocabulary_renders_the_statement_it_is() {
+        let tree = Tree::new("markdown-no-tags");
+        assert_holds(
+            &markdown(&tree, NAMED_ORDINARY, false),
+            "## Tags\n\nThis contract declares no tag vocabulary.\n",
+        );
+    }
+
+    #[test]
+    fn a_tag_vocabulary_names_the_property_that_carries_it() {
+        let tree = Tree::new("markdown-tags");
+        assert_holds(
+            &markdown(&tree, TAGGED, false),
+            "## Tags\n\nTags are carried by the property `labels`, one tag per element.\n",
+        );
+    }
+
+    #[test]
+    fn a_namespace_table_renders_a_row_per_declaration_in_declaration_order() {
+        let tree = Tree::new("markdown-namespaces");
+        assert_holds(
+            &markdown(&tree, TAGGED, false),
+            concat!(
+                "| tag namespace | membership | required |\n",
+                "| --- | --- | --- |\n",
+                "| `log/` | `workout`, `meditation`, `a \\| pipe` | yes |\n",
+                "| `topic/` | open | no |\n",
+            ),
+        );
+    }
+
+    #[test]
+    fn a_type_declaring_no_namespace_renders_no_namespace_table() {
+        // Silence rather than a statement of absence: the construct exists only
+        // at contract version 2, so every type of a version-1 contract would
+        // otherwise carry a remark about a construct its format does not have.
+        let tree = Tree::new("markdown-no-namespaces");
+        assert_no_line(&markdown(&tree, NAMED_ORDINARY, false), |line| {
+            line.starts_with("| tag namespace")
+        });
+    }
+
+    #[test]
+    fn with_provenance_on_a_namespace_table_gains_a_source_column() {
+        let tree = Tree::new("markdown-provenance-namespaces");
+        let document = markdown(&tree, TAGGED, true);
+        assert_holds(
+            &document,
+            "| tag namespace | membership | required | source |\n",
+        );
+        assert_holds(
+            &document,
+            "| `topic/` | open | no | (default, contract version 2) |\n",
+        );
+        assert_holds(&document, "- `tags.property` — `.dogtag/contract.toml:");
     }
 
     #[test]
