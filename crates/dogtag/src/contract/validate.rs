@@ -805,6 +805,52 @@ mod tests {
         assert!(read_at(&schema::VERSION_2, &[CATCH_ALL, optional].concat()).is_empty());
     }
 
+    /// A contract whose ordinary state is the named value `active`, over a
+    /// catch-all type declaring the axis property itself — completed below by
+    /// the `required` spelling each half of the case is about. It carries no
+    /// `contract_version`, so the same bytes read at either version's schema.
+    const NAMED_AXIS_ON_THE_CATCH_ALL: &str = concat!(
+        "[dialect]\nlinks = \"wikilink\"\n",
+        "\n[lifecycle]\naxis = \"status\"\nordinary = { value = \"active\" }\n",
+        "\n[[type]]\nname = \"note\"\ncapabilities = [\"catch-all\"]\n",
+        "\n  [[type.property]]\n  name = \"status\"\n  kind = \"enum\"\n",
+        "  values = [\"active\", \"archived\"]\n",
+    );
+
+    /// The axis every note of the declaring type must carry.
+    const AXIS_REQUIRED: &str = "  required = true\n";
+
+    /// The axis a note of the declaring type may omit.
+    const AXIS_OPTIONAL: &str = "  required = false\n";
+
+    #[test]
+    fn a_named_ordinary_state_on_the_catch_all_has_no_spelling_at_version_2() {
+        // Two rules meet here, and version 2 leaves no gap between them. A
+        // named ordinary state cannot be a value notes may omit, so the axis is
+        // `required = true` on every type that declares it; and the catch-all
+        // may require nothing. So a catch-all declaring the axis is refused
+        // whichever way it spells `required`, and a version-2 corpus with a
+        // named ordinary state keeps that axis off its catch-all entirely —
+        // which means an untyped note in such a corpus has no lifecycle state
+        // at all. Neither record says so; each rule is stated on its own.
+        //
+        // The same bytes load clean at version 1, which is why the interaction
+        // surfaces only when a corpus restamps to version 2. The committed
+        // `starter` fixture did exactly that, and this is why its catch-all
+        // dropped the axis rather than merely relaxing it.
+        let required = [NAMED_AXIS_ON_THE_CATCH_ALL, AXIS_REQUIRED].concat();
+        let optional = [NAMED_AXIS_ON_THE_CATCH_ALL, AXIS_OPTIONAL].concat();
+        assert_eq!(
+            ids(&read_at(&schema::VERSION_2, &required)),
+            ["contract.catch-all-requires"]
+        );
+        assert_eq!(
+            ids(&read_at(&schema::VERSION_2, &optional)),
+            ["contract.lifecycle-ordinary-value-optional"]
+        );
+        assert!(read_at(&schema::VERSION_1, &required).is_empty());
+    }
+
     #[test]
     fn two_catch_all_types_are_not_also_told_what_they_require() {
         // One fault, one diagnostic: the requiring rule reads *the* catch-all,
