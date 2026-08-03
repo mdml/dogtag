@@ -41,6 +41,10 @@
 //! - **A tag namespace renders under the type that declares it**, as a third
 //!   table beside the other two. The nesting is bounded by the construct: a
 //!   namespace carries a flat vocabulary and nothing below it.
+//! - **A record's fields render under the property that declares them**, as a
+//!   table of their own introduced by the property it belongs to. The record
+//!   kind is one level deep, which is what keeps this nesting finite: a field
+//!   is never itself a record, so no field table has a table under it.
 //!
 //! A corpus names its own types and its own lifecycle states, and those names
 //! reach this output. A heading, a paragraph and a table row are each one
@@ -51,8 +55,8 @@
 
 use super::yes_no;
 use crate::contract::{
-    CONTRACT_PATH, Contract, LifecycleDecl, LinkDialect, NamespaceMembership, Ordinary,
-    PropertyDecl, PropertyKind, RelationshipDecl, ScalarKind, TagNamespaceDecl, TypeDecl,
+    CONTRACT_PATH, Contract, FieldDecl, FieldKind, LifecycleDecl, LinkDialect, NamespaceMembership,
+    Ordinary, PropertyDecl, PropertyKind, RelationshipDecl, ScalarKind, TagNamespaceDecl, TypeDecl,
 };
 use crate::diagnostic::Location;
 use crate::provenance::{ProvenanceEntry, Source};
@@ -140,22 +144,69 @@ impl Render<'_> {
         blocks
     }
 
-    /// A type's properties and relationships, or the statements that it has
-    /// none of either.
-    ///
-    /// The two statements share a block, because a type that declares nothing is
-    /// one short remark rather than two paragraphs.
+    /// Everything a type declares: its properties, the fields of any record
+    /// among them, its relationships, and its tag namespaces.
     fn declaration_blocks(&self, declared: &TypeDecl) -> Vec<String> {
-        let properties = self.properties(declared);
-        let relationships = self.relationships(declared);
-        let mut blocks = if declared.properties().is_empty() && declared.relationships().is_empty()
-        {
-            vec![format!("{properties}\n{relationships}")]
-        } else {
-            vec![properties, relationships]
-        };
+        let mut blocks = self.property_blocks(declared);
         blocks.extend(self.namespace_block(declared));
         blocks
+    }
+
+    /// A type's properties and relationships, or the statements that it has
+    /// none of either, with each record property's fields under it.
+    ///
+    /// The two statements share a block, because a type that declares nothing is
+    /// one short remark rather than two paragraphs — and a type declaring no
+    /// property declares no record either, so nothing comes between them.
+    fn property_blocks(&self, declared: &TypeDecl) -> Vec<String> {
+        let properties = self.properties(declared);
+        let relationships = self.relationships(declared);
+        if declared.properties().is_empty() && declared.relationships().is_empty() {
+            return vec![format!("{properties}\n{relationships}")];
+        }
+        let mut blocks = vec![properties];
+        for property in declared.properties() {
+            blocks.extend(self.field_blocks(declared, property));
+        }
+        blocks.push(relationships);
+        blocks
+    }
+
+    /// One record property's fields, as the table they are.
+    ///
+    /// Nothing at all for a property that is not a record, which is the common
+    /// case — and the one-level bound means a field never has a table of its
+    /// own beneath this one.
+    fn field_blocks(&self, declared: &TypeDecl, property: &PropertyDecl) -> Vec<String> {
+        let Some(fields) = property.kind().fields() else {
+            return Vec::new();
+        };
+        let rows = fields
+            .iter()
+            .map(|field| self.field_row(declared, property, field))
+            .collect();
+        vec![
+            fields_lead(property),
+            table(self.header(&["field", "kind", "required"]), rows),
+        ]
+    }
+
+    /// One field's row.
+    fn field_row(
+        &self,
+        declared: &TypeDecl,
+        property: &PropertyDecl,
+        field: &FieldDecl,
+    ) -> Vec<String> {
+        // A field is addressed under the property that declares it, so the
+        // collection its `required` lives in is `property.<name>.field`.
+        let collection = format!("property.{}.field", property.name());
+        self.row(Row {
+            name: field.name(),
+            between: Some(field_kind_text(field.kind())),
+            required: field.required(),
+            source: required_key(declared, &collection, field.name()),
+        })
     }
 
     /// A type's tag-namespace table, when it declares any.
@@ -375,15 +426,42 @@ fn capabilities_text(declared: &TypeDecl) -> String {
 }
 
 /// A property kind, spelled with everything that is part of its meaning.
+///
+/// A record spells its bare kind and nothing more: what it carries is the field
+/// table under it, and repeating the fields inside a cell would be the same
+/// declaration twice, in a form a table cannot hold.
 fn kind_text(kind: &PropertyKind) -> String {
     match kind {
         PropertyKind::Enum { values } => enum_text(values),
         PropertyKind::List { of } => format!("list of {}", scalar_text(*of)),
+        PropertyKind::Record { .. } => "record".to_owned(),
+        PropertyKind::ListOfRecord { .. } => "list of record".to_owned(),
         scalar => scalar_text(
             ScalarKind::named(scalar.as_str()).expect("a kind that is neither enum nor list"),
         )
         .to_owned(),
     }
+}
+
+/// A field kind: the scalar lattice at full width, `enum` included.
+fn field_kind_text(kind: &FieldKind) -> String {
+    match kind {
+        FieldKind::Scalar(scalar) => scalar_text(*scalar).to_owned(),
+        FieldKind::Enum { values } => enum_text(values),
+    }
+}
+
+/// The sentence introducing one record property's field table, which names the
+/// property the fields belong to and which of the two record shapes it is.
+fn fields_lead(property: &PropertyDecl) -> String {
+    let shape = match property.kind() {
+        PropertyKind::ListOfRecord { .. } => "a list of records, each",
+        _ => "a record",
+    };
+    format!(
+        "The property `{}` is {shape} with these fields:",
+        one_line(property.name())
+    )
 }
 
 /// An `enum`, with its members in declaration order.
@@ -517,8 +595,8 @@ fn cell(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::super::fixture::{
-        ABSENT_ORDINARY, AWKWARD, Body, CLEAN, FIXTURES, KINDS, NAMED_ORDINARY, TAGGED, Tree,
-        assert_holds, assert_no_line, rendered, shown,
+        ABSENT_ORDINARY, AWKWARD, Body, CLEAN, FIXTURES, KINDS, NAMED_ORDINARY, RECORDS, TAGGED,
+        Tree, assert_holds, assert_no_line, rendered, shown,
     };
     use super::*;
     use crate::diagnostic::{FileRef, Position, Span, VaultPath};
@@ -625,6 +703,67 @@ mod tests {
             "| `sightings` | list of date (RFC 3339 full-date) | no |\n",
         );
         assert_holds(&document, "| `state` | enum (`one`, `two`) | no |\n");
+    }
+
+    #[test]
+    fn a_record_property_renders_its_fields_as_a_table_under_the_property() {
+        let tree = Tree::new("markdown-record");
+        let document = markdown(&tree, RECORDS, false);
+        assert_holds(&document, "| `legal_name` | record | yes |\n");
+        assert_holds(
+            &document,
+            concat!(
+                "The property `legal_name` is a record with these fields:\n",
+                "\n",
+                "| field | kind | required |\n",
+                "| --- | --- | --- |\n",
+                "| `given` | string | yes |\n",
+                "| `family` | string | no |\n",
+            ),
+        );
+    }
+
+    #[test]
+    fn a_list_of_records_says_so_and_renders_the_fields_each_element_carries() {
+        let tree = Tree::new("markdown-record-list");
+        let document = markdown(&tree, RECORDS, false);
+        assert_holds(&document, "| `channels` | list of record | no |\n");
+        assert_holds(
+            &document,
+            concat!(
+                "The property `channels` is a list of records, each with these fields:\n",
+                "\n",
+                "| field | kind | required |\n",
+                "| --- | --- | --- |\n",
+                "| `label` | enum (`home`, `a \\| pipe`) | yes |\n",
+                "| `reached_on` | date (RFC 3339 full-date) | no |\n",
+            ),
+        );
+    }
+
+    #[test]
+    fn a_type_declaring_no_record_renders_no_field_table() {
+        // The nesting is the record kind's, so a contract that declares none
+        // carries no field table and no remark about one.
+        let tree = Tree::new("markdown-no-record");
+        let document = markdown(&tree, KINDS, false);
+        assert_no_line(&document, |line| line.starts_with("| field"));
+        assert_no_line(&document, |line| line.starts_with("The property "));
+    }
+
+    #[test]
+    fn with_provenance_on_a_field_table_gains_a_source_column() {
+        let tree = Tree::new("markdown-provenance-fields");
+        let document = markdown(&tree, RECORDS, true);
+        assert_holds(&document, "| field | kind | required | source |\n");
+        assert_holds(
+            &document,
+            "| `family` | string | no | (default, contract version 2) |\n",
+        );
+        assert_holds(
+            &document,
+            "| `given` | string | yes | `.dogtag/contract.toml:",
+        );
     }
 
     #[test]

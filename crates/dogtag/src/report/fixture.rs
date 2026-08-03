@@ -231,6 +231,36 @@ pub(super) const TAGGED: Body<'static> = Body::new(concat!(
     "  open = true\n",
 ));
 
+/// A contract declaring the record kind in both of its spellings.
+///
+/// `legal_name` is a bare `record` and `channels` is a `list` of `record`, so
+/// the two shapes that carry a field list are both rendered. Between them the
+/// fields cover what a field may be: several scalar kinds, an `enum` with its
+/// own members, a `required` that is written beside one that is defaulted, and
+/// a member holding a column rule, so a field's vocabulary is held up against
+/// the same escaping every other corpus value is.
+///
+/// The records sit on `person` rather than on the catch-all, because a required
+/// field's property is required and a version-2 catch-all may require nothing.
+pub(super) const RECORDS: Body<'static> = Body::new(concat!(
+    "contract_version = 2\n",
+    "\n[dialect]\nlinks = \"wikilink\"\n",
+    "\n[lifecycle]\nnone = true\n",
+    "\n[[type]]\nname = \"capture\"\ncapabilities = [\"catch-all\"]\n",
+    "\n[[type]]\nname = \"person\"\ncapabilities = [\"identity-bearing\"]\n",
+    "\n  [[type.property]]\n  name = \"legal_name\"\n  kind = \"record\"\n  required = true\n",
+    "\n    [[type.property.field]]\n",
+    "    name = \"given\"\n    kind = \"string\"\n    required = true\n",
+    "\n    [[type.property.field]]\n",
+    "    name = \"family\"\n    kind = \"string\"\n",
+    "\n  [[type.property]]\n  name = \"channels\"\n  kind = \"list\"\n  of = \"record\"\n",
+    "\n    [[type.property.field]]\n",
+    "    name = \"label\"\n    kind = \"enum\"\n    values = [\"home\", \"a | pipe\"]\n",
+    "    required = true\n",
+    "\n    [[type.property.field]]\n",
+    "    name = \"reached_on\"\n    kind = \"date\"\n",
+));
+
 /// A record that loads, naming an actor and registering a vault elsewhere.
 pub(super) const RECORD: Body<'static> = Body::new(concat!(
     "installation_version = 1\n",

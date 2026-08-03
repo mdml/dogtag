@@ -23,12 +23,13 @@ use std::collections::BTreeSet;
 use serde_json::Value;
 
 use super::fixture::{
-    ABSENT_ORDINARY, AWKWARD, Body, CLEAN, KINDS, MARKDOWN_LINKS, NAMED_ORDINARY, TAGGED, Tree,
-    rendered,
+    ABSENT_ORDINARY, AWKWARD, Body, CLEAN, KINDS, MARKDOWN_LINKS, NAMED_ORDINARY, RECORDS, TAGGED,
+    Tree, rendered,
 };
 use super::{contract_json, contract_markdown};
 use crate::contract::{
-    Contract, LifecycleDecl, NamespaceMembership, Ordinary, PropertyKind, TypeDecl,
+    Contract, FieldKind, LifecycleDecl, NamespaceMembership, Ordinary, PropertyDecl, PropertyKind,
+    TypeDecl,
 };
 
 /// What separates an atom's fields. Chosen so no corpus vocabulary holds it.
@@ -58,6 +59,13 @@ impl Declaration<'_> {
     fn tag_namespace(&self, membership: &str) -> String {
         let (owner, name, required) = (self.owner, self.name, self.required);
         format!("type.{owner}.tag-namespace{FIELD}{name}{FIELD}{membership}{FIELD}{required}")
+    }
+
+    /// This declaration as a field of the record `property` declares.
+    fn field(&self, property: &str, spelled: &str) -> String {
+        let (owner, name, required) = (self.owner, self.name, self.required);
+        let under = format!("type.{owner}.property.{property}.field");
+        format!("{under}{FIELD}{name}{FIELD}{spelled}{FIELD}{required}")
     }
 }
 
@@ -114,6 +122,7 @@ fn model_type(declared: &TypeDecl) -> Vec<String> {
             required: property.required(),
         };
         atoms.push(declaration.property(&model_kind(property.kind())));
+        atoms.extend(model_fields(owner, property));
     }
     for relationship in declared.relationships() {
         let declaration = Declaration {
@@ -138,7 +147,36 @@ fn model_kind(kind: &PropertyKind) -> String {
     match kind {
         PropertyKind::Enum { values } => format!("enum({})", values.join(";")),
         PropertyKind::List { of } => format!("list({of})"),
-        scalar => scalar.as_str().to_owned(),
+        PropertyKind::ListOfRecord { .. } => "list(record)".to_owned(),
+        // Every remaining kind reduces to its own spelling, `record` included:
+        // what a record carries becomes atoms of its own, one per field.
+        bare => bare.as_str().to_owned(),
+    }
+}
+
+/// The fields of a record property, each its own atom under the property that
+/// declares it. A property carrying no record contributes none.
+fn model_fields(owner: &str, property: &PropertyDecl) -> Vec<String> {
+    let Some(fields) = property.kind().fields() else {
+        return Vec::new();
+    };
+    fields
+        .iter()
+        .map(|field| {
+            let declaration = Declaration {
+                owner,
+                name: field.name(),
+                required: field.required(),
+            };
+            declaration.field(property.name(), &model_field_kind(field.kind()))
+        })
+        .collect()
+}
+
+fn model_field_kind(kind: &FieldKind) -> String {
+    match kind {
+        FieldKind::Enum { values } => format!("enum({})", values.join(";")),
+        FieldKind::Scalar(scalar) => scalar.as_str().to_owned(),
     }
 }
 
@@ -207,6 +245,7 @@ fn json_type(declared: &Value) -> Vec<String> {
             required: property["required"] == true,
         };
         atoms.push(declaration.property(&json_kind(property)));
+        atoms.extend(json_fields(owner, property));
     }
     for relationship in array(&declared["relationships"]) {
         let declaration = Declaration {
@@ -237,16 +276,41 @@ fn json_membership(namespace: &Value) -> String {
 
 fn json_kind(property: &Value) -> String {
     match as_str(&property["kind"]) {
-        "enum" => format!(
-            "enum({})",
-            array(&property["values"])
-                .iter()
-                .map(as_str)
-                .collect::<Vec<&str>>()
-                .join(";")
-        ),
+        "enum" => json_enum(property),
         "list" => format!("list({})", as_str(&property["of"])),
-        scalar => scalar.to_owned(),
+        bare => bare.to_owned(),
+    }
+}
+
+fn json_enum(carrier: &Value) -> String {
+    let members: Vec<&str> = array(&carrier["values"]).iter().map(as_str).collect();
+    format!("enum({})", members.join(";"))
+}
+
+/// The fields a rendered property carries, each its own atom. A property that
+/// declares no record carries no `fields` key at all.
+fn json_fields(owner: &str, property: &Value) -> Vec<String> {
+    let Some(fields) = property["fields"].as_array() else {
+        return Vec::new();
+    };
+    let name = as_str(&property["name"]);
+    fields
+        .iter()
+        .map(|field| {
+            let declaration = Declaration {
+                owner,
+                name: as_str(&field["name"]),
+                required: field["required"] == true,
+            };
+            declaration.field(name, &json_field_kind(field))
+        })
+        .collect()
+}
+
+fn json_field_kind(field: &Value) -> String {
+    match as_str(&field["kind"]) {
+        "enum" => json_enum(field),
+        bare => bare.to_owned(),
     }
 }
 
@@ -310,12 +374,17 @@ enum Columns {
     Property,
     Relationship,
     Namespace,
+    Field,
 }
 
 /// A reader that walks a rendered Markdown document once.
 struct Scan {
     atoms: BTreeSet<String>,
     kind: String,
+    /// The record property whose field table is being read, named by the
+    /// sentence that introduces it — which is how a field row knows what it
+    /// hangs under, since the table itself only names the field.
+    property: String,
     columns: Option<Columns>,
 }
 
@@ -340,6 +409,7 @@ const LINES: &[(&str, Handler)] = &[
     ("This vault is at ", Scan::preamble),
     ("This corpus declares no lifecycle axis.", Scan::no_axis),
     ("The life axis is the property ", Scan::axis),
+    ("The property ", Scan::record),
     ("References are written as ", Scan::dialect),
     ("Tags are carried by the property ", Scan::tags),
     ("`", Scan::flag),
@@ -350,6 +420,7 @@ impl Scan {
         Self {
             atoms: BTreeSet::new(),
             kind: String::new(),
+            property: String::new(),
             columns: None,
         }
     }
@@ -401,6 +472,7 @@ impl Scan {
             Some("property") => self.columns = Some(Columns::Property),
             Some("relationship") => self.columns = Some(Columns::Relationship),
             Some("tag namespace") => self.columns = Some(Columns::Namespace),
+            Some("field") => self.columns = Some(Columns::Field),
             Some("---") => (),
             _ => self.declaration(&cells),
         }
@@ -416,6 +488,9 @@ impl Scan {
             Columns::Namespace => self
                 .declared(&name, cells[2])
                 .tag_namespace(&unescaped(&membership(cells[1]))),
+            Columns::Field => self
+                .declared(&name, cells[2])
+                .field(&self.property, &unescaped(&kind(cells[1]))),
         };
         self.atoms.insert(atom);
     }
@@ -460,6 +535,18 @@ impl Scan {
     fn flag(&mut self, line: Line<'_>) {
         let property = line.code().first().copied().expect("a flag names it");
         self.atoms.insert(format!("flag{FIELD}{property}"));
+    }
+
+    /// The sentence introducing a record property's field table, which is where
+    /// the rows below it learn the property they belong to. It declares nothing
+    /// itself: the property is already an atom from its own table's row.
+    fn record(&mut self, line: Line<'_>) {
+        let property = line
+            .code()
+            .first()
+            .copied()
+            .expect("a record's fields name the property they belong to");
+        self.property = property.to_owned();
     }
 
     fn tags(&mut self, line: Line<'_>) {
@@ -556,13 +643,14 @@ mod tests {
 
     /// Every contract these renderings are held up against, named so a failure
     /// says which one disagreed.
-    const SUBJECTS: [(&str, Body<'static>); 7] = [
+    const SUBJECTS: [(&str, Body<'static>); 8] = [
         ("starter", NAMED_ORDINARY),
         ("dense", ABSENT_ORDINARY),
         ("clean", CLEAN),
         ("kinds", KINDS),
         ("markdown-links", MARKDOWN_LINKS),
         ("tagged", TAGGED),
+        ("records", RECORDS),
         // The vocabulary carrying a column rule and a line break. It was the
         // one fixture this list omitted, and it was omitted because it fails:
         // the check was arranged around its own counterexample.
@@ -632,6 +720,36 @@ mod tests {
             from_markdown(&renamed),
             declared,
             "a misspelled declaration must be detected"
+        );
+    }
+
+    #[test]
+    fn the_readers_notice_a_record_field_that_one_document_dropped() {
+        // The nested rendering is exactly where an equivalence check can stop
+        // covering a construct without failing, so it is held up against its
+        // own counterexample the way the flat tables are.
+        let tree = Tree::new("equivalence-fields");
+        let (root, contract) = rendered(&tree, RECORDS);
+        let document = contract_markdown(&root, &contract, false);
+        let declared = markdown_spelling(&from_contract(&contract));
+        assert_eq!(from_markdown(&document), declared);
+        let without = document.replace("| `family` | string | no |\n", "");
+        assert_ne!(document, without, "the row this test removes must exist");
+        assert_ne!(
+            from_markdown(&without),
+            declared,
+            "a dropped field must be detected"
+        );
+        // A field under the wrong property is a different declaration, which is
+        // what the introducing sentence is read for.
+        let moved = document.replace(
+            "The property `channels` is a list of records, each",
+            "The property `legal_name` is a list of records, each",
+        );
+        assert_ne!(
+            from_markdown(&moved),
+            declared,
+            "a field moved to another property must be detected"
         );
     }
 

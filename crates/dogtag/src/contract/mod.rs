@@ -42,6 +42,8 @@
 //! ```
 
 mod declarations;
+mod fields;
+mod kinds;
 mod lifecycle;
 mod model;
 mod parse;
@@ -60,9 +62,10 @@ use crate::diagnostic::{Diagnostic, KernelDiagnostic, Location};
 use crate::document;
 use crate::encoding::{self, EncodingFault, Text};
 
+pub use kinds::{FieldDecl, FieldKind, PropertyKind, ScalarKind};
 pub use model::{
     Capability, Contract, Dialect, FlagDecl, LifecycleDecl, LinkDialect, Ordinary, PropertyDecl,
-    PropertyKind, RelationshipDecl, ScalarKind, TypeDecl,
+    RelationshipDecl, TypeDecl,
 };
 pub use vocabulary::{NamespaceMembership, TagNamespaceDecl, TagsDecl};
 

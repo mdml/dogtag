@@ -36,8 +36,8 @@ use super::{
     VersionFacts,
 };
 use crate::contract::{
-    CONTRACT_PATH, Capability, Contract, LifecycleDecl, Ordinary, PropertyDecl, PropertyKind,
-    RelationshipDecl, ScalarKind, TagNamespaceDecl, TagsDecl, TypeDecl,
+    CONTRACT_PATH, Capability, Contract, FieldDecl, LifecycleDecl, Ordinary, PropertyDecl,
+    PropertyKind, RelationshipDecl, TagNamespaceDecl, TagsDecl, TypeDecl,
 };
 use crate::diagnostic::{Diagnostic, FileRef, Location, Position, Related, SeverityCounts, Span};
 use crate::provenance::{ProvenanceEntry, Source};
@@ -356,6 +356,22 @@ struct PropertyWire<'a> {
     values: Option<&'a [String]>,
     #[serde(skip_serializing_if = "Option::is_none")]
     of: Option<&'static str>,
+    /// The fields of a `record`, or of a `list` of `record`; omitted by every
+    /// other kind, which declares none. Present and non-empty wherever it
+    /// appears, because a record with no fields does not load.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    fields: Option<Vec<FieldWire<'a>>>,
+    required: bool,
+}
+
+/// One record field, spelled the way a property is: its `values` appear only
+/// where it declares an `enum`.
+#[derive(Serialize)]
+struct FieldWire<'a> {
+    name: &'a str,
+    kind: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    values: Option<&'a [String]>,
     required: bool,
 }
 
@@ -578,7 +594,29 @@ fn property_wire(declared: &PropertyDecl) -> PropertyWire<'_> {
         name: declared.name(),
         kind: kind.as_str(),
         values: kind.values(),
-        of: kind.element().map(ScalarKind::as_str),
+        of: element_wire(kind),
+        fields: kind
+            .fields()
+            .map(|fields| fields.iter().map(field_wire).collect()),
+        required: declared.required(),
+    }
+}
+
+/// What a `list` names in `of`, as the contract spells it. A record is not a
+/// member of the scalar lattice, so the second shape spells its own word.
+fn element_wire(kind: &PropertyKind) -> Option<&'static str> {
+    match kind {
+        PropertyKind::List { of } => Some(of.as_str()),
+        PropertyKind::ListOfRecord { .. } => Some("record"),
+        _ => None,
+    }
+}
+
+fn field_wire(declared: &FieldDecl) -> FieldWire<'_> {
+    FieldWire {
+        name: declared.name(),
+        kind: declared.kind().as_str(),
+        values: declared.kind().values(),
         required: declared.required(),
     }
 }
@@ -610,8 +648,8 @@ fn defining_version(source: Source) -> Option<u32> {
 #[cfg(test)]
 mod tests {
     use super::super::fixture::{
-        ABSENT_ORDINARY, AWKWARD, Body, CLEAN, FIXTURES, NAMED_ORDINARY, RECORD, TAGGED, Tree,
-        contract, no_record, opened, registering, rendered, shown,
+        ABSENT_ORDINARY, AWKWARD, Body, CLEAN, FIXTURES, NAMED_ORDINARY, RECORD, RECORDS, TAGGED,
+        Tree, contract, no_record, opened, registering, rendered, shown,
     };
     use super::super::{Selection, SelectionRoute, doctor_report};
     use super::*;
@@ -1076,6 +1114,60 @@ mod tests {
         assert!(
             json.contains("      \"tag_namespaces\": []\n"),
             "a type declaring none still carries the collection: {json}"
+        );
+    }
+
+    #[test]
+    fn a_record_renders_its_fields_under_the_property_that_declares_them() {
+        let tree = Tree::new("json-records");
+        let (root, declared) = rendered(&tree, RECORDS);
+        let json = parsed(&contract_json(&root, &declared));
+        // `person`, the second type: the catch-all declares no record, because
+        // a required one is what contract version 2 forbids it.
+        let properties = json["contract"]["types"][1]["properties"]
+            .as_array()
+            .expect("an array");
+        let bare = &properties[0];
+        assert_eq!(
+            (&bare["name"], &bare["kind"], &bare["of"]),
+            (
+                &Value::from("legal_name"),
+                &Value::from("record"),
+                &Value::Null
+            )
+        );
+        let fields = bare["fields"].as_array().expect("an array");
+        assert_eq!(fields.len(), 2);
+        assert_eq!(
+            (
+                &fields[0]["name"],
+                &fields[0]["kind"],
+                &fields[0]["required"]
+            ),
+            (
+                &Value::from("given"),
+                &Value::from("string"),
+                &Value::from(true)
+            )
+        );
+        assert_eq!(fields[0]["values"], Value::Null, "a scalar declares none");
+        let listed = &properties[1];
+        assert_eq!(
+            (&listed["kind"], &listed["of"]),
+            (&Value::from("list"), &Value::from("record"))
+        );
+        let labelled = &listed["fields"].as_array().expect("an array")[0];
+        assert_eq!(labelled["values"][1], Value::from("a | pipe"));
+    }
+
+    #[test]
+    fn a_property_that_declares_no_record_omits_its_fields_rather_than_nulling_them() {
+        let tree = Tree::new("json-no-records");
+        let (root, declared) = rendered(&tree, NAMED_ORDINARY);
+        let json = contract_json(&root, &declared);
+        assert!(
+            !json.contains("\"fields\""),
+            "a declaration nobody made: {json}"
         );
     }
 
