@@ -1,4 +1,10 @@
-//! The resolved committed contract, as version 1 of the format declares it.
+//! The resolved committed contract, as the version it declares declares it.
+//!
+//! The model is one shape across every supported version; what varies is which
+//! keys were legal to write and which omissions resolved to a default, and both
+//! of those are settled before this module sees anything — see
+//! [`crate::contract::Contract::contract_version`] for the version a resolved
+//! contract was judged against.
 //!
 //! Every accessor here answers a question about a **declaration**. Nothing in
 //! this module knows a vocabulary word: a type is identity-bearing because the
