@@ -161,6 +161,81 @@ fn each_built_corpus_declares_the_current_contract_version() {
     }
 }
 
+/// Every built corpus leaves its catch-all type requiring nothing.
+///
+/// The second mechanical coupling between the supported range and the committed
+/// fixtures, stated for the same reason as the first. Contract version 2 refuses
+/// a catch-all that requires any of its declarations
+/// (`contract.catch-all-requires`), so restamping a fixture to the current
+/// version is never only a version edit: every requirement its catch-all carried
+/// had to move to a type notes opt into, or go.
+///
+/// `starter`'s could only go. Its ordinary state is a named value, which the
+/// lifecycle rules require on every type that declares the axis — so at version
+/// 2 a catch-all cannot carry that axis under either spelling, and an untyped
+/// note in `starter` therefore has no lifecycle state. The kernel test
+/// `a_named_ordinary_state_on_the_catch_all_has_no_spelling_at_version_2` pins
+/// the interaction itself; this one pins that the fixtures stay on the legal
+/// side of it.
+///
+/// Stated here so a requirement reintroduced on a catch-all fails on one
+/// assertion that explains itself rather than on fourteen scenario-by-profile
+/// failures that do not.
+#[test]
+fn each_built_corpus_leaves_its_catch_all_requiring_nothing() {
+    for profile in built_profiles() {
+        let contract = contract_of(&profile);
+        let catch_all = contract
+            .catch_all()
+            .unwrap_or_else(|| panic!("the `{profile}` corpus declares exactly one catch-all"));
+        let required = requirements_of(catch_all);
+        assert!(
+            required.is_empty(),
+            "the `{profile}` corpus's catch-all type `{}` requires {required:?}: contract \
+             version 2 refuses a catch-all that requires anything, because every untyped note \
+             binds to it",
+            catch_all.name()
+        );
+
+        // A helper that answered "nothing requires anything" would satisfy the
+        // assertion above against any corpus whatsoever, including one that had
+        // quietly stopped requiring anything anywhere. Both fixtures require
+        // things of types a note opts into — which is where version 2 says a
+        // requirement belongs — so ask, and fail if the answer is silence.
+        let elsewhere: Vec<&str> = contract
+            .types()
+            .iter()
+            .filter(|declared| !declared.has(Capability::CatchAll))
+            .flat_map(requirements_of)
+            .collect();
+        assert!(
+            !elsewhere.is_empty(),
+            "the `{profile}` corpus requires nothing of any type: the assertion above would \
+             pass whatever the catch-all declared"
+        );
+    }
+}
+
+/// Everything one type requires, named the way the contract names it.
+fn requirements_of(declared: &dogtag::contract::TypeDecl) -> Vec<&str> {
+    let properties = declared
+        .properties()
+        .iter()
+        .filter(|property| property.required())
+        .map(|property| property.name());
+    let relationships = declared
+        .relationships()
+        .iter()
+        .filter(|relationship| relationship.required())
+        .map(|relationship| relationship.predicate());
+    let namespaces = declared
+        .tag_namespaces()
+        .iter()
+        .filter(|namespace| namespace.required())
+        .map(|namespace| namespace.prefix());
+    properties.chain(relationships).chain(namespaces).collect()
+}
+
 /// The names of the profiles whose corpus is built.
 fn built_profiles() -> Vec<String> {
     let profiles = load_profiles().expect("profiles load");
