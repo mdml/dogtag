@@ -36,7 +36,7 @@ pub const DENSE: &str =
     include_str!("../../../../conformance/profiles/dense/corpus/.dogtag/contract.toml");
 
 /// A contract whose version this release does not read.
-pub const TOO_NEW: &str = "contract_version = 2\n";
+pub const TOO_NEW: &str = "contract_version = 3\n";
 
 /// Distinguishes trees built inside the same process and second.
 static SEQUENCE: AtomicU32 = AtomicU32::new(0);

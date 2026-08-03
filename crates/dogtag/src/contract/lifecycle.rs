@@ -20,12 +20,6 @@ use crate::document;
 use super::model::{LifecycleDecl, Ordinary};
 use super::sink::{KeyPath, Report, Section, Sink};
 
-/// Every key `[lifecycle]` defines at contract version 1.
-const LIFECYCLE_KEYS: &[&str] = &["axis", "none", "ordinary"];
-
-/// Every key `[lifecycle.ordinary]` defines at contract version 1.
-const ORDINARY_KEYS: &[&str] = &["absent", "value"];
-
 const INCOMPLETE_HELP: &str =
     "declare either `axis` with `ordinary`, or `none = true` for a corpus with no life axis";
 
@@ -47,7 +41,8 @@ pub(crate) fn declaration(sink: &mut Sink<'_>, root: &DeTable<'_>) -> Option<Lif
         label: "`[lifecycle]`".to_owned(),
         path: KeyPath::root().child("lifecycle"),
     };
-    sink.sweep(&section, LIFECYCLE_KEYS);
+    let allowed = sink.schema().keys.lifecycle;
+    sink.sweep(&section, allowed);
     resolve(sink, &section)
 }
 
@@ -145,7 +140,8 @@ fn ordinary_table<'a, 'i>(
         label: "`[lifecycle.ordinary]`".to_owned(),
         path: section.path.child("ordinary"),
     };
-    sink.sweep(&ordinary, ORDINARY_KEYS);
+    let allowed = sink.schema().keys.ordinary;
+    sink.sweep(&ordinary, allowed);
     Some(ordinary)
 }
 
@@ -214,6 +210,7 @@ fn ordinary_invalid(sink: &mut Sink<'_>, section: &Section<'_, '_>) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::contract::schema;
     use crate::contract::sink::tests::{root_of, text_of};
     use crate::diagnostic::DiagnosticList;
 
@@ -225,7 +222,7 @@ mod tests {
     fn read(source: &str) -> Read {
         let text = text_of(source);
         let document = root_of(&text);
-        let mut sink = Sink::new(&text, 1);
+        let mut sink = Sink::new(&text, &schema::VERSION_1);
         let declaration = declaration(&mut sink, document.get_ref());
         let (diagnostics, _) = sink.finish();
         Read {

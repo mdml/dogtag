@@ -18,6 +18,7 @@ use core::ops::Range;
 use toml::Spanned;
 use toml::de::{DeInteger, DeTable, DeValue};
 
+use crate::compat::SUPPORTED_CONTRACT_VERSIONS;
 use crate::diagnostic::{Diagnostic, KernelDiagnostic, Location};
 use crate::document;
 use crate::encoding::Text;
@@ -26,15 +27,6 @@ use crate::provenance::Provenance;
 use super::model::{Contract, Dialect, FlagDecl, LifecycleDecl, LinkDialect, TypeDecl};
 use super::sink::{Claim, KeyPath, Report, Section, Seen, Sink, contract_file};
 use super::{declarations, lifecycle, validate};
-
-/// Every key the contract root defines at version 1.
-const ROOT_KEYS: &[&str] = &["contract_version", "dialect", "flag", "lifecycle", "type"];
-
-/// Every key `[dialect]` defines at version 1.
-const DIALECT_KEYS: &[&str] = &["links"];
-
-/// Every key `[[flag]]` defines at version 1.
-const FLAG_KEYS: &[&str] = &["property"];
 
 /// The version a contract declares, and where it declares it.
 #[derive(Debug)]
@@ -104,19 +96,32 @@ fn as_u32(integer: &DeInteger<'_>) -> Option<u32> {
     u32::from_str_radix(integer.as_str(), integer.radix()).ok()
 }
 
+/// The newest version this release reads, which is what a contract declaring
+/// none is told to write. Taken from the range rather than restated, so a
+/// widening that forgot this advice would leave it naming a stale version.
+fn current() -> u32 {
+    *SUPPORTED_CONTRACT_VERSIONS.end()
+}
+
 fn version_missing() -> Diagnostic {
     Diagnostic::kernel(
         KernelDiagnostic::ContractVersionMissing,
         "the contract declares no `contract_version`",
     )
     .at(Location::whole_file(contract_file()))
-    .with_help("every contract declares `contract_version`, and version 1 is the current format")
+    .with_help(format!(
+        "every contract declares `contract_version`, and version {} is the current format",
+        current()
+    ))
 }
 
 fn invalid(text: &Text, message: String, at: Range<usize>) -> Diagnostic {
     Diagnostic::kernel(KernelDiagnostic::ContractVersionInvalid, message)
         .at(Location::in_file(contract_file(), text.span(at)))
-        .with_help("`contract_version` is a single whole number, `1` at this release")
+        .with_help(format!(
+            "`contract_version` is a single whole number, `{}` at this release",
+            current()
+        ))
 }
 
 /// Everything the body walk resolved, before the diagnostics decide whether it
@@ -155,7 +160,8 @@ pub(crate) fn body(sink: &mut Sink<'_>, root: &DeTable<'_>) -> Parts {
         label: "the contract".to_owned(),
         path: KeyPath::root(),
     };
-    sink.sweep(&section, ROOT_KEYS);
+    let allowed = sink.schema().keys.root;
+    sink.sweep(&section, allowed);
     let parts = Parts {
         dialect: dialect(sink, root),
         lifecycle: lifecycle::declaration(sink, root),
@@ -168,8 +174,13 @@ pub(crate) fn body(sink: &mut Sink<'_>, root: &DeTable<'_>) -> Parts {
 
 /// Reads the mandatory `[dialect]` table.
 ///
-/// The record fixes the table's shape and states no default for `links`, so
-/// absence is a load error rather than a value this parser invents.
+/// **`[dialect]` is mandatory at version 1 and at version 2 both**, and its
+/// absence is `contract.missing-dialect`. That was an inference the parser made
+/// when nothing decided it; the contract-version-2 record ratifies it for both
+/// versions, so the identifier and the behavior are now record-backed rather
+/// than derived from the shape of the table alone. No version states a default
+/// for `links`, so absence stays a load error rather than a value this parser
+/// invents — and a later decision to default it needs a version to carry it.
 fn dialect(sink: &mut Sink<'_>, root: &DeTable<'_>) -> Option<Dialect> {
     let Some(value) = document::get(root, "dialect") else {
         let at = sink.whole_file();
@@ -185,7 +196,8 @@ fn dialect(sink: &mut Sink<'_>, root: &DeTable<'_>) -> Option<Dialect> {
         label: "`[dialect]`".to_owned(),
         path: KeyPath::root().child("dialect"),
     };
-    sink.sweep(&section, DIALECT_KEYS);
+    let allowed = sink.schema().keys.dialect;
+    sink.sweep(&section, allowed);
     let declared = sink.required(&section, "links")?;
     let spelled = sink.string(declared, section.leaf("links"))?;
     links(sink, spelled, declared.span()).map(|links| Dialect { links })
@@ -243,7 +255,8 @@ fn flag(sink: &mut Sink<'_>, value: &Spanned<DeValue<'_>>, seen: &mut Seen) -> O
             .child_opt(named.as_ref().map(|found| found.text)),
         ..entry
     };
-    sink.sweep(&section, FLAG_KEYS);
+    let allowed = sink.schema().keys.flag;
+    sink.sweep(&section, allowed);
     let named = named?;
     sink.written(section.leaf("property").key, named.span.clone());
     let property = named.text.to_owned();
@@ -259,6 +272,7 @@ fn flag(sink: &mut Sink<'_>, value: &Spanned<DeValue<'_>>, seen: &mut Seen) -> O
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::contract::schema;
     use crate::contract::sink::tests::{root_of, text_of};
     use crate::diagnostic::DiagnosticList;
 
@@ -311,7 +325,7 @@ mod tests {
     fn read(source: &str) -> Read {
         let text = text_of(source);
         let document = root_of(&text);
-        let mut sink = Sink::new(&text, 1);
+        let mut sink = Sink::new(&text, &schema::VERSION_1);
         let parts = body(&mut sink, document.get_ref());
         let (diagnostics, provenance) = sink.finish();
         Read {

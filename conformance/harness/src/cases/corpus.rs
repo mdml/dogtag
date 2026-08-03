@@ -219,7 +219,7 @@ pub fn require_record_loaded(installation: &Installation) -> Checked {
 /// these is one.
 #[cfg(test)]
 pub const NO_AXIS: &str = concat!(
-    "contract_version = 1\n",
+    "contract_version = 2\n",
     "\n[dialect]\nlinks = \"wikilink\"\n",
     "\n[lifecycle]\nnone = true\n",
     "\n[[type]]\nname = \"capture\"\ncapabilities = [\"catch-all\"]\n",
@@ -230,7 +230,7 @@ pub const NO_AXIS: &str = concat!(
 /// so every section of a rendering of it has something in it.
 #[cfg(test)]
 pub const WITH_AXIS: &str = concat!(
-    "contract_version = 1\n",
+    "contract_version = 2\n",
     "\n[dialect]\nlinks = \"wikilink\"\n",
     "\n[lifecycle]\naxis = \"status\"\nordinary = { absent = true }\n",
     "\n[[flag]]\nproperty = \"leaned_on\"\n",

@@ -212,7 +212,7 @@ mod tests {
     /// the case reports the reason rather than unwinding the matrix.
     #[test]
     fn a_contract_that_did_not_resolve_reports_the_reason() {
-        let corpus = Corpus::holding("installation-unresolved-contract", "contract_version = 2\n");
+        let corpus = Corpus::holding("installation-unresolved-contract", "contract_version = 3\n");
         let opened = corpus
             .opened_without_a_record()
             .expect("a directory holding a contract is a vault root");

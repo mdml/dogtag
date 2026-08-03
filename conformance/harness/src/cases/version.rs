@@ -15,8 +15,13 @@ use super::expect::{Checked, Subject, rendered, require, require_contains, requi
 /// Distinct identifiers on purpose: *too new* and *below the floor* call for
 /// different actions, and one identifier for both would make the report
 /// unactionable exactly when it matters.
+///
+/// The too-new derivation moved from `2` to `3` when the supported range
+/// widened: a version the range now reads is not a version to refuse, and a
+/// literal one above the ceiling is what this case is about. The floor does not
+/// rise during the beta, so `0` stays where it is.
 const OUT_OF_RANGE: &[(u32, &str)] = &[
-    (2, "compat.contract-too-new"),
+    (3, "compat.contract-too-new"),
     (0, "compat.contract-below-supported-floor"),
 ];
 
@@ -156,20 +161,20 @@ mod tests {
     /// A report body marking every contract-dependent section not evaluated,
     /// each with a reason.
     const NOT_EVALUATED: &str = concat!(
-        "\"types\": { \"evaluated\": false, \"reason\": \"version 2\" },\n",
-        "\"lifecycle\": { \"evaluated\": false, \"reason\": \"version 2\" },\n",
-        "\"dialect\": { \"evaluated\": false, \"reason\": \"version 2\" }\n",
+        "\"types\": { \"evaluated\": false, \"reason\": \"version 3\" },\n",
+        "\"lifecycle\": { \"evaluated\": false, \"reason\": \"version 3\" },\n",
+        "\"dialect\": { \"evaluated\": false, \"reason\": \"version 3\" }\n",
     );
 
     /// The text rendering of the same, in the column the reader reads.
     const NOT_EVALUATED_TEXT: &str = concat!(
-        "types           not evaluated (version 2)\n",
-        "lifecycle       not evaluated (version 2)\n",
-        "dialect         not evaluated (version 2)\n",
+        "types           not evaluated (version 3)\n",
+        "lifecycle       not evaluated (version 3)\n",
+        "dialect         not evaluated (version 3)\n",
     );
 
     /// The subject every assertion below is about.
-    const SUBJECT: &str = "the doctor report for a version-2 contract";
+    const SUBJECT: &str = "the doctor report for a version-3 contract";
 
     /// The refusal must be the version's, not the parser's — so a contract
     /// reporting something other than the expected identifier fails the case
@@ -177,8 +182,8 @@ mod tests {
     #[test]
     fn a_version_reporting_another_identifier_fails_the_case() {
         let corpus = Corpus::holding("version-unexpected-identifier", NO_AXIS);
-        let detail = refuses(&corpus, 2, "compat.contract-below-supported-floor")
-            .expect_err("a version-2 contract is too new, not below the floor");
+        let detail = refuses(&corpus, 3, "compat.contract-below-supported-floor")
+            .expect_err("a version-3 contract is too new, not below the floor");
         assert!(
             detail.contains("must report `compat.contract-below-supported-floor`"),
             "the failure names the identifier: {detail}"
@@ -196,22 +201,22 @@ mod tests {
     fn a_refusal_that_names_neither_the_version_nor_the_range_fails_the_case() {
         let bare = message_names_the_version_and_the_range(
             "compat.contract-too-new: unsupported contract version",
-            2,
-            Subject::new("a contract declaring version 2"),
+            3,
+            Subject::new("a contract declaring version 3"),
         )
         .expect_err("a message naming neither fact names the version least of all");
         assert!(
-            bare.contains("the refusal of a contract declaring version 2 must carry `2`"),
+            bare.contains("the refusal of a contract declaring version 3 must carry `3`"),
             "the failure names the subject and the version: {bare}"
         );
         let half = message_names_the_version_and_the_range(
-            "compat.contract-too-new: the contract declares version 2",
-            2,
-            Subject::new("a contract declaring version 2"),
+            "compat.contract-too-new: the contract declares version 3",
+            3,
+            Subject::new("a contract declaring version 3"),
         )
         .expect_err("a message that stops before the range names only half of it");
         assert!(
-            half.contains("must carry `1..=1`"),
+            half.contains("must carry `1..=2`"),
             "the failure names the range: {half}"
         );
     }
@@ -221,11 +226,11 @@ mod tests {
     /// on those two alone would accept.
     #[test]
     fn a_report_that_drops_the_supported_range_fails_the_case() {
-        let json = "\"found\": 2,\n\"classification\": \"too-new\"\n";
-        let detail = version_is_reported(json, 2, Subject::new(SUBJECT))
+        let json = "\"found\": 3,\n\"classification\": \"too-new\"\n";
+        let detail = version_is_reported(json, 3, Subject::new(SUBJECT))
             .expect_err("a report carrying no supported range does not name one");
         assert!(
-            detail.contains("must carry `\"supported\": { \"min\": 1, \"max\": 1 }`"),
+            detail.contains("must carry `\"supported\": { \"min\": 1, \"max\": 2 }`"),
             "the failure names the object and the range: {detail}"
         );
     }
@@ -234,7 +239,7 @@ mod tests {
     /// might have dropped, so the count is asserted rather than the presence.
     #[test]
     fn a_report_missing_a_section_is_refused_on_the_count() {
-        let json = "\"types\": { \"evaluated\": false, \"reason\": \"version 2\" }\n";
+        let json = "\"types\": { \"evaluated\": false, \"reason\": \"version 3\" }\n";
         let detail = sections_are_not_evaluated(json, NOT_EVALUATED_TEXT, Subject::new(SUBJECT))
             .expect_err("one section of three is not all of them");
         assert!(
@@ -251,7 +256,7 @@ mod tests {
     /// omission: it reads as an answer.
     #[test]
     fn a_section_with_an_empty_reason_is_refused() {
-        let json = NOT_EVALUATED.replace("\"version 2\"", "\"\"");
+        let json = NOT_EVALUATED.replace("\"version 3\"", "\"\"");
         let detail = sections_are_not_evaluated(&json, NOT_EVALUATED_TEXT, Subject::new(SUBJECT))
             .expect_err("an empty reason is not a reason");
         assert!(

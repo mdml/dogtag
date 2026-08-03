@@ -11,7 +11,7 @@
 //! contract
 //!   path          .dogtag/contract.toml
 //!   present       yes
-//!   version       1 (current; supported 1..=1)
+//!   version       2 (current; supported 1..=2)
 //! types           4 declared
 //!   identity-bearing   person, place
 //!   catch-all          capture
@@ -336,7 +336,7 @@ mod tests {
                     "contract\n",
                     "  path          .dogtag/contract.toml\n",
                     "  present       yes\n",
-                    "  version       1 (current; supported 1..=1)\n",
+                    "  version       2 (current; supported 1..=2)\n",
                     "types           3 declared\n",
                     "  identity-bearing   person\n",
                     "  catch-all          note\n",
@@ -360,10 +360,10 @@ mod tests {
     #[test]
     fn an_unusable_contract_still_reports_the_root_and_the_record() {
         let tree = Tree::new("text-unusable");
-        let rendered = text_of(&tree, Body::new("contract_version = 2\n"), RECORD);
-        let reason = "the contract declares a version above the supported range 1..=1";
+        let rendered = text_of(&tree, Body::new("contract_version = 3\n"), RECORD);
+        let reason = "the contract declares a version above the supported range 1..=2";
         assert_holds(&rendered, "  present       yes\n");
-        assert_holds(&rendered, "  version       2 (too new; supported 1..=1)\n");
+        assert_holds(&rendered, "  version       3 (too new; supported 1..=2)\n");
         assert_holds(
             &rendered,
             &format!("types           not evaluated ({reason})\n"),
@@ -386,7 +386,7 @@ mod tests {
         let rendered = text_of(&tree, Body::new("contract_version = 4294967296\n"), RECORD);
         assert_holds(
             &rendered,
-            "  version       beyond `0..=4294967295` (too new; supported 1..=1)\n",
+            "  version       beyond `0..=4294967295` (too new; supported 1..=2)\n",
         );
         assert_holds(&rendered, "error[compat.contract-too-new]");
     }
@@ -405,7 +405,7 @@ mod tests {
         assert_holds(&rendered, "  present       no\n");
         assert_holds(
             &rendered,
-            "  version       not declared (supported 1..=1)\n",
+            "  version       not declared (supported 1..=2)\n",
         );
         assert_holds(
             &rendered,

@@ -167,7 +167,10 @@ fn duplicate_catch_all_reports_an_absent_declaration() {
 
 #[test]
 fn set_contract_version_rewrites_the_declared_version() {
-    for version in [0, 2] {
+    // Neither version may be one a built contract already declares, or the
+    // transformation leaves the bytes identical and the derived case tests
+    // nothing. Both committed contracts declare version 2.
+    for version in [0, 1, 3] {
         changes_every_built_contract(
             "set_contract_version",
             |text| set_contract_version(text, version),

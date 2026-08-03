@@ -30,7 +30,7 @@
 //! use dogtag::contract::parse_contract;
 //!
 //! let load = parse_contract(concat!(
-//!     "contract_version = 1\n",
+//!     "contract_version = 2\n",
 //!     "\n[dialect]\nlinks = \"wikilink\"\n",
 //!     "\n[lifecycle]\nnone = true\n",
 //!     "\n[[type]]\nname = \"capture\"\ncapabilities = [\"catch-all\"]\n",
@@ -44,6 +44,7 @@ mod declarations;
 mod lifecycle;
 mod model;
 mod parse;
+mod schema;
 mod sink;
 mod validate;
 
@@ -178,6 +179,14 @@ fn from_text(text: &Text) -> ContractLoad {
 }
 
 /// The two passes: the version, its classification, then the body.
+///
+/// The schema lookup is what gates the second pass, rather than the
+/// classification alone: reading a version *is* carrying that version's key set
+/// and default table, so a build that classified a version as readable and then
+/// had no rules for it would resolve it against some other version's — the
+/// lying provenance the vault-contract record names as worse than plain
+/// inheritance. The classification still decides what a reader is told, because
+/// below the floor and above the ceiling call for different actions.
 fn resolve(text: &Text, root: &toml::de::DeTable<'_>) -> ContractLoad {
     let declared = match parse::version(text, root) {
         parse::DeclaredVersion::Found(declared) => declared,
@@ -190,11 +199,11 @@ fn resolve(text: &Text, root: &toml::de::DeTable<'_>) -> ContractLoad {
         }
     };
     let class = compat::classify(declared.version, SUPPORTED_CONTRACT_VERSIONS);
-    if !class.is_usable() {
+    let Some(schema) = schema::of(declared.version) else {
         let found = declared.version;
         return unusable_version(class, &found.to_string(), Some(found));
-    }
-    let mut sink = Sink::new(text, declared.version);
+    };
+    let mut sink = Sink::new(text, schema);
     sink.record(newer_format_available(class, declared.version));
     sink.written(Some("contract_version".to_owned()), declared.at);
     let parts = parse::body(&mut sink, root);
@@ -319,11 +328,12 @@ fn newer_format_available(class: VersionClass, found: u32) -> Option<Diagnostic>
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::diagnostic::Severity;
     use crate::provenance::Source;
     use std::io::Write;
 
     const CONFORMING: &str = concat!(
-        "contract_version = 1\n",
+        "contract_version = 2\n",
         "\n",
         "[dialect]\n",
         "links = \"wikilink\"\n",
@@ -364,6 +374,11 @@ mod tests {
         "capabilities = [\"catch-all\"]\n",
     );
 
+    /// The same contract, declaring the version below the current one.
+    fn version_1(source: &str) -> String {
+        source.replace("contract_version = 2", "contract_version = 1")
+    }
+
     fn loaded(source: &str) -> Contract {
         parse_contract(source)
             .contract
@@ -394,7 +409,7 @@ mod tests {
         let load = parse_contract(CONFORMING);
         assert_eq!(ids(&load), Vec::<&str>::new());
         let contract = load.contract.expect("resolved");
-        assert_eq!(contract.contract_version(), 1);
+        assert_eq!(contract.contract_version(), 2);
         assert_eq!(contract.dialect().links(), LinkDialect::Wikilink);
         assert_eq!(contract.types().len(), 2);
     }
@@ -493,7 +508,7 @@ mod tests {
             assert_eq!(
                 entry.source,
                 Source::Default {
-                    contract_version: 1
+                    contract_version: 2
                 },
                 "{key}"
             );
@@ -660,7 +675,7 @@ mod tests {
     #[test]
     fn a_version_below_the_floor_refuses_with_exactly_one_diagnostic() {
         let load =
-            parse_contract(&CONFORMING.replace("contract_version = 1", "contract_version = 0"));
+            parse_contract(&CONFORMING.replace("contract_version = 2", "contract_version = 0"));
         assert_eq!(ids(&load), ["compat.contract-below-supported-floor"]);
         assert!(
             load.diagnostics[0]
@@ -673,14 +688,14 @@ mod tests {
     #[test]
     fn a_version_above_the_range_refuses_with_exactly_one_diagnostic() {
         let load =
-            parse_contract(&CONFORMING.replace("contract_version = 1", "contract_version = 2"));
+            parse_contract(&CONFORMING.replace("contract_version = 2", "contract_version = 3"));
         assert_eq!(ids(&load), ["compat.contract-too-new"]);
         let unresolved = load.contract.expect_err("unresolved");
         assert_eq!(
             unresolved.reason,
             UnresolvedReason::VersionUnusable(VersionClass::TooNew)
         );
-        assert_eq!(unresolved.version, Some(2));
+        assert_eq!(unresolved.version, Some(3));
     }
 
     #[test]
@@ -689,7 +704,7 @@ mod tests {
         // classification is total over it: a version no `u32` holds is above
         // every supported range, so it is the version gate that refuses it.
         let load = parse_contract(
-            &CONFORMING.replace("contract_version = 1", "contract_version = 4294967296"),
+            &CONFORMING.replace("contract_version = 2", "contract_version = 4294967296"),
         );
         assert_eq!(ids(&load), ["compat.contract-too-new"]);
         assert!(load.diagnostics[0].message.contains("version 4294967296"));
@@ -721,25 +736,66 @@ mod tests {
 
     #[test]
     fn a_supported_version_below_the_newest_loads_and_says_so() {
-        // The real range holds one version, so `Supported` is unreachable from
-        // any real contract; the classification is exercised directly rather
-        // than by fabricating an impossible asset.
-        let diagnostic = newer_format_available(VersionClass::Supported, 1).expect("an info");
-        assert_eq!(diagnostic.id.as_str(), "compat.newer-format-available");
-        assert!(diagnostic.message.contains("version 1 is available"));
-        assert!(newer_format_available(VersionClass::Current, 1).is_none());
-        assert!(
-            loaded(CONFORMING)
+        // Reachable from a real contract for the first time: the range holds
+        // two versions, so a version-1 vault loads fully and is told that a
+        // newer format exists. `info` for exactly the reason the severity was
+        // created — it recurs on every run of a legitimate setup.
+        let load = parse_contract(&version_1(CONFORMING));
+        assert_eq!(ids(&load), ["compat.newer-format-available"]);
+        let reported = &load.diagnostics[0];
+        assert_eq!(reported.severity, Severity::Info);
+        assert!(reported.message.contains("version 2 is available"));
+        assert!(load.contract.is_ok(), "a supported version loads fully");
+        assert!(newer_format_available(VersionClass::Current, 2).is_none());
+    }
+
+    #[test]
+    fn version_1_resolves_exactly_as_it_did_before_version_2_existed() {
+        // The claim slice one owes: the same model, the same provenance keys,
+        // and the same sources as when `1..=1` was the whole range — the only
+        // difference being the info a supported-but-not-current version now
+        // earns. Held by comparing the two versions of one text, so a version-2
+        // key set or default table leaking into version 1 fails here.
+        let at_1 = loaded(&version_1(CONFORMING));
+        let at_2 = loaded(CONFORMING);
+        assert_eq!(at_1.contract_version(), 1);
+        assert_eq!(at_1.types(), at_2.types());
+        assert_eq!(at_1.flags(), at_2.flags());
+        assert_eq!(at_1.lifecycle(), at_2.lifecycle());
+        assert_eq!(at_1.dialect(), at_2.dialect());
+        let keys = |contract: &Contract| -> Vec<String> {
+            contract
                 .provenance()
-                .get("contract_version")
-                .is_some()
+                .entries()
+                .map(|entry| entry.key.clone())
+                .collect()
+        };
+        assert_eq!(keys(&at_1), keys(&at_2));
+    }
+
+    #[test]
+    fn an_omission_in_a_version_1_contract_resolves_against_version_1s_table() {
+        // The other half: not merely attributed to version 1, but *resolved*
+        // against version 1's table. A build that judged the omission against
+        // the newest table it knew would record a source that lies.
+        let source = version_1(&CONFORMING.replace("capabilities = [\"identity-bearing\"]\n", ""));
+        let contract = loaded(&source);
+        assert_eq!(contract.types()[0].capabilities(), []);
+        assert_eq!(
+            contract
+                .provenance()
+                .get("type.person.capabilities")
+                .map(|entry| entry.source),
+            Some(Source::Default {
+                contract_version: 1
+            })
         );
     }
 
     #[test]
     fn three_separate_faults_are_reported_three_times() {
         let source = concat!(
-            "contract_version = 1\n",
+            "contract_version = 2\n",
             "\n[dialect]\nlinks = \"org\"\n",
             "\n[lifecycle]\nnone = true\n",
             "\n[[type]]\nname = \"a\"\ncapabilities = [\"catch-all\", \"writeable\"]\n",
@@ -759,7 +815,7 @@ mod tests {
     #[test]
     fn diagnostics_come_out_in_the_deterministic_total_order() {
         let source = concat!(
-            "contract_version = 1\n",
+            "contract_version = 2\n",
             "\n[lifecycle]\nnone = true\n",
             "\n[[type]]\nname = \"a\"\ncapabilities = [\"nope\"]\n",
         );
@@ -782,7 +838,7 @@ mod tests {
         assert_eq!(ids(&load), ["contract.missing-catch-all"]);
         let unresolved = load.contract.expect_err("unresolved");
         assert_eq!(unresolved.reason, UnresolvedReason::Invalid);
-        assert_eq!(unresolved.version, Some(1));
+        assert_eq!(unresolved.version, Some(2));
     }
 
     #[test]
@@ -799,19 +855,19 @@ mod tests {
             (UnresolvedReason::Invalid, "validity rules"),
             (
                 unusable(VersionClass::BelowFloor),
-                "below the supported range 1..=1",
+                "below the supported range 1..=2",
             ),
             (
                 unusable(VersionClass::TooNew),
-                "above the supported range 1..=1",
+                "above the supported range 1..=2",
             ),
             (
                 unusable(VersionClass::Supported),
-                "outside the supported range 1..=1",
+                "outside the supported range 1..=2",
             ),
             (
                 unusable(VersionClass::Current),
-                "outside the supported range 1..=1",
+                "outside the supported range 1..=2",
             ),
         ];
         for (reason, expected) in described {

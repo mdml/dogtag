@@ -1,10 +1,11 @@
 //! Collecting a contract's diagnostics and provenance while its body is walked.
 //!
 //! One [`Sink`] carries three things every step of the walk needs: the text, so
-//! a byte range becomes a line and a column; the declared version, so a message
-//! can say which version's key set refused a key; and the two accumulators. It
-//! exists so that no walking function has to take five arguments to say one
-//! thing.
+//! a byte range becomes a line and a column; the declared version's [`Schema`],
+//! so every key set and every default comes from the version the contract
+//! declares rather than from the newest this build knows; and the two
+//! accumulators. It exists so that no walking function has to take five
+//! arguments to say one thing.
 //!
 //! Every leaf read through a `Sink` records its provenance as it is read, which
 //! is what keeps the recorded key set and the resolved model from drifting.
@@ -22,6 +23,7 @@ use crate::encoding::Text;
 use crate::provenance::{Provenance, ProvenanceEntry, Source};
 
 use super::CONTRACT_PATH;
+use super::schema::Schema;
 
 /// The file every contract diagnostic and every contract provenance entry
 /// names, whatever path the bytes were read from. A machine path never reaches
@@ -198,22 +200,29 @@ pub(crate) struct Claim<'a> {
 /// The diagnostics and provenance one contract parse produces.
 pub(crate) struct Sink<'t> {
     text: &'t Text,
-    version: u32,
+    schema: &'static Schema,
     diagnostics: DiagnosticList,
     provenance: Provenance,
     dropped: bool,
 }
 
 impl<'t> Sink<'t> {
-    /// A sink over `text`, reporting against the version the contract declares.
-    pub(crate) fn new(text: &'t Text, version: u32) -> Self {
+    /// A sink over `text`, judging it against the schema of the version the
+    /// contract declares.
+    pub(crate) fn new(text: &'t Text, schema: &'static Schema) -> Self {
         Self {
             text,
-            version,
+            schema,
             diagnostics: DiagnosticList::new(),
             provenance: Provenance::new(),
             dropped: false,
         }
+    }
+
+    /// What the declared version defines: every key set the walk sweeps
+    /// against, and every default an omission resolves to.
+    pub(crate) fn schema(&self) -> &'static Schema {
+        self.schema
     }
 
     /// Records that a declaration was parsed far enough to be named and then
@@ -302,7 +311,7 @@ impl<'t> Sink<'t> {
     pub(crate) fn missing(&mut self, section: &Section<'_, '_>, key: &str) {
         let message = format!(
             "{} does not declare `{key}`, which contract version {} requires",
-            section.label, self.version
+            section.label, self.schema.version
         );
         self.raise_at(
             KernelDiagnostic::ContractMissingKey,
@@ -320,7 +329,7 @@ impl<'t> Sink<'t> {
         for unknown in document::unknown_keys(section.table, allowed) {
             let message = format!(
                 "{} declares `{}`, which contract version {} does not define",
-                section.label, unknown.key, self.version
+                section.label, unknown.key, self.schema.version
             );
             self.raise_at(KernelDiagnostic::ContractUnknownKey, message, unknown.span);
         }
@@ -340,7 +349,7 @@ impl<'t> Sink<'t> {
     pub(crate) fn defaulted(&mut self, key: Option<String>) {
         if let Some(key) = key {
             self.provenance
-                .insert(ProvenanceEntry::defaulted(key, self.version));
+                .insert(ProvenanceEntry::defaulted(key, self.schema.version));
         }
     }
 
@@ -445,15 +454,25 @@ impl<'t> Sink<'t> {
         Some(declared)
     }
 
-    /// An optional boolean leaf, defaulting to `false` — the value version 1
-    /// gives both `required` keys — and recording which of the two happened.
-    pub(crate) fn optional_flag(&mut self, section: &Section<'_, '_>, key: &'static str) -> bool {
+    /// An optional boolean leaf, taking `default` when the contract omits it
+    /// and recording which of the two happened.
+    ///
+    /// `default` is read from the declared version's table by the caller, which
+    /// is the one place that knows *which* leaf this is: version 1 and version
+    /// 2 both give `false` to both `required` keys, and a later version giving
+    /// one of them another value must not thereby give it to the other.
+    pub(crate) fn optional_flag(
+        &mut self,
+        section: &Section<'_, '_>,
+        key: &'static str,
+        default: bool,
+    ) -> bool {
         let leaf = section.leaf(key);
         match section.get(key) {
-            Some(value) => self.boolean(value, leaf).unwrap_or(false),
+            Some(value) => self.boolean(value, leaf).unwrap_or(default),
             None => {
                 self.defaulted(leaf.key);
-                false
+                default
             }
         }
     }
@@ -484,6 +503,7 @@ impl<'t> Sink<'t> {
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
+    use crate::contract::schema;
     use crate::encoding;
 
     pub(crate) fn text_of(source: &str) -> Text {
@@ -547,7 +567,7 @@ pub(crate) mod tests {
     #[test]
     fn a_span_becomes_a_line_and_a_column() {
         let text = text_of("a = 1\nb = 2\n");
-        let sink = Sink::new(&text, 1);
+        let sink = Sink::new(&text, &schema::VERSION_1);
         let location = sink.location(10..11);
         let span = location.span.expect("a span");
         assert_eq!((span.start.line, span.start.column), (2, 5));
@@ -557,7 +577,7 @@ pub(crate) mod tests {
     #[test]
     fn a_whole_file_diagnostic_carries_no_span() {
         let text = text_of("a = 1\n");
-        let mut sink = Sink::new(&text, 1);
+        let mut sink = Sink::new(&text, &schema::VERSION_1);
         let at = sink.whole_file();
         sink.report(
             KernelDiagnostic::ContractNoTypes,
@@ -573,7 +593,7 @@ pub(crate) mod tests {
     #[test]
     fn recording_nothing_records_nothing() {
         let text = text_of("a = 1\n");
-        let mut sink = Sink::new(&text, 1);
+        let mut sink = Sink::new(&text, &schema::VERSION_1);
         sink.record(None);
         sink.record(Some(Diagnostic::kernel(
             KernelDiagnostic::CompatNewerFormatAvailable,
@@ -586,7 +606,7 @@ pub(crate) mod tests {
     #[test]
     fn a_report_carries_advice_only_when_it_was_given_some() {
         let text = text_of("a = 1\n");
-        let mut sink = Sink::new(&text, 1);
+        let mut sink = Sink::new(&text, &schema::VERSION_1);
         let at = sink.whole_file();
         let advice = "declare exactly one".to_owned();
         sink.report(
@@ -609,7 +629,7 @@ pub(crate) mod tests {
         let text = text_of("[dialect]\nlinks = \"wikilink\"\nflavour = \"plain\"\n");
         let root = root_of(&text);
         let dialect = document::get(root.get_ref(), "dialect").expect("declared");
-        let mut sink = Sink::new(&text, 1);
+        let mut sink = Sink::new(&text, &schema::VERSION_1);
         let table = sink.table(dialect, "dialect").expect("a table");
         sink.sweep(&section(table, "`[dialect]`"), &["links"]);
         let (diagnostics, _) = sink.finish();
@@ -625,7 +645,7 @@ pub(crate) mod tests {
         let text = text_of("[dialect]\n");
         let root = root_of(&text);
         let dialect = document::get(root.get_ref(), "dialect").expect("declared");
-        let mut sink = Sink::new(&text, 1);
+        let mut sink = Sink::new(&text, &schema::VERSION_1);
         let table = sink.table(dialect, "dialect").expect("a table");
         let dialect = section(table, "`[dialect]`");
         assert!(sink.required(&dialect, "links").is_none());
@@ -640,7 +660,7 @@ pub(crate) mod tests {
     fn a_wrong_type_names_what_was_required_and_what_was_found() {
         let text = text_of("links = 1\n");
         let root = root_of(&text);
-        let mut sink = Sink::new(&text, 1);
+        let mut sink = Sink::new(&text, &schema::VERSION_1);
         let links = document::get(root.get_ref(), "links").expect("declared");
         assert!(sink.table(links, "links").is_none());
         assert!(sink.array(links, "links").is_none());
@@ -657,7 +677,7 @@ pub(crate) mod tests {
     fn reading_a_leaf_records_where_it_is_written() {
         let text = text_of("links = \"wikilink\"\nkeep = true\n");
         let root = root_of(&text);
-        let mut sink = Sink::new(&text, 1);
+        let mut sink = Sink::new(&text, &schema::VERSION_1);
         let path = KeyPath::root();
         let links = document::get(root.get_ref(), "links").expect("declared");
         let keep = document::get(root.get_ref(), "keep").expect("declared");
@@ -675,7 +695,7 @@ pub(crate) mod tests {
     fn a_leaf_of_the_wrong_type_records_no_provenance() {
         let text = text_of("links = 1\nkeep = \"yes\"\n");
         let root = root_of(&text);
-        let mut sink = Sink::new(&text, 1);
+        let mut sink = Sink::new(&text, &schema::VERSION_1);
         let path = KeyPath::root();
         let links = document::get(root.get_ref(), "links").expect("declared");
         let keep = document::get(root.get_ref(), "keep").expect("declared");
@@ -690,7 +710,7 @@ pub(crate) mod tests {
     fn a_nameless_leaf_records_nothing_and_still_reads() {
         let text = text_of("links = \"wikilink\"\n");
         let root = root_of(&text);
-        let mut sink = Sink::new(&text, 1);
+        let mut sink = Sink::new(&text, &schema::VERSION_1);
         let links = document::get(root.get_ref(), "links").expect("declared");
         assert_eq!(
             sink.string(links, KeyPath::nameless().leaf("links")),
@@ -705,9 +725,9 @@ pub(crate) mod tests {
     fn an_omitted_flag_takes_the_declaring_versions_default() {
         let text = text_of("required = true\n");
         let root = root_of(&text);
-        let mut sink = Sink::new(&text, 1);
+        let mut sink = Sink::new(&text, &schema::VERSION_1);
         let table = section(root.get_ref(), "`[[type.property]]`");
-        assert!(sink.optional_flag(&table, "required"));
+        assert!(sink.optional_flag(&table, "required", false));
         let (_, provenance) = sink.finish();
         assert_eq!(
             provenance.get("required").map(|e| e.source),
@@ -719,9 +739,9 @@ pub(crate) mod tests {
     fn an_absent_flag_is_attributed_to_the_contract_version_that_defines_it() {
         let text = text_of("name = \"x\"\n");
         let root = root_of(&text);
-        let mut sink = Sink::new(&text, 1);
+        let mut sink = Sink::new(&text, &schema::VERSION_1);
         let table = section(root.get_ref(), "`[[type.property]]`");
-        assert!(!sink.optional_flag(&table, "required"));
+        assert!(!sink.optional_flag(&table, "required", false));
         let (diagnostics, provenance) = sink.finish();
         assert!(diagnostics.is_empty());
         assert_eq!(
@@ -733,12 +753,32 @@ pub(crate) mod tests {
     }
 
     #[test]
+    fn a_default_is_attributed_to_the_version_whose_schema_supplied_it() {
+        // Two versions read the same bytes and record two different sources,
+        // which is the whole of "a default is a property of the version": the
+        // attribution follows the schema the walk was given, never the newest
+        // one this build knows.
+        let text = text_of("name = \"x\"\n");
+        let root = root_of(&text);
+        let mut sink = Sink::new(&text, &schema::VERSION_2);
+        let table = section(root.get_ref(), "`[[type.property]]`");
+        assert!(!sink.optional_flag(&table, "required", false));
+        let (_, provenance) = sink.finish();
+        assert_eq!(
+            provenance.get("required").map(|entry| entry.source),
+            Some(Source::Default {
+                contract_version: 2
+            })
+        );
+    }
+
+    #[test]
     fn a_flag_of_the_wrong_type_reads_as_false_and_is_reported() {
         let text = text_of("required = \"yes\"\n");
         let root = root_of(&text);
-        let mut sink = Sink::new(&text, 1);
+        let mut sink = Sink::new(&text, &schema::VERSION_1);
         let table = section(root.get_ref(), "`[[type.property]]`");
-        assert!(!sink.optional_flag(&table, "required"));
+        assert!(!sink.optional_flag(&table, "required", false));
         let (diagnostics, provenance) = sink.finish();
         assert_eq!(diagnostics.len(), 1);
         assert!(provenance.is_empty());
@@ -747,7 +787,7 @@ pub(crate) mod tests {
     #[test]
     fn a_repeat_points_at_both_declarations() {
         let text = text_of("a = 1\nb = 2\n");
-        let mut sink = Sink::new(&text, 1);
+        let mut sink = Sink::new(&text, &schema::VERSION_1);
         sink.repeated(
             KernelDiagnostic::ContractDuplicateType,
             Repeat {
@@ -767,7 +807,7 @@ pub(crate) mod tests {
     fn a_name_is_read_before_its_path_exists() {
         let text = text_of("name = \"person\"\n");
         let root = root_of(&text);
-        let mut sink = Sink::new(&text, 1);
+        let mut sink = Sink::new(&text, &schema::VERSION_1);
         let entry = section(root.get_ref(), "`[[type]]`");
         let named = sink.name_of(&entry, "name").expect("a name");
         assert_eq!(named.text, "person");
@@ -780,7 +820,7 @@ pub(crate) mod tests {
     fn a_name_of_the_wrong_type_is_reported_and_yields_nothing() {
         let text = text_of("name = 4\n");
         let root = root_of(&text);
-        let mut sink = Sink::new(&text, 1);
+        let mut sink = Sink::new(&text, &schema::VERSION_1);
         let entry = section(root.get_ref(), "`[[type]]`");
         assert!(sink.name_of(&entry, "name").is_none());
         assert!(sink.name_of(&entry, "predicate").is_none());

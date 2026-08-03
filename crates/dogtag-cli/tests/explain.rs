@@ -105,7 +105,7 @@ fn provenance_is_opt_in_and_annotates_nothing_without_the_flag() {
         "a declared value names where it was written: {with:?}"
     );
     assert!(
-        with.stdout.contains("(default, contract version 1)"),
+        with.stdout.contains("(default, contract version 2)"),
         "a defaulted value names the contract version that defines it: {with:?}"
     );
     assert!(
@@ -126,7 +126,7 @@ fn the_json_is_one_document_that_always_carries_provenance() {
     for fragment in [
         "\"schema_version\": 1",
         "\"report\": \"contract\"",
-        "\"contract_version\": 1",
+        "\"contract_version\": 2",
         "\"links\": \"wikilink\"",
         "\"provenance\"",
         "\"source\": \"contract\"",

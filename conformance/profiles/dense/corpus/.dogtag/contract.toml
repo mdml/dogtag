@@ -10,7 +10,7 @@
 # Two of the eight property kinds go unreached here, and that is the corpus speaking rather than an
 # omission: money is recorded in minor units as an integer, and this corpus dates things by the day.
 
-contract_version = 1
+contract_version = 2
 
 [dialect]
 links = "wikilink"
