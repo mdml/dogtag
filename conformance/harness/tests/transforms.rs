@@ -17,6 +17,8 @@
 
 use std::fs;
 
+use dogtag::compat::SUPPORTED_CONTRACT_VERSIONS;
+use dogtag::contract::parse_contract;
 use dogtag_conformance::transform::{
     DERIVED_CATCH_ALL_TYPE, TargetNotFound, Transformed, delete_lifecycle_table, drop_catch_all,
     duplicate_catch_all, flip_property_required, replace_lifecycle_with_none, set_contract_version,
@@ -165,23 +167,74 @@ fn duplicate_catch_all_reports_an_absent_declaration() {
     }
 }
 
+/// The versions a derived case may rewrite a contract to: one below the floor,
+/// one above the ceiling, and every supported version in between — the whole
+/// span the derived version cases draw from.
+///
+/// A target a contract already declares would leave the bytes identical and
+/// make the derived case test nothing, so each contract's own declared version
+/// is filtered out *per contract* rather than excluded by a hardcoded list. The
+/// committed version stamp is coupled to [`SUPPORTED_CONTRACT_VERSIONS`] (the
+/// harness self-test `each_built_corpus_declares_the_current_contract_version`
+/// pins the coupling and says why), and this test must not have to be edited
+/// whenever that stamp moves — a test that has to move with the fixture is a
+/// test that entrenches whatever the fixture currently says.
+fn rewrite_targets(declared: u32) -> impl Iterator<Item = u32> {
+    let below = SUPPORTED_CONTRACT_VERSIONS.start().saturating_sub(1);
+    let above = SUPPORTED_CONTRACT_VERSIONS.end() + 1;
+    (below..=above).filter(move |version| *version != declared)
+}
+
+/// The version a contract's own text declares, read through the SDK rather than
+/// by matching the same bytes the transformation under test matches.
+fn declared_version(text: &str) -> u32 {
+    parse_contract(text)
+        .contract
+        .expect("a built profile's contract resolves")
+        .contract_version()
+}
+
 #[test]
 fn set_contract_version_rewrites_the_declared_version() {
-    // Neither version may be one a built contract already declares, or the
-    // transformation leaves the bytes identical and the derived case tests
-    // nothing. Both committed contracts declare version 2.
-    for version in [0, 1, 3] {
-        changes_every_built_contract(
-            "set_contract_version",
-            |text| set_contract_version(text, version),
-            |_, transformed| {
-                assert!(
-                    transformed.contains(&format!("contract_version = {version}")),
-                    "the declared version is rewritten"
-                );
-            },
-        );
+    for (profile, original) in built_contracts() {
+        for version in rewrite_targets(declared_version(&original)) {
+            let transformed = set_contract_version(&original, version).unwrap_or_else(|failure| {
+                panic!("`set_contract_version` against `{profile}`: {failure}")
+            });
+            assert_ne!(
+                transformed, original,
+                "rewriting `{profile}` to version {version} changed no bytes"
+            );
+            assert!(
+                transformed.contains(&format!("contract_version = {version}")),
+                "the declared version is rewritten in `{profile}`"
+            );
+        }
     }
+}
+
+/// The span of rewrite targets covers both refusals and the supported
+/// classification, and never asks for the version already on the page.
+#[test]
+fn rewrite_targets_span_the_range_and_skip_the_declared_version() {
+    let current = *SUPPORTED_CONTRACT_VERSIONS.end();
+    let targets: Vec<u32> = rewrite_targets(current).collect();
+    assert!(
+        targets.contains(&(SUPPORTED_CONTRACT_VERSIONS.start().saturating_sub(1))),
+        "a version below the floor is reachable: {targets:?}"
+    );
+    assert!(
+        targets.contains(&(current + 1)),
+        "a version above the ceiling is reachable: {targets:?}"
+    );
+    assert!(
+        !targets.contains(&current),
+        "the version a committed contract already declares is skipped: {targets:?}"
+    );
+    assert!(
+        rewrite_targets(*SUPPORTED_CONTRACT_VERSIONS.start()).count() == targets.len(),
+        "every declared version skips exactly one target"
+    );
 }
 
 #[test]
