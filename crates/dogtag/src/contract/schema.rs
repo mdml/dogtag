@@ -23,20 +23,73 @@
 //! record made due before the supported range could widen — widening it without
 //! these two dimensions is the regression it named.
 
-use super::model::{Capability, ScalarKind};
+use super::kinds::ScalarKind;
+use super::model::Capability;
 
 /// Which keys a `[[type.property]]` may carry, which depends on the kind it
 /// declares: `values` belongs to an `enum` and `of` to a `list`.
 pub(crate) struct PropertyKeys {
     /// A property declaring `kind = "enum"`.
     pub(crate) enumeration: &'static [&'static str],
-    /// A property declaring `kind = "list"`.
+    /// A property declaring `kind = "list"` whose elements are scalars.
     pub(crate) list: &'static [&'static str],
     /// A property declaring one of the scalar kinds.
     pub(crate) scalar: &'static [&'static str],
     /// A property whose kind did not resolve, which carries every kind's keys
     /// so an unknown kind produces one diagnostic rather than three.
     pub(crate) unresolved: &'static [&'static str],
+}
+
+/// What a property spells about its own shape, which is what decides the keys
+/// it may carry.
+///
+/// Two spellings rather than one, because `field` is legal on a `list` exactly
+/// when that list names `record` in `of` — the same rule that makes `values`
+/// legal on an `enum` and nowhere else, one level further down.
+pub(crate) struct Shape<'a> {
+    /// The `kind` the property declares, when it declares a string.
+    pub(crate) kind: Option<&'a str>,
+    /// The `of` the property declares, when it declares a string.
+    pub(crate) of: Option<&'a str>,
+}
+
+/// Which keys a `[[type.property.field]]` may carry, which depends on the kind
+/// the field declares: `values` belongs to an `enum`.
+///
+/// No arm carries `of` or `field`, at any kind. A field may be neither a `list`
+/// nor a `record`, so the keys those two constructs are declared with are not
+/// field keys at all — and a field spelling one is told so twice, once for the
+/// kind it may not hold and once for the key that does not exist here, because
+/// both are true and each has its own repair.
+pub(crate) struct FieldKeys {
+    /// A field declaring `kind = "enum"`.
+    pub(crate) enumeration: &'static [&'static str],
+    /// A field declaring one of the scalar kinds.
+    pub(crate) scalar: &'static [&'static str],
+    /// A field whose kind did not resolve, which carries every field kind's
+    /// keys so an unknown kind produces one diagnostic rather than two.
+    pub(crate) unresolved: &'static [&'static str],
+}
+
+/// What the record kind defines at a version that defines it: the two property
+/// shapes that carry a field list, the field's own key sets, and the value its
+/// one optional leaf takes when a contract omits it.
+///
+/// Keys and default travel together for the reason [`TagVocabulary`]'s do: a
+/// version that does not define the record kind has *no row* rather than an
+/// inert one, so `kind = "record"` and `of = "record"` are kinds that version
+/// does not define rather than kinds it defines and refuses.
+pub(crate) struct RecordKind {
+    /// `[[type.property]]` declaring `kind = "record"`.
+    pub(crate) property: &'static [&'static str],
+    /// `[[type.property]]` declaring `kind = "list"` over records — and over an
+    /// element kind that did not resolve, so a misspelled `of` beside a field
+    /// list produces one diagnostic rather than two.
+    pub(crate) property_list: &'static [&'static str],
+    /// `[[type.property.field]]`.
+    pub(crate) field: FieldKeys,
+    /// Whether a `[[type.property.field]]` declaring no `required` is required.
+    pub(crate) field_required: bool,
 }
 
 /// Every key each of the contract's tables defines, at one version.
@@ -141,16 +194,56 @@ pub(crate) struct Schema {
     /// into" line the vault-contract record draws, which no key set on its own
     /// can hold, because a key set decides legality and this decides existence.
     pub(crate) tags: Option<TagVocabulary>,
+    /// The record kind, at a version that defines it.
+    ///
+    /// `None` the same way [`Schema::tags`] is: it gates the *value* vocabulary
+    /// as well as the key sets, so at a version without this row `record` is
+    /// simply not a kind — which is what stops a version-1 contract acquiring a
+    /// construct only version 2 defines the moment the lattice widens.
+    pub(crate) records: Option<RecordKind>,
 }
 
 impl Schema {
-    /// Which keys a property declaring `spelled` may carry.
-    pub(crate) fn property_keys(&self, spelled: Option<&str>) -> &'static [&'static str] {
-        match spelled {
+    /// Which keys a property of this `shape` may carry.
+    pub(crate) fn property_keys(&self, shape: &Shape<'_>) -> &'static [&'static str] {
+        match shape.kind {
             Some("enum") => self.keys.property.enumeration,
-            Some("list") => self.keys.property.list,
+            Some("list") => self.list_keys(shape.of),
+            Some("record") => self.record_keys(),
             Some(other) if ScalarKind::named(other).is_some() => self.keys.property.scalar,
             _ => self.keys.property.unresolved,
+        }
+    }
+
+    /// Which keys a `list` naming `of` may carry: a field list exactly where
+    /// the elements are records, or where the element kind did not resolve.
+    fn list_keys(&self, of: Option<&str>) -> &'static [&'static str] {
+        let Some(records) = self.records.as_ref() else {
+            return self.keys.property.list;
+        };
+        match of {
+            Some(spelled) if ScalarKind::named(spelled).is_some() => self.keys.property.list,
+            _ => records.property_list,
+        }
+    }
+
+    /// Which keys a property declaring `kind = "record"` may carry — which at a
+    /// version defining no record kind is the set for a kind it does not
+    /// define.
+    fn record_keys(&self) -> &'static [&'static str] {
+        self.records
+            .as_ref()
+            .map_or(self.keys.property.unresolved, |records| records.property)
+    }
+}
+
+impl RecordKind {
+    /// Which keys a record field declaring `spelled` may carry.
+    pub(crate) fn field_keys(&self, spelled: Option<&str>) -> &'static [&'static str] {
+        match spelled {
+            Some("enum") => self.field.enumeration,
+            Some(other) if ScalarKind::named(other).is_some() => self.field.scalar,
+            _ => self.field.unresolved,
         }
     }
 }
@@ -179,6 +272,12 @@ const VERSION_1_KEYS: Keys = Keys {
 /// would hide `tags` and `tag-namespace` behind a syntax rather than showing
 /// them in the sets they joined. Version 1's row is pinned as whole equalities
 /// by test, so a key added to both at once fails there.
+///
+/// The two shapes that carry a field list are not here but in
+/// [`VERSION_2_RECORDS`], for the reason that row exists: a version defining no
+/// record kind has no set for them at all. What *is* here is `field` in the
+/// unresolved arm, so a property whose `kind` is a typo is told about the typo
+/// rather than about the field list it wrote underneath.
 const VERSION_2_KEYS: Keys = Keys {
     root: &[
         "contract_version",
@@ -204,8 +303,28 @@ const VERSION_2_KEYS: Keys = Keys {
         enumeration: &["kind", "name", "required", "values"],
         list: &["kind", "name", "of", "required"],
         scalar: &["kind", "name", "required"],
-        unresolved: &["kind", "name", "of", "required", "values"],
+        unresolved: &["field", "kind", "name", "of", "required", "values"],
     },
+};
+
+/// The record kind contract version 2 defines.
+///
+/// `field` is legal on exactly two property shapes — `kind = "record"`, and
+/// `kind = "list"` with `of = "record"` — because those are the two shapes the
+/// adopted sketch declares fields under. The sketch's only worked example is
+/// the list, whose fields sit in `[[type.property.field]]` on the property
+/// itself; the prose that adopts it attaches the field list to `kind =
+/// "record"` and never says where a `list` of `record` declares one, so the
+/// sketch is what settles it. One place a field is declared, for both shapes.
+const VERSION_2_RECORDS: RecordKind = RecordKind {
+    property: &["field", "kind", "name", "required"],
+    property_list: &["field", "kind", "name", "of", "required"],
+    field: FieldKeys {
+        enumeration: &["kind", "name", "required", "values"],
+        scalar: &["kind", "name", "required"],
+        unresolved: &["kind", "name", "required", "values"],
+    },
+    field_required: false,
 };
 
 /// The tag vocabulary contract version 2 defines.
@@ -229,9 +348,9 @@ const VERSION_1_DEFAULTS: Defaults = Defaults {
 /// The values contract version 2 supplies for an omitted leaf.
 ///
 /// Version 2's table is version 1's plus what version 2's own constructs
-/// declare. A tag namespace's `required` is one of those and lives in
-/// [`VERSION_2_TAGS`] beside the keys it belongs to rather than here, because
-/// version 1 has no row for a leaf it never reads.
+/// declare. A tag namespace's `required` and a record field's live in
+/// [`VERSION_2_TAGS`] and [`VERSION_2_RECORDS`] beside the keys they belong to
+/// rather than here, because version 1 has no row for a leaf it never reads.
 const VERSION_2_DEFAULTS: Defaults = VERSION_1_DEFAULTS;
 
 /// What contract version 1 lets a contract say.
@@ -254,6 +373,7 @@ pub(crate) static VERSION_1: Schema = Schema {
     defaults: VERSION_1_DEFAULTS,
     rules: VERSION_1_RULES,
     tags: None,
+    records: None,
 };
 
 /// Contract version 2.
@@ -263,6 +383,7 @@ pub(crate) static VERSION_2: Schema = Schema {
     defaults: VERSION_2_DEFAULTS,
     rules: VERSION_2_RULES,
     tags: Some(VERSION_2_TAGS),
+    records: Some(VERSION_2_RECORDS),
 };
 
 /// Every contract version this release reads, in ascending order.
@@ -316,19 +437,42 @@ mod tests {
         // version 2 cannot be added to version 1 in the same edit without this
         // failing.
         let keys = &VERSION_1.keys;
-        assert_eq!(
+        let tables: [&[&str]; 7] = [
             keys.root,
-            ["contract_version", "dialect", "flag", "lifecycle", "type"]
-        );
-        assert_eq!(keys.dialect, ["links"]);
-        assert_eq!(keys.flag, ["property"]);
-        assert_eq!(keys.lifecycle, ["axis", "none", "ordinary"]);
-        assert_eq!(keys.ordinary, ["absent", "value"]);
-        assert_eq!(
+            keys.dialect,
+            keys.flag,
+            keys.lifecycle,
+            keys.ordinary,
             keys.declared_type,
-            ["capabilities", "name", "property", "relationship"]
+            keys.relationship,
+        ];
+        assert_eq!(
+            tables,
+            [
+                &["contract_version", "dialect", "flag", "lifecycle", "type"][..],
+                &["links"][..],
+                &["property"][..],
+                &["axis", "none", "ordinary"][..],
+                &["absent", "value"][..],
+                &["capabilities", "name", "property", "relationship"][..],
+                &["predicate", "required"][..],
+            ]
         );
-        assert_eq!(keys.relationship, ["predicate", "required"]);
+        let properties: [&[&str]; 4] = [
+            keys.property.enumeration,
+            keys.property.list,
+            keys.property.scalar,
+            keys.property.unresolved,
+        ];
+        assert_eq!(
+            properties,
+            [
+                &["kind", "name", "required", "values"][..],
+                &["kind", "name", "of", "required"][..],
+                &["kind", "name", "required"][..],
+                &["kind", "name", "of", "required", "values"][..],
+            ]
+        );
     }
 
     #[test]
@@ -348,18 +492,26 @@ mod tests {
         assert!(!VERSION_2.rules.catch_all_may_require);
     }
 
+    /// A property spelling `kind` and no `of`.
+    fn of_kind(kind: &str) -> Shape<'_> {
+        Shape {
+            kind: Some(kind),
+            of: None,
+        }
+    }
+
     #[test]
     fn a_propertys_key_set_follows_the_kind_it_declares() {
         assert_eq!(
-            VERSION_1.property_keys(Some("enum")),
+            VERSION_1.property_keys(&of_kind("enum")),
             ["kind", "name", "required", "values"]
         );
         assert_eq!(
-            VERSION_1.property_keys(Some("list")),
+            VERSION_1.property_keys(&of_kind("list")),
             ["kind", "name", "of", "required"]
         );
         assert_eq!(
-            VERSION_1.property_keys(Some("string")),
+            VERSION_1.property_keys(&of_kind("string")),
             ["kind", "name", "required"]
         );
     }
@@ -367,40 +519,117 @@ mod tests {
     #[test]
     fn a_property_whose_kind_did_not_resolve_carries_every_kinds_keys() {
         let every = ["kind", "name", "of", "required", "values"];
-        assert_eq!(VERSION_1.property_keys(Some("url")), every);
-        assert_eq!(VERSION_1.property_keys(None), every);
+        assert_eq!(VERSION_1.property_keys(&of_kind("url")), every);
+        let nameless = Shape {
+            kind: None,
+            of: None,
+        };
+        assert_eq!(VERSION_1.property_keys(&nameless), every);
+    }
+
+    #[test]
+    fn a_version_that_defines_no_record_kind_defines_neither_spelling_of_it() {
+        // `record` reaches the arm for a kind version 1 does not define, and a
+        // `list` at version 1 carries the same keys whatever it names in `of`,
+        // so `field` is an unknown key wherever a version-1 contract writes it.
+        let every = ["kind", "name", "of", "required", "values"];
+        assert_eq!(VERSION_1.property_keys(&of_kind("record")), every);
+        let list_of_record = Shape {
+            kind: Some("list"),
+            of: Some("record"),
+        };
+        assert_eq!(
+            VERSION_1.property_keys(&list_of_record),
+            ["kind", "name", "of", "required"]
+        );
+        assert!(VERSION_1.records.is_none());
+    }
+
+    #[test]
+    fn only_the_two_record_shapes_carry_a_field_list() {
+        let with_of = |of| {
+            VERSION_2.property_keys(&Shape {
+                kind: Some("list"),
+                of: Some(of),
+            })
+        };
+        // An element kind that did not resolve carries the field list too, and
+        // so does a `list` with no `of` at all, so a misspelled `of` beside a
+        // field list is one diagnostic rather than two.
+        let shapes: [&[&str]; 5] = [
+            VERSION_2.property_keys(&of_kind("record")),
+            with_of("record"),
+            with_of("recrod"),
+            VERSION_2.property_keys(&of_kind("list")),
+            with_of("string"),
+        ];
+        let carrying = &["field", "kind", "name", "of", "required"][..];
+        assert_eq!(
+            shapes,
+            [
+                &["field", "kind", "name", "required"][..],
+                carrying,
+                carrying,
+                carrying,
+                &["kind", "name", "of", "required"][..],
+            ]
+        );
+    }
+
+    #[test]
+    fn a_fields_key_set_follows_the_kind_it_declares() {
+        let records = VERSION_2.records.as_ref().expect("version 2 defines it");
+        // Never `of` and never `field`: a field may be neither a `list` nor a
+        // `record`, so neither key exists at this level at any kind.
+        let every = &["kind", "name", "required", "values"][..];
+        let sets: [&[&str]; 5] = [
+            records.field_keys(Some("enum")),
+            records.field_keys(Some("date")),
+            records.field_keys(Some("url")),
+            records.field_keys(Some("list")),
+            records.field_keys(None),
+        ];
+        let scalar = &["kind", "name", "required"][..];
+        assert_eq!(sets, [every, scalar, every, every, every]);
+        assert!(!records.field_required);
     }
 
     #[test]
     fn version_2_adds_the_tag_vocabularys_two_tables_to_version_1s_sets() {
+        let joined: [&[&str]; 2] = [VERSION_2.keys.root, VERSION_2.keys.declared_type];
         assert_eq!(
-            VERSION_2.keys.root,
+            joined,
             [
-                "contract_version",
-                "dialect",
-                "flag",
-                "lifecycle",
-                "tags",
-                "type"
+                &[
+                    "contract_version",
+                    "dialect",
+                    "flag",
+                    "lifecycle",
+                    "tags",
+                    "type"
+                ][..],
+                &[
+                    "capabilities",
+                    "name",
+                    "property",
+                    "relationship",
+                    "tag-namespace"
+                ][..],
             ]
         );
-        assert_eq!(
-            VERSION_2.keys.declared_type,
-            [
-                "capabilities",
-                "name",
-                "property",
-                "relationship",
-                "tag-namespace"
-            ]
-        );
-        assert_eq!(
+        let unchanged = (
             VERSION_2.defaults.property_required,
-            VERSION_1.defaults.property_required
+            VERSION_2.property_keys(&Shape {
+                kind: Some("list"),
+                of: Some("date"),
+            }),
         );
         assert_eq!(
-            VERSION_2.property_keys(Some("list")),
-            VERSION_1.property_keys(Some("list"))
+            unchanged,
+            (
+                VERSION_1.defaults.property_required,
+                VERSION_1.property_keys(&of_kind("list"))
+            )
         );
     }
 
@@ -410,12 +639,15 @@ mod tests {
         // walk that would resolve a tag vocabulary never runs for it and a
         // version-1 model cannot carry one.
         let vocabulary = VERSION_2.tags.as_ref().expect("version 2 defines it");
-        assert_eq!(vocabulary.tags, ["property"]);
+        let declared: [&[&str]; 2] = [vocabulary.tags, vocabulary.namespace];
         assert_eq!(
-            vocabulary.namespace,
-            ["open", "prefix", "required", "values"]
+            declared,
+            [
+                &["property"][..],
+                &["open", "prefix", "required", "values"][..]
+            ]
         );
-        assert!(!vocabulary.namespace_required);
-        assert!(VERSION_1.tags.is_none());
+        let absent = (vocabulary.namespace_required, VERSION_1.tags.is_some());
+        assert_eq!(absent, (false, false));
     }
 }

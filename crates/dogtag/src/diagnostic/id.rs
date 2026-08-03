@@ -91,12 +91,24 @@ pub enum KernelDiagnostic {
     /// untyped note instantly fails. Version-scoped to contract version 2 and
     /// above: a version-1 contract that loaded clean must keep loading.
     ContractCatchAllRequires,
-    /// A property declares a kind outside the closed lattice of eight.
+    /// A property or a record field declares a kind the declared version's lattice does not
+    /// hold. A kind the lattice holds but the position does not admit is its own refusal.
     ContractUnknownPropertyKind,
-    /// An `enum` property's `values` are missing, empty, non-string, or duplicated.
+    /// An `enum` property's or record field's `values` are missing, empty, non-string, or
+    /// duplicated.
     ContractInvalidEnumValues,
-    /// A `list` property's `of` is missing, names an unknown kind, or names `list`.
+    /// A `list` property's `of` is missing, or names a kind the declared version does not admit
+    /// as an element.
     ContractInvalidListOf,
+    /// A record property's `field` list is missing or empty, or a field declares `record` or
+    /// `list`.
+    ///
+    /// The last is refused here rather than as an unknown kind because contract version 2
+    /// defines both: what it does not define is a second level of nesting, and a message
+    /// saying the kind does not exist would be false about the one thing to repair.
+    ContractInvalidRecordFields,
+    /// Two fields of one record share a name.
+    ContractDuplicateField,
     /// Two tag namespaces on one type share a prefix.
     ContractDuplicateTagNamespace,
     /// A tag namespace declares both `values` and `open`, neither, or a `values` that is
@@ -347,6 +359,16 @@ const REGISTRY: &[(KernelDiagnostic, &str, Severity)] = &[
     (
         KernelDiagnostic::ContractInvalidListOf,
         "contract.invalid-list-of",
+        Severity::Error,
+    ),
+    (
+        KernelDiagnostic::ContractInvalidRecordFields,
+        "contract.invalid-record-fields",
+        Severity::Error,
+    ),
+    (
+        KernelDiagnostic::ContractDuplicateField,
+        "contract.duplicate-field",
         Severity::Error,
     ),
     (
@@ -764,6 +786,8 @@ macro_rules! contract_variants {
             | KernelDiagnostic::ContractUnknownPropertyKind
             | KernelDiagnostic::ContractInvalidEnumValues
             | KernelDiagnostic::ContractInvalidListOf
+            | KernelDiagnostic::ContractInvalidRecordFields
+            | KernelDiagnostic::ContractDuplicateField
             | KernelDiagnostic::ContractDuplicateTagNamespace
             | KernelDiagnostic::ContractInvalidTagNamespace
             | KernelDiagnostic::ContractTagsTableMissing
@@ -883,6 +907,8 @@ fn expected_contract_id(kind: KernelDiagnostic) -> &'static str {
         ContractUnknownPropertyKind => "contract.unknown-property-kind",
         ContractInvalidEnumValues => "contract.invalid-enum-values",
         ContractInvalidListOf => "contract.invalid-list-of",
+        ContractInvalidRecordFields => "contract.invalid-record-fields",
+        ContractDuplicateField => "contract.duplicate-field",
         ContractDuplicateTagNamespace => "contract.duplicate-tag-namespace",
         ContractInvalidTagNamespace => "contract.invalid-tag-namespace",
         ContractTagsTableMissing => "contract.tags-table-missing",

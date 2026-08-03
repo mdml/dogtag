@@ -30,9 +30,13 @@ toolchain = "nightly-2026-07-30"
 # lines are covered lines. The version-2 catch-all rule raised them again: it
 # is one branch per requirement kind and one per version, and every arm — each
 # kind of requirement, several at once, none at all, and the same contract at
-# version 1 — is reached from a named test.
-line = 99.33
-branch = 98.73
+# version 1 — is reached from a named test. The record kind raised them once
+# more, for the same reason each of the others did: a walk, a model, two
+# renderings and three equivalence readers, every arm of which — both record
+# spellings, every field kind, each refusal, and the same bytes read at version
+# 1 — is reached from a named test.
+line = 99.38
+branch = 98.80
 
 [thresholds]
 line = 95.0

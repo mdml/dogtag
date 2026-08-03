@@ -18,9 +18,10 @@ use toml::de::{DeTable, DeValue};
 use crate::diagnostic::KernelDiagnostic;
 use crate::document;
 
-use super::model::{
-    Capability, PropertyDecl, PropertyKind, RelationshipDecl, ScalarKind, TypeDecl,
-};
+use super::fields;
+use super::kinds::{PropertyKind, ScalarKind};
+use super::model::{Capability, PropertyDecl, RelationshipDecl, TypeDecl};
+use super::schema::{RecordKind, Shape};
 use super::sink::{Claim, KeyPath, Named, Repeat, Report, Section, Seen, Sink};
 use super::tags;
 
@@ -198,7 +199,7 @@ fn declared_property(
         },
     );
     let declared = spelled_kind(sink, &section);
-    let allowed = sink.schema().property_keys(declared.spelled);
+    let allowed = sink.schema().property_keys(&declared.shape);
     sink.sweep(&section, allowed);
     let default = sink.schema().defaults.property_required;
     let required = sink.optional_flag(&section, "required", default);
@@ -231,9 +232,9 @@ fn declared_property(
     })
 }
 
-/// The `kind` a property spells, and where it spells it.
+/// The shape a property spells, and where it spells its `kind`.
 struct Spelled<'a> {
-    spelled: Option<&'a str>,
+    shape: Shape<'a>,
     at: Range<usize>,
 }
 
@@ -241,8 +242,21 @@ fn spelled_kind<'a>(sink: &mut Sink<'_>, section: &Section<'a, '_>) -> Spelled<'
     let value = sink.required(section, "kind");
     Spelled {
         at: value.map_or_else(|| section.span.clone(), Spanned::span),
-        spelled: value.and_then(|value| sink.string(value, section.leaf("kind"))),
+        shape: Shape {
+            kind: value.and_then(|value| sink.string(value, section.leaf("kind"))),
+            of: element(section),
+        },
     }
+}
+
+/// The element kind a property spells, read without reporting or recording it.
+///
+/// The key sets need the answer before `of` is read for real, because a `list`
+/// carries a field list exactly where its elements are records. Reading it
+/// again here would report a wrong type twice and record its provenance twice,
+/// so this peek does neither and leaves both to [`list_of`].
+fn element<'a>(section: &Section<'a, '_>) -> Option<&'a str> {
+    document::expect_string(section.get("of")?).ok()
 }
 
 fn property_kind(
@@ -250,30 +264,80 @@ fn property_kind(
     section: &Section<'_, '_>,
     declared: &Spelled<'_>,
 ) -> Option<PropertyKind> {
-    match declared.spelled? {
+    match declared.shape.kind? {
         "enum" => enum_values(sink, section).map(|values| PropertyKind::Enum { values }),
-        "list" => list_of(sink, section).map(|of| PropertyKind::List { of }),
+        "list" => list_kind(sink, section),
+        "record" => record_kind(sink, section, declared.at.clone()),
         other => scalar_kind(sink, other, declared.at.clone()),
     }
+}
+
+/// A `list`, over one scalar kind or over records.
+fn list_kind(sink: &mut Sink<'_>, section: &Section<'_, '_>) -> Option<PropertyKind> {
+    match list_of(sink, section)? {
+        Element::Scalar(of) => Some(PropertyKind::List { of }),
+        Element::Record(records) => fields::declared(sink, section, records)
+            .map(|fields| PropertyKind::ListOfRecord { fields }),
+    }
+}
+
+/// `kind = "record"` — and, at a version defining no record kind, a kind that
+/// version does not define.
+///
+/// The lattice is version-scoped rather than global for the reason the key sets
+/// are: a construct only version 2 defines must be **absent from** a version-1
+/// model, and widening `ScalarKind` instead would have a version-1 contract
+/// start accepting `record` the moment version 2 shipped.
+fn record_kind(
+    sink: &mut Sink<'_>,
+    section: &Section<'_, '_>,
+    at: Range<usize>,
+) -> Option<PropertyKind> {
+    let Some(records) = sink.schema().records.as_ref() else {
+        return scalar_kind(sink, "record", at);
+    };
+    fields::declared(sink, section, records).map(|fields| PropertyKind::Record { fields })
 }
 
 fn scalar_kind(sink: &mut Sink<'_>, spelled: &str, at: Range<usize>) -> Option<PropertyKind> {
     let found = ScalarKind::named(spelled).map(PropertyKind::from);
     if found.is_none() {
         let message = format!("`{spelled}` is not a value kind this contract version defines");
-        let names = ScalarKind::ALL.iter().map(|kind| kind.as_str());
-        let report =
-            Report::new(message).with_help(listing("the kinds are", names.chain(["enum", "list"])));
+        let report = Report::new(message).with_help(kinds_help(sink));
         let at = sink.location(at);
         sink.report(KernelDiagnostic::ContractUnknownPropertyKind, report, at);
     }
     found
 }
 
+/// The kinds the declared version defines, so a help line never names a
+/// construct the contract's own version has no way to write.
+fn kinds_help(sink: &Sink<'_>) -> String {
+    let names = ScalarKind::ALL.iter().map(|kind| kind.as_str());
+    listing("the kinds are", names.chain(carrying_kinds(sink)))
+}
+
+/// The kinds that carry something of their own, at the declared version.
+fn carrying_kinds(sink: &Sink<'_>) -> Vec<&'static str> {
+    if sink.schema().records.is_some() {
+        return vec!["enum", "list", "record"];
+    }
+    vec!["enum", "list"]
+}
+
 /// The members of an `enum`: present, non-empty, all strings, no repeats.
-fn enum_values(sink: &mut Sink<'_>, section: &Section<'_, '_>) -> Option<Vec<String>> {
+///
+/// Shared with a record field, whose kind may be an `enum` with its own
+/// `values` — the same construct one level down, so the same reading and the
+/// same identifier, named by whichever declaration's label the section carries.
+pub(super) fn enum_values(sink: &mut Sink<'_>, section: &Section<'_, '_>) -> Option<Vec<String>> {
     let Some(value) = section.get("values") else {
-        invalid_enum(sink, "declares `kind = \"enum\"` but no `values`", None);
+        invalid_enum(
+            sink,
+            section,
+            "declares `kind = \"enum\"` but no `values`",
+            None,
+        );
         return None;
     };
     let at = value.span();
@@ -285,19 +349,25 @@ fn enum_values(sink: &mut Sink<'_>, section: &Section<'_, '_>) -> Option<Vec<Str
     let Some(members) = members else {
         invalid_enum(
             sink,
+            section,
             "declares a `values` entry that is not a string",
             Some(at),
         );
         return None;
     };
-    check_members(sink, &members, at.clone())?;
+    check_members(sink, section, &members, at.clone())?;
     sink.written(section.leaf("values").key, at);
     Some(members)
 }
 
-fn check_members(sink: &mut Sink<'_>, members: &[String], at: Range<usize>) -> Option<()> {
+fn check_members(
+    sink: &mut Sink<'_>,
+    section: &Section<'_, '_>,
+    members: &[String],
+    at: Range<usize>,
+) -> Option<()> {
     if members.is_empty() {
-        invalid_enum(sink, "declares an empty `values`", Some(at));
+        invalid_enum(sink, section, "declares an empty `values`", Some(at));
         return None;
     }
     let mut seen = Seen::new();
@@ -308,20 +378,32 @@ fn check_members(sink: &mut Sink<'_>, members: &[String], at: Range<usize>) -> O
         return Some(());
     };
     let message = format!("declares `{repeat}` twice in `values`");
-    invalid_enum(sink, &message, Some(at));
+    invalid_enum(sink, section, &message, Some(at));
     None
 }
 
-fn invalid_enum(sink: &mut Sink<'_>, detail: &str, at: Option<Range<usize>>) {
-    let report = Report::new(format!("a property {detail}"))
+fn invalid_enum(
+    sink: &mut Sink<'_>,
+    section: &Section<'_, '_>,
+    detail: &str,
+    at: Option<Range<usize>>,
+) {
+    let report = Report::new(format!("{} {detail}", section.label))
         .with_help("an `enum` declares a non-empty list of unique strings".to_owned());
     let at = at.map_or_else(|| sink.whole_file(), |span| sink.location(span));
     sink.report(KernelDiagnostic::ContractInvalidEnumValues, report, at);
 }
 
-/// The element kind of a `list`, which is one of the six scalar kinds. Lists do
-/// not nest, and there is no list of `enum`.
-fn list_of(sink: &mut Sink<'_>, section: &Section<'_, '_>) -> Option<ScalarKind> {
+/// What a `list` holds. Lists do not nest, and there is no list of `enum`: an
+/// `enum` needs its own `values`, which a `list` declaration cannot carry.
+enum Element {
+    /// One of the six scalar kinds.
+    Scalar(ScalarKind),
+    /// A record, at a version that defines the record kind.
+    Record(&'static RecordKind),
+}
+
+fn list_of(sink: &mut Sink<'_>, section: &Section<'_, '_>) -> Option<Element> {
     let Some(value) = section.get("of") else {
         invalid_list(
             sink,
@@ -332,19 +414,36 @@ fn list_of(sink: &mut Sink<'_>, section: &Section<'_, '_>) -> Option<ScalarKind>
     };
     let at = value.span();
     let spelled = sink.string(value, section.leaf("of"))?;
-    let found = ScalarKind::named(spelled);
-    if found.is_none() {
-        let message = format!("declares `of = \"{spelled}\"`, which is not a scalar kind");
-        invalid_list(sink, message, Some(at));
+    if let Some(of) = ScalarKind::named(spelled) {
+        return Some(Element::Scalar(of));
     }
-    found
+    if let Some(records) = element_records(sink, spelled) {
+        return Some(Element::Record(records));
+    }
+    let message = format!(
+        "declares `of = \"{spelled}\"`, which is not an element kind this contract version defines"
+    );
+    invalid_list(sink, message, Some(at));
+    None
+}
+
+/// The record kind, when the `list` names it and the declared version defines
+/// it. A version that does not is simply one where `record` is not a kind.
+fn element_records(sink: &Sink<'_>, spelled: &str) -> Option<&'static RecordKind> {
+    (spelled == "record")
+        .then(|| sink.schema().records.as_ref())
+        .flatten()
 }
 
 fn invalid_list(sink: &mut Sink<'_>, detail: String, at: Option<Range<usize>>) {
-    let report = Report::new(format!("a property {detail}")).with_help(listing(
-        "a `list` holds one of",
-        ScalarKind::ALL.iter().map(|kind| kind.as_str()),
-    ));
+    let names = ScalarKind::ALL.iter().map(|kind| kind.as_str());
+    let elements: Vec<&str> = if sink.schema().records.is_some() {
+        vec!["record"]
+    } else {
+        Vec::new()
+    };
+    let report = Report::new(format!("a property {detail}"))
+        .with_help(listing("a `list` holds one of", names.chain(elements)));
     let at = at.map_or_else(|| sink.whole_file(), |span| sink.location(span));
     sink.report(KernelDiagnostic::ContractInvalidListOf, report, at);
 }
@@ -518,7 +617,7 @@ impl Catalog {
 }
 
 /// A help line listing a closed set, so the set is never restated by hand.
-fn listing<'a>(lead: &str, names: impl Iterator<Item = &'a str>) -> String {
+pub(super) fn listing<'a>(lead: &str, names: impl Iterator<Item = &'a str>) -> String {
     let quoted: Vec<String> = names.map(|name| format!("`{name}`")).collect();
     format!("{lead} {}", quoted.join(", "))
 }
@@ -537,10 +636,10 @@ mod tests {
         provenance: Provenance,
     }
 
-    fn read(source: &str) -> Read {
+    fn read_at(schema: &'static schema::Schema, source: &str) -> Read {
         let text = text_of(source);
         let document = root_of(&text);
-        let mut sink = Sink::new(&text, &schema::VERSION_1);
+        let mut sink = Sink::new(&text, schema);
         let types = types(&mut sink, document.get_ref());
         let (diagnostics, provenance) = sink.finish();
         Read {
@@ -548,6 +647,10 @@ mod tests {
             diagnostics,
             provenance,
         }
+    }
+
+    fn read(source: &str) -> Read {
+        read_at(&schema::VERSION_1, source)
     }
 
     fn ids(read: &Read) -> Vec<&str> {
@@ -777,6 +880,26 @@ mod tests {
             .as_deref()
             .expect("advice");
         assert!(help.ends_with("`datetime`, `enum`, `list`"));
+    }
+
+    /// The advice one refusal gave, read at `schema`.
+    fn advice(schema: &'static schema::Schema, source: &str) -> String {
+        read_at(schema, source).diagnostics.as_slice()[0]
+            .help
+            .clone()
+            .expect("advice")
+    }
+
+    #[test]
+    fn the_kinds_a_help_line_names_are_the_kinds_the_declared_version_defines() {
+        // A help line that named `record` to a version-1 contract would be
+        // advice that version has no way to take.
+        let unknown = property("url", "");
+        assert!(advice(&schema::VERSION_1, &unknown).ends_with("`enum`, `list`"));
+        assert!(advice(&schema::VERSION_2, &unknown).ends_with("`enum`, `list`, `record`"));
+        let element = property("list", "of = \"enum\"\n");
+        assert!(advice(&schema::VERSION_1, &element).ends_with("`date`, `datetime`"));
+        assert!(advice(&schema::VERSION_2, &element).ends_with("`datetime`, `record`"));
     }
 
     #[test]

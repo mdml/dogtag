@@ -18,9 +18,8 @@
 
 use crate::diagnostic::{Diagnostic, KernelDiagnostic, Location, Related};
 
-use super::model::{
-    Capability, FlagDecl, LifecycleDecl, Ordinary, PropertyDecl, PropertyKind, ScalarKind, TypeDecl,
-};
+use super::kinds::{PropertyKind, ScalarKind};
+use super::model::{Capability, FlagDecl, LifecycleDecl, Ordinary, PropertyDecl, TypeDecl};
 use super::parse::Parts;
 use super::sink::{Report, Sink};
 

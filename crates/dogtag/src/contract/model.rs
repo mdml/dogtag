@@ -19,6 +19,7 @@
 
 use core::fmt;
 
+use super::kinds::PropertyKind;
 use super::vocabulary::{TagNamespaceDecl, TagsDecl};
 use crate::provenance::Provenance;
 
@@ -382,157 +383,6 @@ impl PropertyDecl {
     }
 }
 
-/// The closed lattice of value kinds, of which there are eight.
-///
-/// `integer` and `float` are distinct on the wire: `1` is not a `float` and
-/// `1.0` is not an `integer`. There are **no value constraints** of any kind —
-/// no pattern, no bounds, no format hint — because a declared constraint the
-/// kernel never enforces misleads every agent that reads the contract.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum PropertyKind {
-    /// Text.
-    String,
-    /// A whole number.
-    Integer,
-    /// A number written with a fractional part or an exponent.
-    Float,
-    /// `true` or `false`.
-    Boolean,
-    /// An RFC 3339 `full-date` — `YYYY-MM-DD`, and nothing else.
-    ///
-    /// The lexical form is the kind's entire meaning, so it is fixed here
-    /// rather than left to whatever coercion a later frontmatter reader
-    /// happens to perform.
-    Date,
-    /// An RFC 3339 `date-time` **with a mandatory offset** — for example
-    /// `2026-07-31T09:15:00-04:00`. A local time with no offset is not a
-    /// `datetime`.
-    ///
-    /// As with [`PropertyKind::Date`], the lexical form is the meaning; M2
-    /// records it and nothing parses a note.
-    DateTime,
-    /// A closed set of named values.
-    Enum {
-        /// The members, in declaration order. Non-empty and free of repeats.
-        values: Vec<String>,
-    },
-    /// A list of one scalar kind. Lists do not nest, and there is no list of
-    /// `enum`: an `enum` needs its own `values`, which a `list` declaration has
-    /// no way to carry.
-    List {
-        /// The kind of every element.
-        of: ScalarKind,
-    },
-}
-
-impl PropertyKind {
-    /// The spelling the contract writes for the kind itself.
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            Self::String => ScalarKind::String.as_str(),
-            Self::Integer => ScalarKind::Integer.as_str(),
-            Self::Float => ScalarKind::Float.as_str(),
-            Self::Boolean => ScalarKind::Boolean.as_str(),
-            Self::Date => ScalarKind::Date.as_str(),
-            Self::DateTime => ScalarKind::DateTime.as_str(),
-            Self::Enum { .. } => "enum",
-            Self::List { .. } => "list",
-        }
-    }
-
-    /// The members of an `enum`.
-    pub fn values(&self) -> Option<&[String]> {
-        match self {
-            Self::Enum { values } => Some(values),
-            _ => None,
-        }
-    }
-
-    /// The element kind of a `list`.
-    pub fn element(&self) -> Option<ScalarKind> {
-        match self {
-            Self::List { of } => Some(*of),
-            _ => None,
-        }
-    }
-
-    /// The kind spelled out with whatever it carries, for a diagnostic message
-    /// that has to tell two `enum` declarations apart.
-    pub fn describe(&self) -> String {
-        match self {
-            Self::Enum { values } => format!("`enum` over {}", values.join(", ")),
-            Self::List { of } => format!("`list` of `{of}`"),
-            other => format!("`{}`", other.as_str()),
-        }
-    }
-}
-
-impl From<ScalarKind> for PropertyKind {
-    fn from(kind: ScalarKind) -> Self {
-        match kind {
-            ScalarKind::String => Self::String,
-            ScalarKind::Integer => Self::Integer,
-            ScalarKind::Float => Self::Float,
-            ScalarKind::Boolean => Self::Boolean,
-            ScalarKind::Date => Self::Date,
-            ScalarKind::DateTime => Self::DateTime,
-        }
-    }
-}
-
-/// A kind a `list` may hold: the six kinds that are neither `enum` nor `list`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum ScalarKind {
-    /// Text.
-    String,
-    /// A whole number.
-    Integer,
-    /// A number written with a fractional part or an exponent.
-    Float,
-    /// `true` or `false`.
-    Boolean,
-    /// An RFC 3339 `full-date`, as [`PropertyKind::Date`] fixes it.
-    Date,
-    /// An RFC 3339 `date-time` with a mandatory offset, as
-    /// [`PropertyKind::DateTime`] fixes it.
-    DateTime,
-}
-
-impl ScalarKind {
-    /// Every scalar kind, in the order the format declares them.
-    pub const ALL: &'static [ScalarKind] = &[
-        Self::String,
-        Self::Integer,
-        Self::Float,
-        Self::Boolean,
-        Self::Date,
-        Self::DateTime,
-    ];
-
-    /// The spelling the contract writes.
-    pub fn as_str(self) -> &'static str {
-        match self {
-            Self::String => "string",
-            Self::Integer => "integer",
-            Self::Float => "float",
-            Self::Boolean => "boolean",
-            Self::Date => "date",
-            Self::DateTime => "datetime",
-        }
-    }
-
-    /// The scalar kind `name` spells, if the format defines one.
-    pub fn named(name: &str) -> Option<Self> {
-        Self::ALL.iter().copied().find(|kind| kind.as_str() == name)
-    }
-}
-
-impl fmt::Display for ScalarKind {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.as_str())
-    }
-}
-
 /// One relationship declared on one type.
 ///
 /// `required = true` means at least one edge with this predicate must be
@@ -798,81 +648,6 @@ mod tests {
     }
 
     #[test]
-    fn scalar_kinds_round_trip_through_their_spelling() {
-        let names: Vec<&str> = ScalarKind::ALL
-            .iter()
-            .copied()
-            .map(ScalarKind::as_str)
-            .collect();
-        assert_eq!(
-            names,
-            ["string", "integer", "float", "boolean", "date", "datetime"]
-        );
-        for kind in ScalarKind::ALL.iter().copied() {
-            assert_eq!(ScalarKind::named(kind.as_str()), Some(kind));
-            assert_eq!(kind.to_string(), kind.as_str());
-        }
-        assert!(ScalarKind::named("enum").is_none());
-    }
-
-    #[test]
-    fn every_scalar_kind_has_a_property_kind() {
-        let kinds: Vec<&str> = ScalarKind::ALL
-            .iter()
-            .copied()
-            .map(|kind| PropertyKind::from(kind).as_str())
-            .collect();
-        assert_eq!(
-            kinds,
-            ["string", "integer", "float", "boolean", "date", "datetime"]
-        );
-    }
-
-    #[test]
-    fn the_two_carrying_kinds_report_what_they_carry() {
-        let values = PropertyKind::Enum {
-            values: vec!["draft".to_owned()],
-        };
-        assert_eq!(
-            (values.as_str(), values.values()),
-            ("enum", Some(&["draft".to_owned()][..]))
-        );
-        let list = PropertyKind::List {
-            of: ScalarKind::Date,
-        };
-        assert_eq!(
-            (list.as_str(), list.element()),
-            ("list", Some(ScalarKind::Date))
-        );
-    }
-
-    #[test]
-    fn a_scalar_kind_carries_neither_values_nor_an_element() {
-        let carried = (
-            PropertyKind::Boolean.values(),
-            PropertyKind::Boolean.element(),
-        );
-        assert_eq!(carried, (None, None));
-    }
-
-    #[test]
-    fn a_kind_describes_itself_precisely_enough_to_tell_two_enums_apart() {
-        let one = PropertyKind::Enum {
-            values: vec!["draft".to_owned(), "archived".to_owned()],
-        };
-        let other = PropertyKind::Enum {
-            values: vec!["draft".to_owned()],
-        };
-        assert_eq!(one.describe(), "`enum` over draft, archived");
-        assert_ne!(one.describe(), other.describe());
-        let list = PropertyKind::List {
-            of: ScalarKind::Integer,
-        };
-        assert_eq!(list.describe(), "`list` of `integer`");
-        assert_eq!(PropertyKind::Float.describe(), "`float`");
-    }
-
-    #[test]
     fn the_model_clones_compares_and_formats() {
         let contract = sample();
         assert_eq!(contract.clone(), contract);
@@ -906,8 +681,5 @@ mod tests {
         };
         assert_eq!(flag.clone(), flag);
         assert!(format!("{flag:?}").contains("leaned_on"));
-        let kinds = (ScalarKind::Date, ScalarKind::DateTime);
-        assert_ne!(kinds.0, kinds.1);
-        assert!(format!("{kinds:?}").contains("DateTime"));
     }
 }
