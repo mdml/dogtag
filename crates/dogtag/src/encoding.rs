@@ -9,6 +9,21 @@
 //! There are exactly **three** read faults. A missing trailing newline is an
 //! emission rule, not a read fault, and adding a fourth here would refuse files
 //! the format accepts.
+//!
+//! # Two doors, because a corpus is not a committed asset
+//!
+//! [`inspect`] refuses: it answers with the first fault and no text, which is
+//! right for the contract and the installation record — dogtag's own files, held
+//! to one encoding.
+//!
+//! [`inspect_all`] reads anyway: it answers with the text *and* every fault the
+//! bytes carry, which is what a note needs. A note's byte order mark and its
+//! carriage returns are warnings rather than refusals, and a warning that
+//! destroys the text is not a warning. Both faults are returned rather than the
+//! first, because they are independent facts about the file and reporting only
+//! the first would mean repairing one reveals another that was there all along.
+//! Only invalid UTF-8 stops the read, because bytes that are not text cannot be
+//! honestly read at all.
 
 use core::ops::Range;
 use core::str;
@@ -104,6 +119,19 @@ impl Text {
     }
 }
 
+/// An asset's text, together with every fault its bytes carry.
+///
+/// The text is present *because* the faults did not stop the read: this is what
+/// [`inspect_all`] answers, and the caller decides what severity each fault is
+/// reported at.
+#[derive(Clone, Debug)]
+pub struct Reading {
+    /// The text, exactly as it was read — never normalized.
+    pub text: Text,
+    /// The faults the bytes carry, in the order they are checked.
+    pub faults: Vec<EncodingFault>,
+}
+
 /// Reads bytes as an asset's text.
 ///
 /// # Errors
@@ -111,27 +139,47 @@ impl Text {
 /// Returns the first of invalid UTF-8, a byte order mark, and a carriage
 /// return, checked in that order.
 pub fn inspect(bytes: &[u8]) -> Result<Text, EncodingFault> {
-    let text = str::from_utf8(bytes).map_err(|error| EncodingFault::InvalidUtf8 {
+    let text = as_text(bytes)?;
+    match byte_order_mark(text).or_else(|| carriage_return(text)) {
+        Some(fault) => Err(fault),
+        None => Ok(Text::new(text.to_owned())),
+    }
+}
+
+/// Reads bytes as text, keeping the text every fault but one leaves readable.
+///
+/// # Errors
+///
+/// Returns [`EncodingFault::InvalidUtf8`] and nothing else: bytes that are not
+/// text have no text to answer with.
+pub fn inspect_all(bytes: &[u8]) -> Result<Reading, EncodingFault> {
+    let text = as_text(bytes)?;
+    Ok(Reading {
+        faults: [byte_order_mark(text), carriage_return(text)]
+            .into_iter()
+            .flatten()
+            .collect(),
+        text: Text::new(text.to_owned()),
+    })
+}
+
+fn as_text(bytes: &[u8]) -> Result<&str, EncodingFault> {
+    str::from_utf8(bytes).map_err(|error| EncodingFault::InvalidUtf8 {
         offset: error.valid_up_to(),
-    })?;
-    check_byte_order_mark(text)?;
-    check_carriage_return(text)?;
-    Ok(Text::new(text.to_owned()))
+    })
 }
 
-fn check_byte_order_mark(text: &str) -> Result<(), EncodingFault> {
+fn byte_order_mark(text: &str) -> Option<EncodingFault> {
     if text.starts_with('\u{feff}') {
-        Err(EncodingFault::ByteOrderMark)
+        Some(EncodingFault::ByteOrderMark)
     } else {
-        Ok(())
+        None
     }
 }
 
-fn check_carriage_return(text: &str) -> Result<(), EncodingFault> {
-    match text.find('\r') {
-        Some(offset) => Err(EncodingFault::CarriageReturn { offset }),
-        None => Ok(()),
-    }
+fn carriage_return(text: &str) -> Option<EncodingFault> {
+    text.find('\r')
+        .map(|offset| EncodingFault::CarriageReturn { offset })
 }
 
 /// The byte offset each line starts at, line 1 first.
@@ -220,6 +268,38 @@ mod tests {
     #[test]
     fn a_missing_trailing_newline_is_not_a_read_fault() {
         assert_eq!(text_of("a = 1").as_str(), "a = 1");
+    }
+
+    #[test]
+    fn reading_leniently_keeps_the_text_the_faults_did_not_destroy() {
+        let reading = inspect_all("\u{feff}# Title\r\n".as_bytes()).expect("valid UTF-8");
+        assert_eq!(reading.text.as_str(), "\u{feff}# Title\r\n");
+        assert_eq!(
+            reading.faults,
+            [
+                EncodingFault::ByteOrderMark,
+                EncodingFault::CarriageReturn { offset: 10 }
+            ],
+            "both faults, not the first: they are independent facts about the file"
+        );
+    }
+
+    #[test]
+    fn reading_leniently_reports_nothing_about_bytes_that_carry_nothing() {
+        let reading = inspect_all(b"# Title\n").expect("valid UTF-8");
+        assert_eq!(reading.text.as_str(), "# Title\n");
+        assert!(reading.faults.is_empty());
+        let copy = reading.clone();
+        assert_eq!(copy.text.as_str(), reading.text.as_str());
+        assert!(format!("{reading:?}").contains("Title"));
+    }
+
+    #[test]
+    fn reading_leniently_still_refuses_bytes_that_are_not_text() {
+        assert_eq!(
+            inspect_all(b"# Title\xff\n").expect_err("invalid"),
+            EncodingFault::InvalidUtf8 { offset: 7 }
+        );
     }
 
     #[test]
