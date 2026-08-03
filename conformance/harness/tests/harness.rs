@@ -8,6 +8,7 @@
 
 use std::collections::BTreeSet;
 
+use dogtag::compat::SUPPORTED_CONTRACT_VERSIONS;
 use dogtag::contract::{Capability, Contract, Ordinary, load_contract};
 
 use dogtag_conformance::{
@@ -126,6 +127,50 @@ fn each_built_corpus_meets_the_coverage_floor_its_record_states() {
         "starter: the ordinary state is a named value — the other half of the \
          seam axis the two profiles exist to span"
     );
+}
+
+/// Every built corpus's committed contract declares the **current** supported
+/// contract version, and never a version below it.
+///
+/// This is a mechanical coupling rather than a preference, and it is the reason
+/// a fixture's version stamp cannot be migrated on its own schedule. A
+/// committed contract below the ceiling earns `compat.newer-format-available`,
+/// and `conforming-contract-loads-with-zero-diagnostics` requires zero
+/// diagnostics *at any severity* from every built profile — so the moment
+/// [`SUPPORTED_CONTRACT_VERSIONS`] widens, a fixture left on the old stamp
+/// turns seven M2 scenarios red across both built profiles at once. Widening
+/// the range and restamping the committed contracts is therefore one change,
+/// whichever slice the widening belongs to. That is also why the fixture record
+/// makes the `supported`-but-not-current classification derived evidence rather
+/// than committed evidence: a committed fixture cannot demonstrate it and stay
+/// clean.
+///
+/// Stated here so the next widening fails on one assertion that explains itself
+/// rather than on fourteen scenario-by-profile failures that do not.
+#[test]
+fn each_built_corpus_declares_the_current_contract_version() {
+    let current = *SUPPORTED_CONTRACT_VERSIONS.end();
+    for profile in built_profiles() {
+        assert_eq!(
+            contract_of(&profile).contract_version(),
+            current,
+            "the `{profile}` corpus must declare contract version {current}: a committed \
+             contract below the current version earns `compat.newer-format-available`, which \
+             `conforming-contract-loads-with-zero-diagnostics` forbids"
+        );
+    }
+}
+
+/// The names of the profiles whose corpus is built.
+fn built_profiles() -> Vec<String> {
+    let profiles = load_profiles().expect("profiles load");
+    let built: Vec<String> = profiles
+        .iter()
+        .filter(|profile| profile.corpus == CorpusStatus::Built)
+        .map(|profile| profile.name.clone())
+        .collect();
+    assert!(!built.is_empty(), "at least one corpus is built");
+    built
 }
 
 /// A built profile's committed contract, loaded the way the SDK loads one.
