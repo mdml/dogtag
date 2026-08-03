@@ -43,9 +43,8 @@
 //!
 //! ## Current surface
 //!
-//! This release opens a vault and diagnoses it. Nothing reads a note: no
-//! frontmatter is parsed, no link is resolved, and no index is built, so every
-//! answer here is about the vault's *configuration*, never its corpus.
+//! This release opens a vault, diagnoses it, and finds its notes. No link is
+//! resolved and no index is built.
 //!
 //! - `diagnostic` — the envelope every failure is reported as: the exhaustive
 //!   kernel identifier set, the `ext.` namespace consumers mint their own
@@ -60,6 +59,8 @@
 //! - `contract` — the committed vault contract, its two-pass parse, and the
 //!   validity rules enforced at load.
 //! - `installation` — the local installation record, read and never written.
+//! - `note` — the public document model: which files are notes, and what
+//!   reading one says.
 //! - `vault` — discovery, exact-path verification, root trust, and `open`.
 //! - `provenance` — where each resolved leaf value came from.
 //! - `report` — the `doctor` report, its structured schema, and the generated
@@ -80,6 +81,7 @@ pub mod diagnostic;
 pub mod document;
 pub mod encoding;
 pub mod installation;
+pub mod note;
 pub mod provenance;
 pub mod report;
 pub mod vault;

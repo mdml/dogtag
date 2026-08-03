@@ -152,6 +152,13 @@ pub enum KernelDiagnostic {
     ContractUnknownLinkDialect,
     /// The contract declares no type at all.
     ContractNoTypes,
+    /// A note, or a directory notes would have been found in, could not be read.
+    ///
+    /// One unreadable note never makes a corpus unreadable, so this is a finding against
+    /// the path that could not be read and never an abort of the walk. Invalid UTF-8 is
+    /// reported here too: the record groups the two as a file that cannot be honestly read,
+    /// and a consumer's next move — open the path and look — is the same for both.
+    NoteUnreadable,
     /// The installation record could not be read.
     InstallationUnreadable,
     /// The installation record is not valid UTF-8.
@@ -472,6 +479,11 @@ const REGISTRY: &[(KernelDiagnostic, &str, Severity)] = &[
         Severity::Error,
     ),
     (
+        KernelDiagnostic::NoteUnreadable,
+        "note.unreadable",
+        Severity::Error,
+    ),
+    (
         KernelDiagnostic::InstallationUnreadable,
         "installation.unreadable",
         Severity::Error,
@@ -732,6 +744,7 @@ fn expected_id(kind: KernelDiagnostic) -> &'static str {
     match expected_area(kind) {
         "discovery" => expected_discovery_id(kind),
         "contract" => expected_contract_id(kind),
+        "note" => expected_note_id(kind),
         "installation" => expected_installation_id(kind),
         _ => expected_compat_id(kind),
     }
@@ -811,6 +824,14 @@ macro_rules! contract_variants {
     };
 }
 
+/// Every `note.*` variant, as one pattern.
+#[cfg(test)]
+macro_rules! note_variants {
+    () => {
+        KernelDiagnostic::NoteUnreadable
+    };
+}
+
 /// Every `installation.*` variant, as one pattern.
 #[cfg(test)]
 macro_rules! installation_variants {
@@ -857,6 +878,7 @@ fn expected_area(kind: KernelDiagnostic) -> &'static str {
     match kind {
         discovery_variants!() => "discovery",
         contract_variants!() => "contract",
+        note_variants!() => "note",
         installation_variants!() => "installation",
         compat_variants!() => "compat",
     }
@@ -933,6 +955,16 @@ fn expected_contract_id(kind: KernelDiagnostic) -> &'static str {
     }
 }
 
+/// The identifier each `note.*` variant carries, and `""` for any other area.
+#[cfg(test)]
+fn expected_note_id(kind: KernelDiagnostic) -> &'static str {
+    use KernelDiagnostic::*;
+    match kind {
+        NoteUnreadable => "note.unreadable",
+        _ => "",
+    }
+}
+
 /// The identifier each `installation.*` variant carries, and `""` for any other area.
 #[cfg(test)]
 fn expected_installation_id(kind: KernelDiagnostic) -> &'static str {
@@ -994,8 +1026,9 @@ mod tests {
     use super::*;
     use std::collections::BTreeSet;
 
-    /// The areas the kernel claims at M2.
-    const AREAS: &[&str] = &["discovery", "contract", "installation", "compat"];
+    /// The areas the kernel claims: M2's four, plus `note` for a single note's
+    /// own structure.
+    const AREAS: &[&str] = &["discovery", "contract", "note", "installation", "compat"];
 
     #[test]
     fn every_variant_carries_the_identifier_it_declares() {
@@ -1017,6 +1050,7 @@ mod tests {
         assert_eq!(expected_discovery_id(contract), "");
         assert_eq!(expected_installation_id(contract), "");
         assert_eq!(expected_compat_id(contract), "");
+        assert_eq!(expected_note_id(contract), "");
         let discovery = KernelDiagnostic::DiscoveryNestedVault;
         assert_eq!(expected_contract_id(discovery), "");
     }

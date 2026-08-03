@@ -34,7 +34,7 @@ mod open;
 mod trust;
 
 #[cfg(test)]
-mod tree;
+pub(crate) mod tree;
 
 use std::borrow::Cow;
 use std::io;

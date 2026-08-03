@@ -35,8 +35,13 @@ toolchain = "nightly-2026-07-30"
 # renderings and three equivalence readers, every arm of which — both record
 # spellings, every field kind, each refusal, and the same bytes read at version
 # 1 — is reached from a named test.
-line = 99.38
-branch = 98.80
+#
+# The corpus traversal raised them again. Membership is a handful of small
+# predicates and one walk, and every arm of it — a note in a folder, a file that
+# is not Markdown, a dotted directory, a dotted file, a symlink, an empty vault,
+# and a directory that cannot be read at all — is reached from a named test.
+line = 99.39
+branch = 98.82
 
 [thresholds]
 line = 95.0

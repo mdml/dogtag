@@ -39,7 +39,7 @@ fn stamp() -> String {
 /// ancestor holding `.dogtag/contract.toml` — or a bare `.dogtag/`, which
 /// halts the walk — would silently change what these tests observe. That must
 /// fail loudly rather than pass, or skip, on one developer's directory layout.
-pub(super) fn assert_no_vault_above(directory: &Path) {
+pub(crate) fn assert_no_vault_above(directory: &Path) {
     for ancestor in directory.ancestors() {
         assert!(
             !ancestor.join(SENTINEL_DIRECTORY).exists(),
@@ -54,7 +54,7 @@ pub(super) fn assert_no_vault_above(directory: &Path) {
 
 /// Sets `path`'s permission bits.
 #[cfg(unix)]
-pub(super) fn set_mode(path: &Path, mode: u32) {
+pub(crate) fn set_mode(path: &Path, mode: u32) {
     use std::os::unix::fs::PermissionsExt;
 
     fs::set_permissions(path, fs::Permissions::from_mode(mode))
@@ -62,13 +62,13 @@ pub(super) fn set_mode(path: &Path, mode: u32) {
 }
 
 /// A directory tree under the system temporary directory, removed on drop.
-pub(super) struct Tree {
+pub(crate) struct Tree {
     root: PathBuf,
 }
 
 impl Tree {
     /// An empty tree, named for the test that built it.
-    pub(super) fn new(label: &str) -> Self {
+    pub(crate) fn new(label: &str) -> Self {
         let root = std::env::temp_dir().join(format!("dogtag-vault-{label}-{}", stamp()));
         fs::create_dir_all(&root).expect("the system temporary directory is writable");
         let root = fs::canonicalize(&root).expect("a directory that was just created");
@@ -78,33 +78,33 @@ impl Tree {
 
     /// The tree's own directory, canonical — so a temporary directory that is
     /// itself a symlink cannot be mistaken for one a test built.
-    pub(super) fn path(&self) -> &Path {
+    pub(crate) fn path(&self) -> &Path {
         &self.root
     }
 
     /// Creates `relative` as a directory.
-    pub(super) fn dir(&self, relative: &str) -> PathBuf {
+    pub(crate) fn dir(&self, relative: &str) -> PathBuf {
         let path = self.root.join(relative);
         fs::create_dir_all(&path).expect("a directory under a tree this test owns");
         path
     }
 
     /// Creates `relative` as a vault root: `.dogtag/` and the contract inside it.
-    pub(super) fn vault(&self, relative: &str) -> PathBuf {
+    pub(crate) fn vault(&self, relative: &str) -> PathBuf {
         let root = self.incomplete(relative);
         fs::write(root.join(SENTINEL), CONTRACT).expect("a contract under a tree this test owns");
         root
     }
 
     /// Creates `relative` as a broken vault root: `.dogtag/` and no contract.
-    pub(super) fn incomplete(&self, relative: &str) -> PathBuf {
+    pub(crate) fn incomplete(&self, relative: &str) -> PathBuf {
         let root = self.dir(relative);
         fs::create_dir_all(root.join(SENTINEL_DIRECTORY)).expect("a sentinel directory");
         root
     }
 
     /// Creates `relative` as a directory whose `.dogtag` is a regular file.
-    pub(super) fn sentinel_as_a_file(&self, relative: &str) -> PathBuf {
+    pub(crate) fn sentinel_as_a_file(&self, relative: &str) -> PathBuf {
         let directory = self.dir(relative);
         fs::write(directory.join(SENTINEL_DIRECTORY), "not a directory").expect("a stray file");
         directory
@@ -112,7 +112,7 @@ impl Tree {
 
     /// Creates a symlink at `relative` pointing at `target`.
     #[cfg(unix)]
-    pub(super) fn link(&self, relative: &str, target: &Path) -> PathBuf {
+    pub(crate) fn link(&self, relative: &str, target: &Path) -> PathBuf {
         let link = self.root.join(relative);
         std::os::unix::fs::symlink(target, &link).expect("a symlink under a tree this test owns");
         link
@@ -126,7 +126,7 @@ impl Tree {
     /// for, but it would answer differently for a privileged account and turn
     /// a fixed outcome into a property of whoever runs the suite.
     #[cfg(unix)]
-    pub(super) fn unprobeable(&self, relative: &str) -> PathBuf {
+    pub(crate) fn unprobeable(&self, relative: &str) -> PathBuf {
         let directory = self.dir(relative);
         let sentinel = directory.join(SENTINEL_DIRECTORY);
         std::os::unix::fs::symlink(SENTINEL_DIRECTORY, &sentinel).expect("a self-referential link");
@@ -134,7 +134,7 @@ impl Tree {
     }
 
     /// A path inside the tree that was never created.
-    pub(super) fn absent(&self, relative: &str) -> PathBuf {
+    pub(crate) fn absent(&self, relative: &str) -> PathBuf {
         self.root.join(relative)
     }
 }
