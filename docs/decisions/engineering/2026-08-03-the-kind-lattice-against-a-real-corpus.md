@@ -1,6 +1,6 @@
 # The value-kind lattice against a real corpus
 
-- Status: accepted
+- Status: accepted (amended 2026-08-03 — see [Amendments](#amendments))
 - Date: 2026-08-03
 
 ## Context
@@ -71,3 +71,11 @@ The contract format declares names. A prefix has no expression in it, and invent
 - **The record kind is scoped before it is scheduled**, which inverts the usual risk. The freeze-a-guess failure this trail warns about is fixing a shape nothing has asked for; here a shape has been asked for and the cost of naming it now is that a later milestone may find a third instance that does not fit the one-level bound.
 - **`starter` and `dense` remain within the v1 lattice**, so neither fixture demonstrates this gap and the conformance matrix will not surface it. The evidence lives in this record and in a private vault, which is the weakest form of evidence this repository accepts — and it is accepted here for the same reason the privacy gate has no mechanical enforcement.
 - **The prefix gap has no scheduled resolution and may never get one.** A corpus whose editor owns part of its frontmatter has a contract that is silent about that part, indefinitely. That is a real limit on the claim that a contract describes a vault, and it is stated rather than filed.
+
+## Amendments
+
+- **2026-08-03 — the deferral was chosen, not forced, and this record misread the compatibility model to claim otherwise.** The Decision states *"the deferral is forced rather than chosen"* because *"there is no version to spend inside this ladder,"* and the Alternatives reject widening the lattice as *"not available,"* with the supported range *"frozen at `1..=1` for the ladder's duration."* Both readings are wrong. [The compatibility record](2026-07-31-diagnostics-and-compatibility.md) freezes **the floor**, not the ceiling — *"the floor does not rise during the beta"* — and states the direct consequence that *"the supported range grows monotonically and the SDK carries every historical version's parse rules and default tables. That cost is real and is accepted."* It twice anticipates *"the first real bump."* `contract_version = 2` was available the whole time; a v1 vault keeps loading because the floor stays at 1, and the migration cost was already priced by [the vault-contract record](2026-07-31-vault-contract-and-installation-record.md) as a hand edit *"paid by two fixtures and two founder vaults."*
+
+  **What this changes.** The evidence, the two gaps, and the shape of the fix all stand as written — nothing observed about the corpus depended on the misreading. What does not stand is the *justification* for waiting: this record presented a scope decision as an unavailable option, which is the more dangerous of the two errors, because a forced deferral invites no further thought and a chosen one does. The choice is reopened rather than silently kept.
+
+  **One constraint survives and is now binding rather than hypothetical.** The [vault-contract record's](2026-07-31-vault-contract-and-installation-record.md) 2026-08-01 amendment holds that a per-version key set and default table *"are due before the supported range widens, and widening it without them is the regression."* That mechanism was deferred because at one supported version its second branch is unreachable and the coverage floor bans unreachable branches. A second version makes the branch reachable, so the bump does not merely require the mechanism — it is the event that makes building it possible. The same is true of the `supported`-but-not-current classification, which the compatibility record records as the one branch no real vault could reach at M2.
