@@ -203,6 +203,28 @@ pub(super) const CLEAN: Body<'static> = Body::new(concat!(
     "\n[[type]]\nname = \"capture\"\ncapabilities = [\"catch-all\"]\n",
 ));
 
+/// A contract declaring a tag vocabulary.
+///
+/// It carries the two memberships a namespace can declare — a closed vocabulary
+/// and an open namespace — a `required` that is written beside one that is
+/// defaulted, and one member holding a column rule, so a namespace's vocabulary
+/// is held up against the same escaping every other corpus value is.
+pub(super) const TAGGED: Body<'static> = Body::new(concat!(
+    "contract_version = 2\n",
+    "\n[dialect]\nlinks = \"wikilink\"\n",
+    "\n[lifecycle]\nnone = true\n",
+    "\n[tags]\nproperty = \"labels\"\n",
+    "\n[[type]]\nname = \"log\"\ncapabilities = [\"catch-all\"]\n",
+    "\n  [[type.property]]\n  name = \"labels\"\n  kind = \"list\"\n  of = \"string\"\n",
+    "\n  [[type.tag-namespace]]\n",
+    "  prefix = \"log/\"\n",
+    "  required = true\n",
+    "  values = [\"workout\", \"meditation\", \"a | pipe\"]\n",
+    "\n  [[type.tag-namespace]]\n",
+    "  prefix = \"topic/\"\n",
+    "  open = true\n",
+));
+
 /// A record that loads, naming an actor and registering a vault elsewhere.
 pub(super) const RECORD: Body<'static> = Body::new(concat!(
     "installation_version = 1\n",

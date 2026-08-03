@@ -83,6 +83,24 @@ pub(crate) struct Defaults {
     pub(crate) relationship_required: bool,
 }
 
+/// What the tag vocabulary defines at a version that defines it: the key sets
+/// of its two tables, and the value its one optional leaf takes when a contract
+/// omits it.
+///
+/// Keys and default travel together because the construct is version-scoped as
+/// a whole. There is no version defining `[tags]` without
+/// `[[type.tag-namespace]]`, and none defining a default for a leaf it never
+/// reads, so a version that does not define the vocabulary has *no row* rather
+/// than an inert one in three separate tables.
+pub(crate) struct TagVocabulary {
+    /// `[tags]`.
+    pub(crate) tags: &'static [&'static str],
+    /// `[[type.tag-namespace]]`.
+    pub(crate) namespace: &'static [&'static str],
+    /// Whether a `[[type.tag-namespace]]` declaring no `required` is required.
+    pub(crate) namespace_required: bool,
+}
+
 /// One contract version's schema.
 pub(crate) struct Schema {
     /// The version this is the schema of, which every message about a key or a
@@ -92,6 +110,15 @@ pub(crate) struct Schema {
     pub(crate) keys: Keys,
     /// What an omission resolves to.
     pub(crate) defaults: Defaults,
+    /// The tag vocabulary, at a version that defines it.
+    ///
+    /// `None` is the whole of "this version has no tag vocabulary", and it
+    /// gates the *walk* rather than only the key sweep. A version-1 contract
+    /// writing `[tags]` is refused as an unknown key **and** resolves to a
+    /// model with no tag vocabulary in it — the "absent from, never defaulted
+    /// into" line the vault-contract record draws, which no key set on its own
+    /// can hold, because a key set decides legality and this decides existence.
+    pub(crate) tags: Option<TagVocabulary>,
 }
 
 impl Schema {
@@ -125,12 +152,50 @@ const VERSION_1_KEYS: Keys = Keys {
 
 /// The key sets contract version 2 defines.
 ///
-/// Equal to version 1's at this release, and stated as its own constant rather
-/// than shared: version 2's constructs — the tag vocabulary and the record kind
-/// — arrive in the changes that carry them, and *this* is the row they extend.
-/// Sharing one constant would make adding a key to version 2 add it to version
-/// 1 as well, which is the whole failure this mechanism exists to prevent.
-const VERSION_2_KEYS: Keys = VERSION_1_KEYS;
+/// Stated in full rather than as version 1's row plus a delta: the two rows are
+/// read side by side when a reader asks what a version changed, and a delta
+/// would hide `tags` and `tag-namespace` behind a syntax rather than showing
+/// them in the sets they joined. Version 1's row is pinned as whole equalities
+/// by test, so a key added to both at once fails there.
+const VERSION_2_KEYS: Keys = Keys {
+    root: &[
+        "contract_version",
+        "dialect",
+        "flag",
+        "lifecycle",
+        "tags",
+        "type",
+    ],
+    dialect: &["links"],
+    flag: &["property"],
+    lifecycle: &["axis", "none", "ordinary"],
+    ordinary: &["absent", "value"],
+    declared_type: &[
+        "capabilities",
+        "name",
+        "property",
+        "relationship",
+        "tag-namespace",
+    ],
+    relationship: &["predicate", "required"],
+    property: PropertyKeys {
+        enumeration: &["kind", "name", "required", "values"],
+        list: &["kind", "name", "of", "required"],
+        scalar: &["kind", "name", "required"],
+        unresolved: &["kind", "name", "of", "required", "values"],
+    },
+};
+
+/// The tag vocabulary contract version 2 defines.
+///
+/// `open` and `values` are both legal keys and exactly one of them may be
+/// written; that is a validity rule rather than a key rule, so the sweep admits
+/// both and the `tags` module refuses the pair.
+const VERSION_2_TAGS: TagVocabulary = TagVocabulary {
+    tags: &["property"],
+    namespace: &["open", "prefix", "required", "values"],
+    namespace_required: false,
+};
 
 /// The values contract version 1 supplies for an omitted leaf.
 const VERSION_1_DEFAULTS: Defaults = Defaults {
@@ -141,9 +206,10 @@ const VERSION_1_DEFAULTS: Defaults = Defaults {
 
 /// The values contract version 2 supplies for an omitted leaf.
 ///
-/// Version 2's table is version 1's plus whatever version 2's own constructs
-/// declare, and at this release they declare nothing: the same reasoning as
-/// [`VERSION_2_KEYS`], for the second of the two dimensions.
+/// Version 2's table is version 1's plus what version 2's own constructs
+/// declare. A tag namespace's `required` is one of those and lives in
+/// [`VERSION_2_TAGS`] beside the keys it belongs to rather than here, because
+/// version 1 has no row for a leaf it never reads.
 const VERSION_2_DEFAULTS: Defaults = VERSION_1_DEFAULTS;
 
 /// Contract version 1.
@@ -151,6 +217,7 @@ pub(crate) static VERSION_1: Schema = Schema {
     version: 1,
     keys: VERSION_1_KEYS,
     defaults: VERSION_1_DEFAULTS,
+    tags: None,
 };
 
 /// Contract version 2.
@@ -158,6 +225,7 @@ pub(crate) static VERSION_2: Schema = Schema {
     version: 2,
     keys: VERSION_2_KEYS,
     defaults: VERSION_2_DEFAULTS,
+    tags: Some(VERSION_2_TAGS),
 };
 
 /// Every contract version this release reads, in ascending order.
@@ -258,12 +326,28 @@ mod tests {
     }
 
     #[test]
-    fn version_2_carries_exactly_version_1s_constructs_at_this_release() {
-        // The version exists and the range reads it before either construct it
-        // will carry lands, which is the slice ordering the packet fixes: the
-        // mechanism ships in the change that widens the range, and the
-        // constructs ship in the changes that add them.
-        assert_eq!(VERSION_2.keys.root, VERSION_1.keys.root);
+    fn version_2_adds_the_tag_vocabularys_two_tables_to_version_1s_sets() {
+        assert_eq!(
+            VERSION_2.keys.root,
+            [
+                "contract_version",
+                "dialect",
+                "flag",
+                "lifecycle",
+                "tags",
+                "type"
+            ]
+        );
+        assert_eq!(
+            VERSION_2.keys.declared_type,
+            [
+                "capabilities",
+                "name",
+                "property",
+                "relationship",
+                "tag-namespace"
+            ]
+        );
         assert_eq!(
             VERSION_2.defaults.property_required,
             VERSION_1.defaults.property_required
@@ -272,5 +356,20 @@ mod tests {
             VERSION_2.property_keys(Some("list")),
             VERSION_1.property_keys(Some("list"))
         );
+    }
+
+    #[test]
+    fn only_version_2_defines_the_tag_vocabulary() {
+        // Existence rather than legality: version 1 has no row at all, so the
+        // walk that would resolve a tag vocabulary never runs for it and a
+        // version-1 model cannot carry one.
+        let vocabulary = VERSION_2.tags.as_ref().expect("version 2 defines it");
+        assert_eq!(vocabulary.tags, ["property"]);
+        assert_eq!(
+            vocabulary.namespace,
+            ["open", "prefix", "required", "values"]
+        );
+        assert!(!vocabulary.namespace_required);
+        assert!(VERSION_1.tags.is_none());
     }
 }

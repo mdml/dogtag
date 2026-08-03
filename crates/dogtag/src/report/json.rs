@@ -37,7 +37,7 @@ use super::{
 };
 use crate::contract::{
     CONTRACT_PATH, Capability, Contract, LifecycleDecl, Ordinary, PropertyDecl, PropertyKind,
-    RelationshipDecl, ScalarKind, TypeDecl,
+    RelationshipDecl, ScalarKind, TagNamespaceDecl, TagsDecl, TypeDecl,
 };
 use crate::diagnostic::{Diagnostic, FileRef, Location, Position, Related, SeverityCounts, Span};
 use crate::provenance::{ProvenanceEntry, Source};
@@ -291,8 +291,18 @@ struct ContractBodyWire<'a> {
     contract_version: u32,
     dialect: DialectBodyWire,
     lifecycle: LifecycleBodyWire<'a>,
+    /// Omitted by a contract that declares no tag vocabulary, and by every
+    /// contract at a version that has none to declare — a declaration the
+    /// contract does not make is absent rather than `null`.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    tags: Option<TagsBodyWire<'a>>,
     flags: Vec<FlagWire<'a>>,
     types: Vec<TypeWire<'a>>,
+}
+
+#[derive(Serialize)]
+struct TagsBodyWire<'a> {
+    property: &'a str,
 }
 
 #[derive(Serialize)]
@@ -320,6 +330,22 @@ struct TypeWire<'a> {
     capabilities: Vec<&'static str>,
     properties: Vec<PropertyWire<'a>>,
     relationships: Vec<RelationshipWire<'a>>,
+    /// Empty rather than omitted, like the two collections above it: a type
+    /// declaring none of something still has the collection, and a consumer
+    /// reads one shape for all three.
+    tag_namespaces: Vec<TagNamespaceWire<'a>>,
+}
+
+/// One tag namespace, spelled the way the contract spells it: exactly one of
+/// `values` and `open` appears, because exactly one of them may be declared.
+#[derive(Serialize)]
+struct TagNamespaceWire<'a> {
+    prefix: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    values: Option<&'a [String]>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    open: Option<bool>,
+    required: bool,
 }
 
 #[derive(Serialize)]
@@ -488,6 +514,7 @@ fn contract_body_wire(contract: &Contract) -> ContractBodyWire<'_> {
             links: contract.dialect().links().as_str(),
         },
         lifecycle: lifecycle_body_wire(contract.lifecycle()),
+        tags: contract.tags().map(tags_body_wire),
         flags: contract
             .flags()
             .iter()
@@ -507,6 +534,12 @@ fn lifecycle_body_wire(lifecycle: &LifecycleDecl) -> LifecycleBodyWire<'_> {
     }
 }
 
+fn tags_body_wire(declared: &TagsDecl) -> TagsBodyWire<'_> {
+    TagsBodyWire {
+        property: declared.property(),
+    }
+}
+
 fn type_wire(declared: &TypeDecl) -> TypeWire<'_> {
     TypeWire {
         name: declared.name(),
@@ -522,6 +555,20 @@ fn type_wire(declared: &TypeDecl) -> TypeWire<'_> {
             .iter()
             .map(relationship_wire)
             .collect(),
+        tag_namespaces: declared
+            .tag_namespaces()
+            .iter()
+            .map(tag_namespace_wire)
+            .collect(),
+    }
+}
+
+fn tag_namespace_wire(declared: &TagNamespaceDecl) -> TagNamespaceWire<'_> {
+    TagNamespaceWire {
+        prefix: declared.prefix(),
+        values: declared.values(),
+        open: declared.membership().is_open().then_some(true),
+        required: declared.required(),
     }
 }
 
@@ -563,8 +610,8 @@ fn defining_version(source: Source) -> Option<u32> {
 #[cfg(test)]
 mod tests {
     use super::super::fixture::{
-        ABSENT_ORDINARY, AWKWARD, Body, CLEAN, FIXTURES, NAMED_ORDINARY, RECORD, Tree, contract,
-        no_record, opened, registering, rendered, shown,
+        ABSENT_ORDINARY, AWKWARD, Body, CLEAN, FIXTURES, NAMED_ORDINARY, RECORD, TAGGED, Tree,
+        contract, no_record, opened, registering, rendered, shown,
     };
     use super::super::{Selection, SelectionRoute, doctor_report};
     use super::*;
@@ -613,7 +660,7 @@ mod tests {
         let tree = Tree::new("json-order");
         let report = doctor_report(&opened(&tree, NAMED_ORDINARY, RECORD), discovery(), &[]);
         let json = doctor_json(&report);
-        assert!(json.starts_with("{\n  \"schema_version\": 1,\n  \"report\": \"doctor\",\n"));
+        assert!(json.starts_with("{\n  \"schema_version\": 2,\n  \"report\": \"doctor\",\n"));
         assert_key_order(
             &json,
             &[
@@ -914,7 +961,7 @@ mod tests {
         let tree = Tree::new("json-contract-order");
         let (root, contract) = rendered(&tree, NAMED_ORDINARY);
         let json = contract_json(&root, &contract);
-        assert!(json.starts_with("{\n  \"schema_version\": 1,\n  \"report\": \"contract\",\n"));
+        assert!(json.starts_with("{\n  \"schema_version\": 2,\n  \"report\": \"contract\",\n"));
         assert_key_order(
             &json,
             &[
@@ -981,6 +1028,52 @@ mod tests {
                 .as_array()
                 .expect("an array")
                 .is_empty()
+        );
+    }
+
+    #[test]
+    fn a_tag_vocabulary_renders_its_property_and_every_namespace_under_its_type() {
+        let tree = Tree::new("json-tags");
+        let (root, declared) = rendered(&tree, TAGGED);
+        let json = parsed(&contract_json(&root, &declared));
+        assert_eq!(json["contract"]["tags"]["property"], Value::from("labels"));
+        let namespaces = json["contract"]["types"][0]["tag_namespaces"]
+            .as_array()
+            .expect("an array");
+        assert_eq!(namespaces.len(), 2);
+        let closed = &namespaces[0];
+        assert_eq!(
+            (&closed["prefix"], &closed["values"][0], &closed["required"]),
+            (
+                &Value::from("log/"),
+                &Value::from("workout"),
+                &Value::from(true)
+            )
+        );
+        assert_eq!(
+            closed["open"],
+            Value::Null,
+            "a closed namespace is not open"
+        );
+        let open = &namespaces[1];
+        assert_eq!(
+            (&open["open"], &open["values"], &open["required"]),
+            (&Value::from(true), &Value::Null, &Value::from(false))
+        );
+    }
+
+    #[test]
+    fn a_contract_with_no_tag_vocabulary_omits_it_rather_than_nulling_it() {
+        let tree = Tree::new("json-no-tags");
+        let (root, declared) = rendered(&tree, CLEAN);
+        let json = contract_json(&root, &declared);
+        assert!(
+            !json.contains("\"tags\""),
+            "a table nobody declared: {json}"
+        );
+        assert!(
+            json.contains("      \"tag_namespaces\": []\n"),
+            "a type declaring none still carries the collection: {json}"
         );
     }
 

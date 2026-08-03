@@ -23,10 +23,13 @@ use std::collections::BTreeSet;
 use serde_json::Value;
 
 use super::fixture::{
-    ABSENT_ORDINARY, AWKWARD, Body, CLEAN, KINDS, MARKDOWN_LINKS, NAMED_ORDINARY, Tree, rendered,
+    ABSENT_ORDINARY, AWKWARD, Body, CLEAN, KINDS, MARKDOWN_LINKS, NAMED_ORDINARY, TAGGED, Tree,
+    rendered,
 };
 use super::{contract_json, contract_markdown};
-use crate::contract::{Contract, LifecycleDecl, Ordinary, PropertyKind, TypeDecl};
+use crate::contract::{
+    Contract, LifecycleDecl, NamespaceMembership, Ordinary, PropertyKind, TypeDecl,
+};
 
 /// What separates an atom's fields. Chosen so no corpus vocabulary holds it.
 const FIELD: &str = " :: ";
@@ -50,6 +53,12 @@ impl Declaration<'_> {
         let (owner, name, required) = (self.owner, self.name, self.required);
         format!("type.{owner}.relationship{FIELD}{name}{FIELD}{required}")
     }
+
+    /// This declaration as a tag namespace, whose name is its prefix.
+    fn tag_namespace(&self, membership: &str) -> String {
+        let (owner, name, required) = (self.owner, self.name, self.required);
+        format!("type.{owner}.tag-namespace{FIELD}{name}{FIELD}{membership}{FIELD}{required}")
+    }
 }
 
 /// The declarations a resolved contract makes.
@@ -64,6 +73,11 @@ fn from_contract(contract: &Contract) -> BTreeSet<String> {
         contract.dialect().links()
     ));
     atoms.extend(model_lifecycle(contract.lifecycle()));
+    atoms.extend(
+        contract
+            .tags()
+            .map(|tags| format!("tags.property{FIELD}{}", tags.property())),
+    );
     for flag in contract.flags() {
         atoms.insert(format!("flag{FIELD}{}", flag.property()));
     }
@@ -109,6 +123,14 @@ fn model_type(declared: &TypeDecl) -> Vec<String> {
         };
         atoms.push(declaration.relationship());
     }
+    for namespace in declared.tag_namespaces() {
+        let declaration = Declaration {
+            owner,
+            name: namespace.prefix(),
+            required: namespace.required(),
+        };
+        atoms.push(declaration.tag_namespace(&model_membership(namespace.membership())));
+    }
     atoms
 }
 
@@ -117,6 +139,13 @@ fn model_kind(kind: &PropertyKind) -> String {
         PropertyKind::Enum { values } => format!("enum({})", values.join(";")),
         PropertyKind::List { of } => format!("list({of})"),
         scalar => scalar.as_str().to_owned(),
+    }
+}
+
+fn model_membership(membership: &NamespaceMembership) -> String {
+    match membership {
+        NamespaceMembership::Closed { values } => format!("closed({})", values.join(";")),
+        NamespaceMembership::Open => "open".to_owned(),
     }
 }
 
@@ -134,6 +163,9 @@ fn from_json(document: &str) -> BTreeSet<String> {
         as_str(&contract["dialect"]["links"])
     ));
     atoms.extend(json_lifecycle(&contract["lifecycle"]));
+    if let Some(property) = contract["tags"]["property"].as_str() {
+        atoms.insert(format!("tags.property{FIELD}{property}"));
+    }
     for flag in array(&contract["flags"]) {
         atoms.insert(format!("flag{FIELD}{}", as_str(&flag["property"])));
     }
@@ -184,7 +216,23 @@ fn json_type(declared: &Value) -> Vec<String> {
         };
         atoms.push(declaration.relationship());
     }
+    for namespace in array(&declared["tag_namespaces"]) {
+        let declaration = Declaration {
+            owner,
+            name: as_str(&namespace["prefix"]),
+            required: namespace["required"] == true,
+        };
+        atoms.push(declaration.tag_namespace(&json_membership(namespace)));
+    }
     atoms
+}
+
+fn json_membership(namespace: &Value) -> String {
+    let Some(values) = namespace["values"].as_array() else {
+        return "open".to_owned();
+    };
+    let members: Vec<&str> = values.iter().map(as_str).collect();
+    format!("closed({})", members.join(";"))
 }
 
 fn json_kind(property: &Value) -> String {
@@ -261,6 +309,7 @@ impl<'a> Line<'a> {
 enum Columns {
     Property,
     Relationship,
+    Namespace,
 }
 
 /// A reader that walks a rendered Markdown document once.
@@ -292,6 +341,7 @@ const LINES: &[(&str, Handler)] = &[
     ("This corpus declares no lifecycle axis.", Scan::no_axis),
     ("The life axis is the property ", Scan::axis),
     ("References are written as ", Scan::dialect),
+    ("Tags are carried by the property ", Scan::tags),
     ("`", Scan::flag),
 ];
 
@@ -350,6 +400,7 @@ impl Scan {
         match cells.first().copied().map(Line::as_str) {
             Some("property") => self.columns = Some(Columns::Property),
             Some("relationship") => self.columns = Some(Columns::Relationship),
+            Some("tag namespace") => self.columns = Some(Columns::Namespace),
             Some("---") => (),
             _ => self.declaration(&cells),
         }
@@ -362,6 +413,9 @@ impl Scan {
                 .declared(&name, cells[2])
                 .property(&unescaped(&kind(cells[1]))),
             Columns::Relationship => self.declared(&name, cells[1]).relationship(),
+            Columns::Namespace => self
+                .declared(&name, cells[2])
+                .tag_namespace(&unescaped(&membership(cells[1]))),
         };
         self.atoms.insert(atom);
     }
@@ -407,6 +461,15 @@ impl Scan {
         let property = line.code().first().copied().expect("a flag names it");
         self.atoms.insert(format!("flag{FIELD}{property}"));
     }
+
+    fn tags(&mut self, line: Line<'_>) {
+        let property = line
+            .code()
+            .first()
+            .copied()
+            .expect("the tag property is named in code");
+        self.atoms.insert(format!("tags.property{FIELD}{property}"));
+    }
 }
 
 /// The declarations a rendered Markdown document carries.
@@ -427,6 +490,19 @@ fn kind(cell: Line<'_>) -> String {
         .split_once(" (")
         .map_or(spelled, |(base, _)| base)
         .to_owned()
+}
+
+/// A cell's membership, reduced from the Markdown's member list to a bare atom.
+///
+/// A closed vocabulary writes each member in code and an open namespace writes
+/// a bare word, so the presence of a code span is what tells them apart — and a
+/// closed vocabulary whose one member is the word `open` still reads as closed.
+fn membership(cell: Line<'_>) -> String {
+    let members = cell.code();
+    if members.is_empty() {
+        return "open".to_owned();
+    }
+    format!("closed({})", members.join(";"))
 }
 
 /// A cell's text with the column rule the renderer escaped restored.
@@ -480,12 +556,13 @@ mod tests {
 
     /// Every contract these renderings are held up against, named so a failure
     /// says which one disagreed.
-    const SUBJECTS: [(&str, Body<'static>); 6] = [
+    const SUBJECTS: [(&str, Body<'static>); 7] = [
         ("starter", NAMED_ORDINARY),
         ("dense", ABSENT_ORDINARY),
         ("clean", CLEAN),
         ("kinds", KINDS),
         ("markdown-links", MARKDOWN_LINKS),
+        ("tagged", TAGGED),
         // The vocabulary carrying a column rule and a line break. It was the
         // one fixture this list omitted, and it was omitted because it fails:
         // the check was arranged around its own counterexample.
@@ -572,5 +649,17 @@ mod tests {
         }
         assert!(Line("no cells here").cells().is_empty());
         assert_eq!(Line("`quoted`").unquoted(), "quoted");
+    }
+
+    #[test]
+    fn a_membership_reduces_to_the_same_atom_from_either_document() {
+        assert_eq!(membership(Line("open")), "open");
+        assert_eq!(
+            membership(Line("`workout`, `meditation`")),
+            "closed(workout;meditation)"
+        );
+        // A vocabulary of one member spelled `open` is still a vocabulary,
+        // because a member is written in code and the open namespace is not.
+        assert_eq!(membership(Line("`open`")), "closed(open)");
     }
 }

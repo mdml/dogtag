@@ -107,7 +107,7 @@ fn the_json_report_is_one_document_carrying_the_settled_shape() {
         "not one JSON document: {finished:?}"
     );
     for fragment in [
-        "\"schema_version\": 1",
+        "\"schema_version\": 2",
         "\"report\": \"doctor\"",
         "\"how\": \"discovery\"",
         "\"requested\": null",

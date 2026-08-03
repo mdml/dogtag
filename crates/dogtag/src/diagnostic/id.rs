@@ -90,6 +90,17 @@ pub enum KernelDiagnostic {
     ContractInvalidEnumValues,
     /// A `list` property's `of` is missing, names an unknown kind, or names `list`.
     ContractInvalidListOf,
+    /// Two tag namespaces on one type share a prefix.
+    ContractDuplicateTagNamespace,
+    /// A tag namespace declares both `values` and `open`, neither, or a `values` that is
+    /// empty, non-string, or duplicated.
+    ContractInvalidTagNamespace,
+    /// A type declares a tag namespace and the contract declares no `[tags]` table.
+    ContractTagsTableMissing,
+    /// A type declares a tag namespace but not the property `[tags]` names.
+    ContractTagPropertyUndeclared,
+    /// `[tags]` names a property whose declared kind is not a `list` of `string`.
+    ContractTagPropertyNotListOfString,
     /// The contract declares no `[lifecycle]` table at all.
     ContractMissingLifecycle,
     /// `[lifecycle]` declares neither an axis with an ordinary state nor `none = true`.
@@ -324,6 +335,31 @@ const REGISTRY: &[(KernelDiagnostic, &str, Severity)] = &[
     (
         KernelDiagnostic::ContractInvalidListOf,
         "contract.invalid-list-of",
+        Severity::Error,
+    ),
+    (
+        KernelDiagnostic::ContractDuplicateTagNamespace,
+        "contract.duplicate-tag-namespace",
+        Severity::Error,
+    ),
+    (
+        KernelDiagnostic::ContractInvalidTagNamespace,
+        "contract.invalid-tag-namespace",
+        Severity::Error,
+    ),
+    (
+        KernelDiagnostic::ContractTagsTableMissing,
+        "contract.tags-table-missing",
+        Severity::Error,
+    ),
+    (
+        KernelDiagnostic::ContractTagPropertyUndeclared,
+        "contract.tag-property-undeclared",
+        Severity::Error,
+    ),
+    (
+        KernelDiagnostic::ContractTagPropertyNotListOfString,
+        "contract.tag-property-not-list-of-string",
         Severity::Error,
     ),
     (
@@ -715,6 +751,11 @@ macro_rules! contract_variants {
             | KernelDiagnostic::ContractUnknownPropertyKind
             | KernelDiagnostic::ContractInvalidEnumValues
             | KernelDiagnostic::ContractInvalidListOf
+            | KernelDiagnostic::ContractDuplicateTagNamespace
+            | KernelDiagnostic::ContractInvalidTagNamespace
+            | KernelDiagnostic::ContractTagsTableMissing
+            | KernelDiagnostic::ContractTagPropertyUndeclared
+            | KernelDiagnostic::ContractTagPropertyNotListOfString
             | KernelDiagnostic::ContractMissingLifecycle
             | KernelDiagnostic::ContractLifecycleIncomplete
             | KernelDiagnostic::ContractLifecycleNoneWithAxis
@@ -828,6 +869,11 @@ fn expected_contract_id(kind: KernelDiagnostic) -> &'static str {
         ContractUnknownPropertyKind => "contract.unknown-property-kind",
         ContractInvalidEnumValues => "contract.invalid-enum-values",
         ContractInvalidListOf => "contract.invalid-list-of",
+        ContractDuplicateTagNamespace => "contract.duplicate-tag-namespace",
+        ContractInvalidTagNamespace => "contract.invalid-tag-namespace",
+        ContractTagsTableMissing => "contract.tags-table-missing",
+        ContractTagPropertyUndeclared => "contract.tag-property-undeclared",
+        ContractTagPropertyNotListOfString => "contract.tag-property-not-list-of-string",
         ContractMissingLifecycle => "contract.missing-lifecycle",
         ContractLifecycleIncomplete => "contract.lifecycle-incomplete",
         ContractLifecycleNoneWithAxis => "contract.lifecycle-none-with-axis",

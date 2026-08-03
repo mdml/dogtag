@@ -1,8 +1,9 @@
 //! The committed vault contract, `.dogtag/contract.toml`.
 //!
 //! One file carries a corpus's whole declaration — its types, properties,
-//! relationships, capabilities, lifecycle, dialect, and the format version they
-//! are written in — and its presence is also the vault-root sentinel. Reading
+//! relationships, capabilities, lifecycle, tag vocabulary, dialect, and the
+//! format version they are written in — and its presence is also the vault-root
+//! sentinel. Reading
 //! it is what lets the kernel enforce a corpus's shape without knowing a single
 //! one of its vocabulary words.
 //!
@@ -46,7 +47,9 @@ mod model;
 mod parse;
 mod schema;
 mod sink;
+mod tags;
 mod validate;
+mod vocabulary;
 
 use std::fs;
 use std::io;
@@ -61,6 +64,7 @@ pub use model::{
     Capability, Contract, Dialect, FlagDecl, LifecycleDecl, LinkDialect, Ordinary, PropertyDecl,
     PropertyKind, RelationshipDecl, ScalarKind, TypeDecl,
 };
+pub use vocabulary::{NamespaceMembership, TagNamespaceDecl, TagsDecl};
 
 use sink::{Sink, contract_file};
 

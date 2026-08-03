@@ -22,6 +22,7 @@ use super::model::{
     Capability, PropertyDecl, PropertyKind, RelationshipDecl, ScalarKind, TypeDecl,
 };
 use super::sink::{Claim, KeyPath, Named, Repeat, Report, Section, Seen, Sink};
+use super::tags;
 
 const NO_TYPES: &str = "the contract declares no type";
 
@@ -91,6 +92,7 @@ fn declared_type(
         capabilities: capabilities(sink, &section),
         properties: properties(sink, &section, &mut catalog.kinds),
         relationships: relationships(sink, &section),
+        tag_namespaces: tags::namespaces(sink, &section),
     };
     let named = named?;
     sink.written(section.leaf("name").key, named.span.clone());

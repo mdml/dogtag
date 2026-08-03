@@ -78,7 +78,12 @@ pub use markdown::contract_markdown;
 /// alternative was coupling output stability to format stability, which would
 /// make every format bump a breaking change for every consumer parsing the JSON
 /// and every schema fix a format bump.
-pub const SCHEMA_VERSION: u32 = 1;
+///
+/// It ticks when a field name or a field's type changes, which is the line the
+/// diagnostics record's 2026-08-01 amendment drew from the other side when it
+/// declined to tick for a change that moved no field. Version 2 is the tag
+/// vocabulary: `contract.tags` and a `tag_namespaces` collection on every type.
+pub const SCHEMA_VERSION: u32 = 2;
 
 /// How a caller arrived at the vault it is reporting on.
 ///
@@ -868,6 +873,6 @@ mod tests {
 
     #[test]
     fn the_schema_version_is_its_own_clock() {
-        assert_eq!(SCHEMA_VERSION, 1);
+        assert_eq!(SCHEMA_VERSION, 2);
     }
 }
