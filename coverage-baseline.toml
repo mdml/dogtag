@@ -7,7 +7,7 @@
 toolchain = "nightly-2026-07-30"
 
 [global]
-# Measured on the pinned toolchain: 99.2234% lines and 98.5222% branches.
+# Measured on the pinned toolchain: 99.2797% lines and 98.6175% branches.
 # Recorded floored to two decimals, so the ratchet compares against a number a
 # clean run reproduces rather than one that rounds up past it.
 #
@@ -21,8 +21,12 @@ toolchain = "nightly-2026-07-30"
 # erosion of what was already covered. Lowering this number is the one move
 # the ratchet does not allow silently; that one is recorded in
 # docs/decisions/engineering/2026-07-30-commit-convention-and-release-notes.md.
-line = 99.22
-branch = 98.52
+#
+# Both rose again when the contract's per-version schema landed at M3: the new
+# module is data plus one small lookup, all of it reached from tests, so it
+# raises the covered fraction rather than merely enlarging the denominator.
+line = 99.27
+branch = 98.61
 
 [thresholds]
 line = 95.0

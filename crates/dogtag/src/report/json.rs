@@ -675,7 +675,7 @@ mod tests {
                 &version["classification"],
                 &version["supported"]["max"]
             ),
-            (&Value::from(1), &Value::from("current"), &Value::from(1))
+            (&Value::from(2), &Value::from("current"), &Value::from(2))
         );
         let installation = &json["installation"];
         assert_eq!(
@@ -805,16 +805,16 @@ mod tests {
                 )))
             }
             UnresolvedReason::Encoding => {
-                doctor_of(tree, Body::new("contract_version = 1\r\n"), RECORD)
+                doctor_of(tree, Body::new("contract_version = 2\r\n"), RECORD)
             }
             UnresolvedReason::Malformed => {
                 doctor_of(tree, Body::new("contract_version = = 1\n"), RECORD)
             }
             UnresolvedReason::VersionUnusable(_) => {
-                doctor_of(tree, Body::new("contract_version = 2\n"), RECORD)
+                doctor_of(tree, Body::new("contract_version = 3\n"), RECORD)
             }
             UnresolvedReason::Invalid => {
-                doctor_of(tree, Body::new("contract_version = 1\n"), RECORD)
+                doctor_of(tree, Body::new("contract_version = 2\n"), RECORD)
             }
         }
     }
@@ -933,7 +933,7 @@ mod tests {
         let (root, declared) = rendered(&tree, NAMED_ORDINARY);
         let json = parsed(&contract_json(&root, &declared));
         assert_eq!(json["vault"]["root"], Value::from(shown(root.path())));
-        assert_eq!(json["contract"]["contract_version"], Value::from(1));
+        assert_eq!(json["contract"]["contract_version"], Value::from(2));
         assert_eq!(
             json["contract"]["dialect"]["links"],
             Value::from("wikilink")
@@ -1012,7 +1012,7 @@ mod tests {
             document.contains(concat!(
                 "      \"key\": \"type.project.capabilities\",\n",
                 "      \"source\": \"default\",\n",
-                "      \"contract_version\": 1,\n",
+                "      \"contract_version\": 2,\n",
                 "      \"location\": null\n",
             )),
             "a defaulted leaf names the version that defines it, and no file: {document}"

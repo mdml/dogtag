@@ -136,7 +136,7 @@ mod tests {
 
     /// The smallest contract that resolves with nothing at all to report.
     const CLEAN: &str = concat!(
-        "contract_version = 1\n",
+        "contract_version = 2\n",
         "\n[dialect]\nlinks = \"wikilink\"\n",
         "\n[lifecycle]\nnone = true\n",
         "\n[[type]]\nname = \"capture\"\ncapabilities = [\"catch-all\"]\n",
@@ -145,7 +145,7 @@ mod tests {
     /// A contract whose lifecycle axis names its ordinary state, with a flag,
     /// a relationship, and the other link dialect.
     const NAMED_ORDINARY: &str = concat!(
-        "contract_version = 1\n",
+        "contract_version = 2\n",
         "\n[dialect]\nlinks = \"markdown\"\n",
         "\n[lifecycle]\naxis = \"status\"\nordinary = { value = \"active\" }\n",
         "\n[[flag]]\nproperty = \"pinned\"\n",
@@ -158,7 +158,7 @@ mod tests {
 
     /// A contract whose ordinary state is the **absence** of a value.
     const ABSENT_ORDINARY: &str = concat!(
-        "contract_version = 1\n",
+        "contract_version = 2\n",
         "\n[dialect]\nlinks = \"wikilink\"\n",
         "\n[lifecycle]\naxis = \"standing\"\nordinary = { absent = true }\n",
         "\n[[type]]\nname = \"person\"\ncapabilities = [\"identity-bearing\"]\n",
@@ -329,7 +329,7 @@ mod tests {
     fn every_way_a_contract_fails_to_resolve_keeps_the_rest_of_the_report() {
         let tree = Tree::new("open-unresolved");
         assert_eq!(
-            unresolved(&tree, "contract_version = 1\r\n"),
+            unresolved(&tree, "contract_version = 2\r\n"),
             UnresolvedReason::Encoding
         );
         assert_eq!(
@@ -341,11 +341,11 @@ mod tests {
             UnresolvedReason::VersionUnusable(VersionClass::BelowFloor)
         );
         assert_eq!(
-            unresolved(&tree, "contract_version = 2\n"),
+            unresolved(&tree, "contract_version = 3\n"),
             UnresolvedReason::VersionUnusable(VersionClass::TooNew)
         );
         assert_eq!(
-            unresolved(&tree, "contract_version = 1\n"),
+            unresolved(&tree, "contract_version = 2\n"),
             UnresolvedReason::Invalid
         );
     }
@@ -355,11 +355,11 @@ mod tests {
         let tree = Tree::new("open-version");
         let below = opened_holding(&tree, "contract_version = 0\n");
         assert_eq!(ids(&below), ["compat.contract-below-supported-floor"]);
-        let above = opened_holding(&tree, "contract_version = 2\n");
+        let above = opened_holding(&tree, "contract_version = 3\n");
         assert_eq!(ids(&above), ["compat.contract-too-new"]);
         assert_eq!(
             above.contract().expect_err("too new").version,
-            Some(2),
+            Some(3),
             "the declared version survives the refusal"
         );
     }
@@ -367,7 +367,7 @@ mod tests {
     #[test]
     fn both_assets_diagnostics_arrive_together_in_the_total_order() {
         let tree = Tree::new("open-merged");
-        let root = vault_holding(&tree, "contract_version = 1\nstray = true\n");
+        let root = vault_holding(&tree, "contract_version = 2\nstray = true\n");
         let record = parse_installation("installation_version = 1\nstray = true\n");
         let opened = open(root, record);
         let reported = ids(&opened);
@@ -413,7 +413,7 @@ mod tests {
     fn an_asset_that_did_not_resolve_contributes_no_provenance() {
         let tree = Tree::new("open-partial");
         let record_only = open(
-            vault_holding(&tree, "contract_version = 2\n"),
+            vault_holding(&tree, "contract_version = 3\n"),
             parse_installation(RECORD),
         );
         assert_eq!(
@@ -436,7 +436,7 @@ mod tests {
         let opened = opened_holding(&tree, CLEAN);
         let copy = opened.clone();
         assert_eq!(copy, opened);
-        assert_ne!(opened, opened_holding(&tree, "contract_version = 2\n"));
+        assert_ne!(opened, opened_holding(&tree, "contract_version = 3\n"));
         assert!(format!("{opened:?}").contains("capture"));
     }
 }

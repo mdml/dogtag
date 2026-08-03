@@ -124,7 +124,7 @@ mod tests {
     /// A contract whose catch-all is declared across several lines: valid
     /// TOML, and a spelling the textual transformation cannot see.
     const CATCH_ALL_ACROSS_LINES: &str = concat!(
-        "contract_version = 1\n",
+        "contract_version = 2\n",
         "\n[dialect]\nlinks = \"wikilink\"\n",
         "\n[lifecycle]\nnone = true\n",
         "\n[[type]]\nname = \"capture\"\ncapabilities = [\n  \"catch-all\",\n]\n",
@@ -134,7 +134,7 @@ mod tests {
     /// valid TOML, and also invisible to a transformation matching the header
     /// literally.
     const SPACED_LIFECYCLE_HEADER: &str = concat!(
-        "contract_version = 1\n",
+        "contract_version = 2\n",
         "\n[dialect]\nlinks = \"wikilink\"\n",
         "\n[ lifecycle ]\nnone = true\n",
         "\n[[type]]\nname = \"capture\"\ncapabilities = [\"catch-all\"]\n",

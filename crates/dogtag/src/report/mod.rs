@@ -691,9 +691,9 @@ mod tests {
                 state: "loaded",
                 reason: None,
                 version: VersionFacts {
-                    found: Some(1),
+                    found: Some(2),
                     min: 1,
-                    max: 1,
+                    max: 2,
                     classification: Some(VersionClass::Current),
                 },
             }
@@ -714,7 +714,7 @@ mod tests {
     #[test]
     fn an_unresolved_contract_keeps_every_fact_that_does_not_depend_on_it() {
         let tree = Tree::new("model-unresolved");
-        let report = report_of(&tree, Body::new("contract_version = 2\n"));
+        let report = report_of(&tree, Body::new("contract_version = 3\n"));
         let refused = (
             report.contract.state,
             report.contract.present,
@@ -748,7 +748,7 @@ mod tests {
             VersionFacts {
                 found: None,
                 min: 1,
-                max: 1,
+                max: 2,
                 classification: None,
             },
             "the range this build reads is a fact whatever the file says"
@@ -825,7 +825,7 @@ mod tests {
     fn consumer_diagnostics_join_the_vaults_own_in_one_sorted_list() {
         let tree = Tree::new("model-extra");
         let planted = Diagnostic::kernel(KernelDiagnostic::DiscoveryNestedVault, "an ancestor");
-        let vault = opened(&tree, Body::new("contract_version = 2\n"), RECORD);
+        let vault = opened(&tree, Body::new("contract_version = 3\n"), RECORD);
         let report = doctor_report(&vault, discovery(), std::slice::from_ref(&planted));
         let reported: Vec<&str> = report
             .diagnostics()
@@ -860,7 +860,7 @@ mod tests {
         let tree = Tree::new("model-derives");
         let report = report_of(&tree, CLEAN);
         assert_eq!(report.clone(), report);
-        let refused = report_of(&tree, Body::new("contract_version = 2\n"));
+        let refused = report_of(&tree, Body::new("contract_version = 3\n"));
         assert_ne!(report, refused);
         let rendered = format!("{report:?} {:?}", Severity::Error);
         assert!(rendered.contains("capture") && rendered.contains("Error"));

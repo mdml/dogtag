@@ -453,7 +453,7 @@ mod tests {
             &document,
             &format!("This vault is at `{}`.", shown(root.path())),
         );
-        assert_holds(&document, "`.dogtag/contract.toml` (contract version 1)");
+        assert_holds(&document, "`.dogtag/contract.toml` (contract version 2)");
         assert_holds(&document, "Do not edit this rendering; edit the contract.");
         assert!(document.ends_with(".\n"));
     }
@@ -627,12 +627,12 @@ mod tests {
         );
         assert_holds(
             &document,
-            "| `tags` | list of string | no | (default, contract version 1) |\n",
+            "| `tags` | list of string | no | (default, contract version 2) |\n",
         );
         assert_holds(&document, "| relationship | required | source |\n");
         assert_holds(
             &document,
-            "| `involves` | no | (default, contract version 1) |\n",
+            "| `involves` | no | (default, contract version 2) |\n",
         );
     }
 
@@ -681,7 +681,7 @@ mod tests {
         let tree = Tree::new("markdown-provenance-default");
         assert_holds(
             &markdown(&tree, NAMED_ORDINARY, true),
-            "- `type.project.capabilities` — (default, contract version 1)\n",
+            "- `type.project.capabilities` — (default, contract version 2)\n",
         );
     }
 

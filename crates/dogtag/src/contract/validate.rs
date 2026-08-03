@@ -275,13 +275,14 @@ fn listing(values: &[String]) -> String {
 mod tests {
     use super::*;
     use crate::contract::parse;
+    use crate::contract::schema;
     use crate::contract::sink::tests::{root_of, text_of};
     use crate::diagnostic::DiagnosticList;
 
     fn read(source: &str) -> DiagnosticList {
         let text = text_of(source);
         let document = root_of(&text);
-        let mut sink = Sink::new(&text, 1);
+        let mut sink = Sink::new(&text, &schema::VERSION_1);
         parse::body(&mut sink, document.get_ref());
         let (diagnostics, _) = sink.finish();
         diagnostics
@@ -604,7 +605,7 @@ mod tests {
     #[test]
     fn a_rule_falls_back_to_the_file_when_nothing_recorded_a_location() {
         let text = text_of("a = 1\n");
-        let sink = Sink::new(&text, 1);
+        let sink = Sink::new(&text, &schema::VERSION_1);
         assert!(located(&sink, "lifecycle.axis").span.is_none());
     }
 }

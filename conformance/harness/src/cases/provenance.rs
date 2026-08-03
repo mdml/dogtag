@@ -355,7 +355,7 @@ mod tests {
             "the failure names the version recorded: {detail}"
         );
         assert!(
-            detail.contains("declares version 1"),
+            detail.contains("declares version 2"),
             "the failure names the version declared: {detail}"
         );
     }
@@ -373,7 +373,7 @@ mod tests {
         provenance.insert(ProvenanceEntry::written(
             LEAF,
             Source::Default {
-                contract_version: 1,
+                contract_version: 2,
             },
             Location::whole_file(FileRef::InstallationRecord),
         ));

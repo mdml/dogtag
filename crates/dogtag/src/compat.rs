@@ -12,18 +12,27 @@
 //! both halves of the promise this range exists to keep.
 //!
 //! [`classify`] takes the range as an argument rather than reading the constant
-//! so that every classification is reachable from a test. At M2 the real range
-//! holds one version, so `Supported` — in range, below the maximum — cannot be
-//! reached by any real vault; injecting a range like `2..=4` reaches it without
-//! fabricating an impossible asset, and makes the compatibility contract exist
-//! in code rather than only in a document.
+//! so that every classification is reachable from a test. The contract range now
+//! holds two versions, so `Supported` — in range, below the maximum — is
+//! reachable from a real version-1 vault for the first time; the installation
+//! range still holds one, and injecting a range like `2..=4` is what reaches
+//! that asset's `Supported` branch without fabricating an impossible file.
 
 use core::ops::RangeInclusive;
 
 /// The contract versions this SDK reads.
-pub const SUPPORTED_CONTRACT_VERSIONS: RangeInclusive<u32> = 1..=1;
+///
+/// The ceiling rose to 2 in the change that landed the per-version key sets and
+/// default tables the SDK now carries for each of them; widening it without
+/// them is the regression the vault-contract record's first amendment named.
+/// The floor stays at 1, so a version-1 vault keeps loading.
+pub const SUPPORTED_CONTRACT_VERSIONS: RangeInclusive<u32> = 1..=2;
 
 /// The installation-record versions this SDK reads.
+///
+/// Deliberately still one version: nothing in the contract's version 2 touches
+/// the installation record's schema, and bumping it in sympathy would be
+/// symmetry for its own sake.
 pub const SUPPORTED_INSTALLATION_VERSIONS: RangeInclusive<u32> = 1..=1;
 
 /// Where a declared version sits relative to a supported range.
@@ -75,10 +84,15 @@ pub fn classify(found: u32, supported: RangeInclusive<u32>) -> VersionClass {
 mod tests {
     use super::*;
 
+    /// The widened contract range is what makes `Supported` — and with it
+    /// `compat.newer-format-available` — reachable from a real vault for the
+    /// first time; the record's range still holds one version.
     #[test]
-    fn the_real_ranges_are_a_single_version_at_this_milestone() {
-        assert_eq!(SUPPORTED_CONTRACT_VERSIONS, 1..=1);
+    fn the_contract_range_holds_two_versions_and_the_record_range_holds_one() {
+        assert_eq!(SUPPORTED_CONTRACT_VERSIONS, 1..=2);
         assert_eq!(SUPPORTED_INSTALLATION_VERSIONS, 1..=1);
+        let real = classify(1, SUPPORTED_CONTRACT_VERSIONS);
+        assert_eq!(real, VersionClass::Supported);
     }
 
     #[test]

@@ -1,7 +1,7 @@
 # .dogtag/contract.toml — the committed vault contract of the `starter` conformance fixture.
 # `starter` is the normative initialization profile: this file is the definition of what a fresh install must stamp.
 
-contract_version = 1
+contract_version = 2
 
 [dialect]
 links = "wikilink"

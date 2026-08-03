@@ -23,12 +23,6 @@ use super::model::{
 };
 use super::sink::{Claim, KeyPath, Named, Repeat, Report, Section, Seen, Sink};
 
-/// Every key `[[type]]` defines at contract version 1.
-const TYPE_KEYS: &[&str] = &["capabilities", "name", "property", "relationship"];
-
-/// Every key `[[type.relationship]]` defines at contract version 1.
-const RELATIONSHIP_KEYS: &[&str] = &["predicate", "required"];
-
 const NO_TYPES: &str = "the contract declares no type";
 
 const NO_TYPES_HELP: &str =
@@ -88,7 +82,8 @@ fn declared_type(
             name: named.as_ref().map(|found| found.text),
         },
     );
-    sink.sweep(&section, TYPE_KEYS);
+    let allowed = sink.schema().keys.declared_type;
+    sink.sweep(&section, allowed);
     let declared = TypeDecl {
         name: named
             .as_ref()
@@ -112,7 +107,7 @@ fn capabilities(sink: &mut Sink<'_>, section: &Section<'_, '_>) -> Vec<Capabilit
     let leaf = section.leaf("capabilities");
     let Some(value) = section.get("capabilities") else {
         sink.defaulted(leaf.key);
-        return Vec::new();
+        return sink.schema().defaults.type_capabilities.to_vec();
     };
     let Some(array) = sink.array(value, "capabilities") else {
         return Vec::new();
@@ -201,8 +196,10 @@ fn declared_property(
         },
     );
     let declared = spelled_kind(sink, &section);
-    sink.sweep(&section, property_keys(declared.spelled));
-    let required = sink.optional_flag(&section, "required");
+    let allowed = sink.schema().property_keys(declared.spelled);
+    sink.sweep(&section, allowed);
+    let default = sink.schema().defaults.property_required;
+    let required = sink.optional_flag(&section, "required", default);
     // The kind is read here but not required until after the name is claimed.
     // Dropping the property on an unresolved kind used to happen first, which
     // cost two things: a second property of the same name went unreported
@@ -243,20 +240,6 @@ fn spelled_kind<'a>(sink: &mut Sink<'_>, section: &Section<'a, '_>) -> Spelled<'
     Spelled {
         at: value.map_or_else(|| section.span.clone(), Spanned::span),
         spelled: value.and_then(|value| sink.string(value, section.leaf("kind"))),
-    }
-}
-
-/// Which keys a property declaration may carry, which depends on the kind it
-/// declares: `values` belongs to an `enum` and `of` to a `list`.
-///
-/// A property whose kind did not resolve is allowed both, so an unknown kind
-/// produces one diagnostic rather than three.
-fn property_keys(spelled: Option<&str>) -> &'static [&'static str] {
-    match spelled {
-        Some("enum") => &["kind", "name", "required", "values"],
-        Some("list") => &["kind", "name", "of", "required"],
-        Some(other) if ScalarKind::named(other).is_some() => &["kind", "name", "required"],
-        _ => &["kind", "name", "of", "required", "values"],
     }
 }
 
@@ -400,8 +383,10 @@ fn declared_relationship(
             name: named.as_ref().map(|found| found.text),
         },
     );
-    sink.sweep(&section, RELATIONSHIP_KEYS);
-    let required = sink.optional_flag(&section, "required");
+    let allowed = sink.schema().keys.relationship;
+    sink.sweep(&section, allowed);
+    let default = sink.schema().defaults.relationship_required;
+    let required = sink.optional_flag(&section, "required", default);
     let named = named?;
     sink.written(section.leaf("predicate").key, named.span.clone());
     let predicate = named.text.to_owned();
@@ -539,6 +524,7 @@ fn listing<'a>(lead: &str, names: impl Iterator<Item = &'a str>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::contract::schema;
     use crate::contract::sink::tests::{root_of, text_of};
     use crate::diagnostic::DiagnosticList;
     use crate::provenance::{Provenance, Source};
@@ -552,7 +538,7 @@ mod tests {
     fn read(source: &str) -> Read {
         let text = text_of(source);
         let document = root_of(&text);
-        let mut sink = Sink::new(&text, 1);
+        let mut sink = Sink::new(&text, &schema::VERSION_1);
         let types = types(&mut sink, document.get_ref());
         let (diagnostics, provenance) = sink.finish();
         Read {
