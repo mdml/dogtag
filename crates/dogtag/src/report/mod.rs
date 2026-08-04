@@ -50,6 +50,7 @@ mod doctor;
 mod json;
 mod list;
 mod markdown;
+mod show;
 
 #[cfg(test)]
 mod equivalence;
@@ -69,9 +70,10 @@ use crate::installation::{Installation, InstallationRecord, VaultEntry};
 use crate::vault::{Opened, VaultRoot};
 
 pub use doctor::doctor_text;
-pub use json::{contract_json, doctor_json, list_json};
+pub use json::{contract_json, doctor_json, list_json, show_json};
 pub use list::list_text;
 pub use markdown::contract_markdown;
+pub use show::{ShowReport, show_report, show_text};
 
 /// The version of the structured output this module emits.
 ///
