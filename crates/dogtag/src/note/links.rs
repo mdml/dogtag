@@ -160,7 +160,25 @@ impl Grammar {
         let start = cursor + text[cursor..].find(self.open)?;
         let inside = start + self.open.len();
         let end = inside + text[inside..].find(self.close)? + self.close.len();
-        Some(start..end)
+        Some(self.narrowed(text, start..end))
+    }
+
+    /// The run narrowed to the **last** opening delimiter that begins it.
+    ///
+    /// A stray bracket earlier on the line is prose rather than part of the
+    /// reference: `See [a] then [Ada](x.md).` writes one markdown link,
+    /// `[Ada](x.md)`, and `[[a [[b]]` writes the inner wikilink `[[b]]`. The
+    /// label ends at the last `](` under `markdown` and at the closing
+    /// delimiter under `wikilink`, and the reference opens at the last opening
+    /// delimiter before that.
+    fn narrowed(&self, text: &str, span: Range<usize>) -> Range<usize> {
+        let inner = &text[span.clone()];
+        let label_end = match self.split {
+            Some(split) => inner.rfind(split).unwrap_or(0),
+            None => inner.len() - self.close.len(),
+        };
+        let opens = inner[..label_end].rfind(self.open).unwrap_or(0);
+        span.start + opens..span.end
     }
 }
 
@@ -386,6 +404,32 @@ mod tests {
         let prose = "See [[Ada]] and [[Babbage]].\n";
         assert_eq!(scan(LinkDialect::Wikilink, prose), [4..11, 16..27]);
         assert_eq!(&prose[4..11], "[[Ada]]");
+    }
+
+    #[test]
+    fn a_stray_bracket_before_a_markdown_link_is_prose_rather_than_part_of_it() {
+        // The reference opens at the last `[` that begins the bracket run
+        // before `](` — never at a stray bracket earlier on the line.
+        let prose = "See [a] then [Ada](x.md).\n";
+        assert_eq!(
+            found(LinkDialect::Markdown, prose),
+            [("[Ada](x.md)", "x.md")]
+        );
+        let spans = scan(LinkDialect::Markdown, prose);
+        assert_eq!((spans.len(), spans[0].clone()), (1, 13..24));
+        assert_eq!(&prose[13..24], "[Ada](x.md)");
+    }
+
+    #[test]
+    fn a_wikilink_opened_twice_reads_the_inner_run_as_the_reference() {
+        // The same rule in the wikilink family: the reference is the last
+        // `[[` before the closing `]]`, so an unclosed opener is prose.
+        let prose = "[[a [[b]] then [[c]]\n";
+        assert_eq!(
+            found(LinkDialect::Wikilink, prose),
+            [("[[b]]", "b"), ("[[c]]", "c")]
+        );
+        assert_eq!(scan(LinkDialect::Wikilink, prose)[0], 4..9);
     }
 
     #[test]
