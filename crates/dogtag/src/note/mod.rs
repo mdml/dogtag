@@ -32,6 +32,7 @@ mod frontmatter;
 mod index;
 mod lexical;
 mod links;
+mod list;
 mod model;
 mod read;
 mod resolve;
@@ -43,6 +44,7 @@ use crate::contract::Contract;
 use crate::diagnostic::{Diagnostic, DiagnosticList, VaultPath};
 use crate::vault::VaultRoot;
 
+pub use list::{ListFilter, ListResult, NoteSummary, list};
 pub use model::{
     Binding, Edge, FieldValue, Note, Property, PropertyValue, RecordValue, Reference, Relationship,
 };

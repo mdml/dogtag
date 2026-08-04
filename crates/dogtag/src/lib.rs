@@ -50,8 +50,8 @@
 //! the reference itself; a bare name several notes bear names none of them
 //! wherever it is written, prose included, because ambiguity is a defect of the
 //! reference rather than of the corpus. Nothing is persisted: the name index is
-//! built while a corpus is read and answered from memory, and no surface reads
-//! a corpus yet — `check`, `list`, and `show` are the commands that will.
+//! built while a corpus is read and answered from memory. `list` is the first
+//! corpus-reading surface; `check` and `show` remain later slices of M3.
 //!
 //! - `diagnostic` — the envelope every failure is reported as: the exhaustive
 //!   kernel identifier set, the `ext.` namespace consumers mint their own

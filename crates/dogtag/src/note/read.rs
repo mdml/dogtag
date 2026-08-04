@@ -47,13 +47,22 @@ struct Subject<'a> {
 
 /// Reads the note at `path`, which is `absolute` on this machine.
 pub(crate) fn note(absolute: &Path, path: &VaultPath, contract: &Contract) -> Read {
+    read(absolute, path, contract, true)
+}
+
+/// Reads only the schema'd plane of one note for corpus summaries.
+pub(crate) fn summary(absolute: &Path, path: &VaultPath, contract: &Contract) -> Read {
+    read(absolute, path, contract, false)
+}
+
+fn read(absolute: &Path, path: &VaultPath, contract: &Contract, read_body: bool) -> Read {
     let subject = Subject { path, contract };
     let bytes = match fs::read(absolute) {
         Ok(bytes) => bytes,
         Err(error) => return refused(path, &unreadable(path, &error)),
     };
     match encoding::inspect_all(&bytes) {
-        Ok(reading) => from_text(subject, reading),
+        Ok(reading) => from_text(subject, reading, read_body),
         Err(fault) => refused(
             path,
             &format!("`{path}` could not be read: {}", fault.describe()),
@@ -62,7 +71,7 @@ pub(crate) fn note(absolute: &Path, path: &VaultPath, contract: &Contract) -> Re
 }
 
 /// The pipeline, once the note's bytes are text.
-fn from_text(subject: Subject<'_>, reading: Reading) -> Read {
+fn from_text(subject: Subject<'_>, reading: Reading, read_body: bool) -> Read {
     let path = subject.path;
     let mut findings = Findings::new(path, &reading.text);
     for fault in &reading.faults {
@@ -76,11 +85,19 @@ fn from_text(subject: Subject<'_>, reading: Reading) -> Read {
     // The body is read whatever the frontmatter turned out to be: its title and
     // its untyped references are properties of the prose, and no declaration
     // bears on either.
-    let body = body::read(
-        reading.text.as_str()[parsed.body.clone()].to_owned(),
-        subject.contract.dialect().links(),
-        parsed.body.start,
-    );
+    let body = if read_body {
+        body::read(
+            reading.text.as_str()[parsed.body.clone()].to_owned(),
+            subject.contract.dialect().links(),
+            parsed.body.start,
+        )
+    } else {
+        Body {
+            text: String::new(),
+            title: None,
+            references: Vec::new(),
+        }
+    };
     let note = build(&mut findings, subject, &parsed.front, body);
     Read {
         note: Some(note),
