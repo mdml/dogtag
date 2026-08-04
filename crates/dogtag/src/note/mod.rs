@@ -465,6 +465,34 @@ mod tests {
     }
 
     #[test]
+    fn an_empty_link_scalar_claims_no_edge_in_either_spelling() {
+        // `works-at:` and `works-at: [""]` claim nothing alike: no edge and no
+        // dangling finding — only the absence the type makes reportable.
+        let tree = Tree::new("corpus-empty-edge");
+        for spelling in ["", " [\"\"]"] {
+            let note = format!("---\ntype: person\nfull_name: Ada\nworks-at:{spelling}\n---\n");
+            let corpus = read(&tree, &[("ada.md", &note)]);
+            assert_eq!(
+                ids(&corpus),
+                ["note.missing-required-relationship"],
+                "works-at:{spelling}"
+            );
+            assert_eq!(only(&corpus).relationship("works-at"), Some(&[][..]));
+        }
+        // An empty item beside a real one claims exactly what the real one does.
+        let note = concat!(
+            "---\ntype: person\nfull_name: Ada\n",
+            "works-at:\n  - \"\"\n  - \"[[engine]]\"\n---\n",
+        );
+        let corpus = read(&tree, &[("ada.md", note)]);
+        let reported = ids(&corpus);
+        assert!(reported.is_empty(), "{reported:?}");
+        let edges = only(&corpus).relationship("works-at").expect("declared");
+        let written: Vec<&str> = edges.iter().map(Edge::written).collect();
+        assert_eq!(written, ["[[engine]]"]);
+    }
+
+    #[test]
     fn a_relationship_value_that_is_not_a_link_is_reported() {
         let tree = Tree::new("corpus-edge-shape");
         let note = "---\ntype: person\nfull_name: Ada\nworks-at:\n  at: Engine\n---\n";
@@ -533,6 +561,49 @@ mod tests {
         let missing = &corpus.diagnostics()[0].message;
         assert!(missing.contains("`legal_name.given`"), "{missing}");
         assert!(corpus.diagnostics()[1].message.contains("`legal_name`"));
+    }
+
+    #[test]
+    fn a_missing_record_field_points_its_evidence_at_the_contract() {
+        // The evidence carries the location of the field's own
+        // `required = true` leaf, exactly as a missing property's evidence
+        // carries the property's — in both record spellings, and without the
+        // sequence index a provenance key never holds.
+        let tree = Tree::new("corpus-record-evidence");
+        let note = concat!(
+            "---\ntype: person\nfull_name: Ada\nworks-at: \"[[engine]]\"\n",
+            "legal_name:\n  family: Lovelace\n",
+            "waypoints:\n  - reached_on: 1843-01-01\n---\n",
+        );
+        let corpus = read(&tree, &[("ada.md", note)]);
+        assert_eq!(
+            ids(&corpus),
+            [
+                "note.missing-required-property",
+                "note.missing-required-property"
+            ]
+        );
+        let named: Vec<bool> = corpus
+            .diagnostics()
+            .iter()
+            .zip(["`legal_name.given`", "`waypoints[0].caption`"])
+            .map(|(diagnostic, path)| diagnostic.message.contains(path))
+            .collect();
+        assert_eq!(named, [true, true]);
+        for diagnostic in corpus.diagnostics() {
+            let evidence = &diagnostic.related[0];
+            assert!(
+                evidence.message.contains("required"),
+                "{}",
+                evidence.message
+            );
+            let location = evidence
+                .location
+                .as_ref()
+                .expect("the requirement is written in the contract, and that is where it points");
+            assert_eq!(location.file.display_path(), ".dogtag/contract.toml");
+            assert!(location.span.is_some());
+        }
     }
 
     #[test]
@@ -1231,6 +1302,48 @@ mod tests {
                 ("[[difference]]", None),
             ],
             "a prose reference belongs in prose until its target exists"
+        );
+    }
+
+    #[test]
+    fn a_reference_quoted_in_a_code_block_raises_no_link_finding() {
+        // A code block is not prose: a note quoting example `[[links]]` in one
+        // is quoting, not referencing — so even a bare name several notes bear
+        // raises nothing, where the same line in prose would be ambiguous.
+        let tree = Tree::new("corpus-code-block");
+        let note = concat!(
+            "---\ntype: person\nfull_name: Ada\nworks-at: \"[[engine]]\"\n---\n",
+            "# Ada\n\nFor example:\n\n```\nSee [[daily]].\n```\n\n    [[daily]]\n",
+        );
+        let corpus = read(
+            &tree,
+            &[
+                ("ada.md", note),
+                ("2025/daily.md", "# Daily\n"),
+                ("2026/daily.md", "# Daily\n"),
+            ],
+        );
+        let reported = ids(&corpus);
+        assert!(reported.is_empty(), "{reported:?}");
+        assert!(
+            corpus_note(&corpus, "ada.md").body_references().is_empty(),
+            "neither the fenced nor the indented spelling is a reference"
+        );
+    }
+
+    #[test]
+    fn a_classic_mac_note_is_read_and_still_warned_about_its_carriage_returns() {
+        // Lone `\r` line endings: the frontmatter is *seen* — the note binds to
+        // its declared type rather than silently to the catch-all — while the
+        // carriage returns stay exactly the warning they are under `\r\n`.
+        let tree = Tree::new("corpus-classic-mac");
+        let note = "---\rtype: person\rfull_name: Ada\rworks-at: \"[[engine]]\"\r---\r";
+        let corpus = read(&tree, &[("ada.md", note)]);
+        assert_eq!(ids(&corpus), ["note.carriage-return-line-ending"]);
+        assert_eq!(
+            only(&corpus).binding().type_name(),
+            Some("person"),
+            "the frontmatter is read, not lost"
         );
     }
 
