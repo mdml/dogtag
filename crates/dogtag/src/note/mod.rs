@@ -710,6 +710,33 @@ mod tests {
     }
 
     #[test]
+    fn a_refused_construct_written_in_brackets_is_refused_just_the_same() {
+        // Reading the alias as the literal tag `*base` would be the silent
+        // reinterpretation the hand-written subset exists to prevent, and a
+        // note that never loaded is not a note carrying a tag nobody declared.
+        let tree = Tree::new("corpus-refused-flow");
+        let note = "---\ntype: person\nlabels: [role/founder, *base]\n---\n";
+        let corpus = read_against(&tree, NAMESPACED, &[("ada.md", note)]);
+        let message = one_finding(&corpus, "note.frontmatter-unsupported");
+        assert!(message.contains("an alias"), "{message}");
+        let read = only(&corpus);
+        assert!(read.tags().is_empty(), "{:?}", read.tags());
+        assert_eq!(read.binding().bound_by(), "none");
+    }
+
+    #[test]
+    fn a_record_field_written_twice_in_brackets_is_refused_rather_than_last_wins() {
+        let tree = Tree::new("corpus-refused-flow-repeat");
+        let note = concat!(
+            "---\ntype: person\nfull_name: Ada\nworks-at: \"[[E]]\"\n",
+            "legal_name: {given: Augusta, given: Ada}\n---\n",
+        );
+        let corpus = read(&tree, &[("ada.md", note)]);
+        let message = one_finding(&corpus, "note.frontmatter-unsupported");
+        assert!(message.contains("written twice"), "{message}");
+    }
+
+    #[test]
     fn a_frontmatter_block_that_is_not_the_grammar_is_reported_as_invalid() {
         let tree = Tree::new("corpus-invalid");
         let corpus = read(&tree, &[("ada.md", "---\nnot an entry\n---\n")]);

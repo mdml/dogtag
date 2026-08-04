@@ -18,6 +18,11 @@
 //! *refused* where a loader silently keeps the last, and an alias is refused
 //! with a span pointing at the construct rather than quietly resolved.
 //!
+//! Every refusal is of the **language**, never of a style: `[one, *base]`
+//! writes the alias `*base` writes, and `{given: A, given: A}` repeats a key
+//! the same way two lines do. [`scalar`] holds the refusals for that reason,
+//! and both halves of the grammar — [`block`] and [`flow`] — consult it.
+//!
 //! # What "nested at most one level below the top" means here
 //!
 //! It is a **shape** rule, not a depth counter, and [`shape`] holds it. The
