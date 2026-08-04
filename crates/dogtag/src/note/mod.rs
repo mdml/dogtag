@@ -760,6 +760,39 @@ mod tests {
     }
 
     #[test]
+    fn a_folder_note_and_its_folder_answer_in_one_order_rather_than_two() {
+        // `notes()` and `diagnostics()` are two views of one corpus, and a
+        // folder note is where the walk's order and the paths' order diverge:
+        // the walk descends into `projects/` before it reaches `projects.md`,
+        // while `.` precedes `/` so the paths run the other way.
+        let tree = Tree::new("corpus-folder-note");
+        let stray = "---\ntype: person\nfull_name: Ada\nworks-at: \"[[E]]\"\nstray: one\n---\n";
+        let corpus = read(
+            &tree,
+            &[("projects/alpha.md", stray), ("projects.md", stray)],
+        );
+        let paths: Vec<&str> = corpus
+            .notes()
+            .iter()
+            .map(|note| note.path().as_str())
+            .collect();
+        let located: Vec<&str> = corpus
+            .diagnostics()
+            .iter()
+            .map(|diagnostic| {
+                diagnostic
+                    .location
+                    .as_ref()
+                    .expect("located")
+                    .file
+                    .display_path()
+            })
+            .collect();
+        assert_eq!(paths, ["projects.md", "projects/alpha.md"]);
+        assert_eq!(located, paths, "one order, whichever accessor is asked");
+    }
+
+    #[test]
     fn a_corpus_looks_a_note_up_by_its_identity() {
         let tree = Tree::new("corpus-lookup");
         let corpus = read(&tree, &[("people/ada.md", CONFORMING)]);
