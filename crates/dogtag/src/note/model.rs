@@ -5,13 +5,19 @@
 //! edges, tags, body, and title. A surface renders it; none of them grows a
 //! second notion of what a note looks like.
 //!
+//! One thing rides alongside that shape rather than inside it: the untyped
+//! references a note's body writes. No M3 surface renders them — `show` answers
+//! the typed shape above — but the record has them parsed and resolved at this
+//! milestone for the milestones that want them, so they are carried and reached
+//! through one narrow accessor.
+//!
 //! Two things it deliberately is not. It is **not** a copy of the contract: a
 //! property is here because the note wrote it, and what its kind *is* stays the
 //! contract's answer. And a value is **not** coerced — every scalar is the
 //! bytes the note wrote, because the declared kind decides what those bytes
 //! mean and a parsed value would have decided it already.
 
-use crate::diagnostic::VaultPath;
+use crate::diagnostic::{Location, VaultPath};
 
 /// One note, read.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -20,6 +26,7 @@ pub struct Note {
     pub(crate) binding: Binding,
     pub(crate) properties: Vec<Property>,
     pub(crate) relationships: Vec<Relationship>,
+    pub(crate) references: Vec<Reference>,
     pub(crate) tags: Vec<String>,
     pub(crate) title: Option<String>,
     pub(crate) body: String,
@@ -76,6 +83,21 @@ impl Note {
             .iter()
             .find(|relationship| relationship.predicate == predicate)
             .map(|relationship| relationship.edges.as_slice())
+    }
+
+    /// The untyped references the note's body writes, in the order it writes
+    /// them.
+    ///
+    /// A prose reference is **not an edge**: it answers "connected", never
+    /// "how", and a reference whose target does not exist yet legitimately
+    /// belongs in prose until it does. So one that resolves to nothing is a
+    /// finding at no severity and simply carries no target.
+    ///
+    /// No M3 surface renders these — `show`'s shape is the typed one — and the
+    /// accessor is deliberately the narrowest thing that lets the milestones
+    /// that want them (an index, backlinks) read what this one resolved.
+    pub fn body_references(&self) -> &[Reference] {
+        &self.references
     }
 
     /// The note's tags: the declared tag property's values, in the order the
@@ -279,16 +301,24 @@ impl Relationship {
     }
 }
 
-/// One typed link: the reference the note wrote, and what it resolves to.
+/// One typed link: the reference the note wrote, and the note it resolves to.
 ///
-/// The target is the seam resolution fills. A typed link must resolve, and one
-/// that does not is a `link.*` error against the reference itself — but *which*
-/// note a reference names is a question about the corpus rather than about this
-/// note, so it is answered where the whole corpus is in hand.
+/// A typed link **must** resolve — an edge with a dangling endpoint is not a
+/// relationship, it is a string — so a target of `None` is always accompanied
+/// by a `link.*` error against the reference itself. *Which* note a reference
+/// names is a question about the corpus rather than about this note, so it is
+/// answered where the whole corpus is in hand.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Edge {
     pub(crate) written: String,
     pub(crate) target: Option<VaultPath>,
+    /// Where the reference is written.
+    ///
+    /// Carried on the edge because a `link.*` finding is addressed to the
+    /// reference itself, and by the time the whole corpus is in hand the note's
+    /// text — the only thing that turns a byte range into a line and a column —
+    /// has been dropped.
+    pub(crate) at: Location,
 }
 
 impl Edge {
@@ -297,7 +327,36 @@ impl Edge {
         &self.written
     }
 
-    /// The note the reference resolves to, once resolution has run.
+    /// The note the reference resolves to.
+    ///
+    /// `None` where the reference resolved to nothing, or where a bare name is
+    /// one several notes bear — both of which are reported.
+    pub fn target(&self) -> Option<&VaultPath> {
+        self.target.as_ref()
+    }
+}
+
+/// One untyped reference, written in a note's body.
+///
+/// The prose-level reference, which the metadata plane's typed links sit beside
+/// rather than replace. It carries no predicate, so it makes no claim about
+/// *how* two notes relate, and **a dangling untyped reference is a finding at
+/// no severity**: a reference to a note that does not exist yet belongs in
+/// prose until it does, and danglingness is only a defect where a relationship
+/// was claimed.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Reference {
+    pub(crate) written: String,
+    pub(crate) target: Option<VaultPath>,
+}
+
+impl Reference {
+    /// The reference exactly as the note wrote it, delimiters included.
+    pub fn written(&self) -> &str {
+        &self.written
+    }
+
+    /// The note the reference resolves to, when it resolves to exactly one.
     pub fn target(&self) -> Option<&VaultPath> {
         self.target.as_ref()
     }
@@ -327,13 +386,25 @@ mod tests {
                 predicate: "works-at".to_owned(),
                 edges: vec![Edge {
                     written: "[[Analytical Engine]]".to_owned(),
-                    target: None,
+                    target: Some(VaultPath::kernel("engines/analytical.md")),
+                    at: at(),
                 }],
+            }],
+            references: vec![Reference {
+                written: "[[Charles Babbage]]".to_owned(),
+                target: None,
             }],
             tags: vec!["role/founder".to_owned()],
             title: Some("Ada Lovelace".to_owned()),
             body: "# Ada Lovelace\n".to_owned(),
         }
+    }
+
+    /// Somewhere in the note, for an edge that has to carry a location.
+    fn at() -> Location {
+        Location::whole_file(crate::diagnostic::FileRef::InVault(VaultPath::kernel(
+            "people/ada.md",
+        )))
     }
 
     fn record() -> RecordValue {
@@ -378,12 +449,13 @@ mod tests {
     }
 
     #[test]
-    fn a_note_answers_for_its_edges_which_carry_no_target_until_they_resolve() {
+    fn a_note_answers_for_its_edges_and_the_notes_they_resolved_to() {
         let note = note();
         let edges = note.relationship("works-at").expect("declared");
+        assert_eq!(edges[0].written(), "[[Analytical Engine]]");
         assert_eq!(
-            (edges[0].written(), edges[0].target()),
-            ("[[Analytical Engine]]", None)
+            edges[0].target().map(VaultPath::as_str),
+            Some("engines/analytical.md")
         );
         let declared = &note.relationships()[0];
         let carried = (
@@ -392,6 +464,18 @@ mod tests {
             note.relationship("absent").is_some(),
         );
         assert_eq!(carried, ("works-at", 1, false));
+    }
+
+    #[test]
+    fn a_note_answers_for_the_untyped_references_its_body_writes() {
+        // A prose reference to a note that does not exist yet is not a defect,
+        // so a reference simply carries no target and nothing is reported.
+        let note = note();
+        let reference = &note.body_references()[0];
+        assert_eq!(
+            (reference.written(), reference.target()),
+            ("[[Charles Babbage]]", None)
+        );
     }
 
     #[test]
@@ -473,5 +557,8 @@ mod tests {
         assert!(rendered.contains("Lovelace"));
         assert!(format!("{:?}", record()).contains("given"));
         assert!(format!("{:?}", Binding::Unbound { named: None }).contains("Unbound"));
+        let reference = &note.body_references()[0];
+        assert_eq!(reference.clone(), *reference);
+        assert!(format!("{reference:?}").contains("Babbage"));
     }
 }
