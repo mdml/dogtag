@@ -15,7 +15,7 @@
 use core::ops::Range;
 use std::collections::BTreeSet;
 
-use super::scalar::{Head, REFUSED_OPENERS};
+use super::scalar::{self, Head, opens_flow};
 use super::{DOCUMENT_END, Entry, Fault, FaultKind, Line, MAX_NESTING, Shape, Value, flow};
 
 /// Reads a frontmatter block's lines as a mapping of keys to values.
@@ -125,7 +125,7 @@ impl<'a> Block<'a> {
     /// One `key: value` entry, consuming whatever the value takes.
     fn entry(&mut self, line: Line<'a>, indent: usize, depth: usize) -> Option<Entry> {
         self.index += 1;
-        if let Some((kind, message)) = refused_key(line.text) {
+        if let Some((kind, message)) = refused_line(line.text) {
             self.refuse(kind, message, line.range());
             self.skip_under(indent);
             return None;
@@ -259,19 +259,15 @@ impl<'a> Block<'a> {
     /// A value written on the line its key is on.
     fn inline(&mut self, text: &'a str, spot: Spot) -> Value {
         let span = spot.at..spot.at + text.len();
-        if let Some(message) = refused_value(text) {
+        if let Some(message) = scalar::refused_value(text) {
             self.refuse(FaultKind::Unsupported, message, span);
             self.skip_under(spot.indent);
             return empty(spot.at);
         }
         if opens_flow(text) {
-            return match flow::read(text, spot.at, spot.depth) {
-                Ok(value) => value,
-                Err(fault) => {
-                    self.faults.push(fault);
-                    empty(spot.at)
-                }
-            };
+            let (value, faults) = flow::read(text, spot.at, spot.depth);
+            self.faults.extend(faults);
+            return value.unwrap_or_else(|| empty(spot.at));
         }
         if Head(text).opens_quote() {
             return self.quoted(text, spot.at);
@@ -343,37 +339,17 @@ fn opens_mapping(text: &str) -> bool {
     !opens_flow(text) && Head(text).key().is_some()
 }
 
-fn opens_flow(text: &str) -> bool {
-    text.starts_with('[') || text.starts_with('{')
-}
-
 /// Why a line cannot open a mapping entry, when it cannot.
-fn refused_key(text: &str) -> Option<(FaultKind, String)> {
+///
+/// The tab is this half's own: indentation is a block-style notion, and a tab
+/// in it is bad grammar rather than a construct the subset declines to read.
+/// Everything else is the shared refusal both halves answer with.
+fn refused_line(text: &str) -> Option<(FaultKind, String)> {
     if text.starts_with('\t') {
         let message = "a tab indents this line; the subset indents with spaces".to_owned();
         return Some((FaultKind::Invalid, message));
     }
-    if text == "?" || text.starts_with("? ") {
-        let message = "`?` writes an explicit key, which the subset refuses".to_owned();
-        return Some((FaultKind::Unsupported, message));
-    }
-    if text.starts_with("<<") {
-        let message = "`<<` writes a merge key, which resolves an alias".to_owned();
-        return Some((FaultKind::Unsupported, message));
-    }
-    if opens_flow(text) {
-        let message = "a flow collection cannot be a key: keys are strings".to_owned();
-        return Some((FaultKind::Unsupported, message));
-    }
-    refused_value(text).map(|message| (FaultKind::Unsupported, message))
-}
-
-/// Why a value cannot be read, when the subset refuses the construct outright.
-fn refused_value(text: &str) -> Option<String> {
-    REFUSED_OPENERS
-        .iter()
-        .find(|(opener, _)| text.starts_with(*opener))
-        .map(|(opener, what)| format!("`{opener}` writes {what}, which the subset refuses"))
+    scalar::refused_key(text).map(|message| (FaultKind::Unsupported, message))
 }
 
 #[cfg(test)]
@@ -624,7 +600,11 @@ mod tests {
         assert!(opens_flow("[a]"));
         assert!(opens_flow("{a: b}"));
         assert!(!opens_flow("a"));
-        assert!(refused_key("plain: one").is_none());
-        assert!(refused_value("plain").is_none());
+        assert!(refused_line("plain: one").is_none());
+        assert_eq!(
+            refused_line("\ta: one").map(|(kind, _)| kind),
+            Some(FaultKind::Invalid),
+            "a tab is bad grammar rather than a construct the subset declines"
+        );
     }
 }

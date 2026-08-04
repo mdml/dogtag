@@ -1,4 +1,5 @@
-//! Reading one scalar, and telling a key from a value.
+//! Reading one scalar, telling a key from a value, and the constructs the
+//! subset refuses outright.
 //!
 //! Nothing here decides what a scalar *means*. Quoting is undone because it is
 //! spelling — `"true"` and `true` carry the same four bytes to the declared
@@ -6,6 +7,13 @@
 //! the value. Beyond that the bytes are handed on exactly as they were written,
 //! which is what lets the declared kind, rather than the parser's guess, decide
 //! what the value is.
+//!
+//! The refusals live here rather than in either half of the grammar because
+//! both halves need them and the subset has **one** answer, not one per style.
+//! `[one, *base]` writes the same alias `*base` does, and a reader who is told
+//! that one spelling is refused while the other is quietly reinterpreted as
+//! text has met exactly the silent reinterpretation the hand-written subset
+//! exists to prevent.
 
 use core::str::CharIndices;
 
@@ -30,13 +38,44 @@ const UNICODE_DIGITS: usize = 4;
 /// `&` and `*` are an anchor and an alias, `!` is a tag, and `|` and `>` open a
 /// block scalar. Each is named where it is refused, so a corpus using one is
 /// told which construct stopped its note rather than that its note is wrong.
-pub(super) const REFUSED_OPENERS: &[(char, &str)] = &[
+const REFUSED_OPENERS: &[(char, &str)] = &[
     ('&', "an anchor"),
     ('*', "an alias"),
     ('!', "a tag"),
     ('|', "a block scalar"),
     ('>', "a folded block scalar"),
 ];
+
+/// Whether text opens a flow collection.
+pub(super) fn opens_flow(text: &str) -> bool {
+    text.starts_with('[') || text.starts_with('{')
+}
+
+/// Why a value cannot be read, when the subset refuses the construct outright.
+pub(super) fn refused_value(text: &str) -> Option<String> {
+    REFUSED_OPENERS
+        .iter()
+        .find(|(opener, _)| text.starts_with(*opener))
+        .map(|(opener, what)| format!("`{opener}` writes {what}, which the subset refuses"))
+}
+
+/// Why what is written as a key cannot be one, when it cannot.
+///
+/// A key is refused for everything a value is, and for three more: an explicit
+/// key, a merge key — which is an alias wearing a key's clothes — and a flow
+/// collection, which is the non-string key the subset names.
+pub(super) fn refused_key(text: &str) -> Option<String> {
+    if text == "?" || text.starts_with("? ") {
+        return Some("`?` writes an explicit key, which the subset refuses".to_owned());
+    }
+    if text.starts_with("<<") {
+        return Some("`<<` writes a merge key, which resolves an alias".to_owned());
+    }
+    if opens_flow(text) {
+        return Some("a flow collection cannot be a key: keys are strings".to_owned());
+    }
+    refused_value(text)
+}
 
 /// A scalar read from the front of some text.
 #[derive(Debug)]
