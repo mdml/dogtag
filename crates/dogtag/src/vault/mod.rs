@@ -106,8 +106,9 @@ impl VaultRoot {
     ///
     /// This is the spelling every in-vault diagnostic uses, so the same fault
     /// in the same corpus renders identically on every machine. Answers
-    /// `None` when `path` is not inside the root, and the empty string for the
-    /// root itself.
+    /// `None` when `path` is not inside the root — or when a component's name
+    /// is not valid UTF-8, because a lossy respelling would name a file that
+    /// does not exist — and the empty string for the root itself.
     ///
     /// It is also the **only public door** to a [`VaultPath`], and so to
     /// [`crate::diagnostic::FileRef::InVault`]: a consumer that wants to point
