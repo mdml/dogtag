@@ -1,14 +1,21 @@
-//! The one thing a note's body is read for: its title.
+//! The two things a note's body is read for: its title, and the untyped
+//! references it writes.
 //!
 //! **The title is the first H1, carried as display metadata and never as
 //! identity.** Renaming a title is an edit; changing an identity is a
 //! link-integrity operation, and keeping the two apart is what lets a note be
 //! retitled without breaking a single link.
 //!
-//! This is the whole of the body grammar M3 commits to. There is no outline, no
-//! section model, no task list — "body content is untouched beyond link
-//! extraction" reads as *no structure*, not as *no title*, because the shared
-//! document-model shape names the title and `show` returns it.
+//! The references are the *other* half of "body content is untouched beyond
+//! link extraction": the dialect's delimited form is found in the prose and
+//! resolved, and nothing else about the prose is interpreted — a reference
+//! inside a code fence is still a reference, because refusing it would need the
+//! block structure this milestone declines to grow.
+//!
+//! Beyond those two, there is no outline, no section model, no task list —
+//! "body content is untouched beyond link extraction" reads as *no structure*,
+//! not as *no title*, because the shared document-model shape names the title
+//! and `show` returns it.
 //!
 //! Finding the first H1 still needs the smallest amount of block structure that
 //! gets there, and the base grammar is CommonMark:
@@ -23,14 +30,44 @@
 //! immediately above the underline, where CommonMark folds the whole paragraph.
 //! A title written across two lines is not a title anyone writes.
 
+use crate::contract::LinkDialect;
+
+use super::links;
+use super::model::Reference;
+
 /// How far a line is indented before it is a code block rather than prose.
 const CODE_INDENT: usize = 4;
 
 /// The two fences CommonMark opens a code block with.
 const FENCES: [&str; 2] = ["```", "~~~"];
 
+/// A note's body, and everything read out of it.
+pub(crate) struct Body {
+    /// The body as uninterpreted text.
+    pub(crate) text: String,
+    /// The first H1, when the note has one.
+    pub(crate) title: Option<String>,
+    /// The untyped references the prose writes, unresolved.
+    pub(crate) references: Vec<Reference>,
+}
+
+/// Reads a note's body, in the dialect its contract declares.
+pub(crate) fn read(text: String, dialect: LinkDialect) -> Body {
+    Body {
+        title: title(&text),
+        references: links::scan(dialect, &text)
+            .into_iter()
+            .map(|written| Reference {
+                written: written.to_owned(),
+                target: None,
+            })
+            .collect(),
+        text,
+    }
+}
+
 /// The note's title: its first H1, when it has one.
-pub(crate) fn title(body: &str) -> Option<String> {
+fn title(body: &str) -> Option<String> {
     let mut scan = Scan {
         fence: None,
         previous: None,
@@ -147,12 +184,12 @@ fn closed(text: &str) -> &str {
 mod tests {
     use super::*;
 
-    fn read(body: &str) -> Option<String> {
+    fn heading(body: &str) -> Option<String> {
         title(body)
     }
 
     fn titled(body: &str) -> String {
-        read(body).expect("a title")
+        heading(body).expect("a title")
     }
 
     #[test]
@@ -168,7 +205,7 @@ mod tests {
     #[test]
     fn an_atx_heading_may_be_indented_up_to_the_code_block_margin() {
         // Four spaces is a code block, and a heading in one is a line of code.
-        let found = (titled("   # Ada\n"), read("    # Ada\n"));
+        let found = (titled("   # Ada\n"), heading("    # Ada\n"));
         assert_eq!(found, ("Ada".to_owned(), None));
     }
 
@@ -185,7 +222,11 @@ mod tests {
 
     #[test]
     fn only_a_first_level_heading_is_a_title() {
-        let found = (read("## Ada\n"), read("#Ada\n"), titled("## Ada\n# Real\n"));
+        let found = (
+            heading("## Ada\n"),
+            heading("#Ada\n"),
+            titled("## Ada\n# Real\n"),
+        );
         assert_eq!(found, (None, None, "Real".to_owned()));
     }
 
@@ -195,7 +236,7 @@ mod tests {
         assert_eq!(written, ("Ada Lovelace".to_owned(), "Ada".to_owned()));
         // An underline with nothing above it underlines nothing, and a blank
         // line ends the paragraph the underline would have titled.
-        let nothing = (read("\n=====\n"), read("Ada\n\n=====\n"));
+        let nothing = (heading("\n=====\n"), heading("Ada\n\n=====\n"));
         assert_eq!(nothing, (None, None));
     }
 
@@ -209,8 +250,8 @@ mod tests {
         // A fence that is never closed takes the rest of the note with it, and
         // a Setext underline inside one underlines nothing.
         let inside = (
-            read("```rust\n# still code\nfn main() {}\n"),
-            read("```\nAda\n===\n```\n"),
+            heading("```rust\n# still code\nfn main() {}\n"),
+            heading("```\nAda\n===\n```\n"),
         );
         assert_eq!(inside, (None, None));
     }
@@ -218,9 +259,9 @@ mod tests {
     #[test]
     fn a_note_with_no_heading_at_all_has_no_title() {
         let found = (
-            read(""),
-            read("just prose\nand more\n"),
-            read("    indented\n"),
+            heading(""),
+            heading("just prose\nand more\n"),
+            heading("    indented\n"),
         );
         assert_eq!(found, (None, None, None));
     }
@@ -230,6 +271,37 @@ mod tests {
         // CommonMark: an indented code block cannot interrupt a paragraph, so
         // the underline below still finds the text above it.
         assert_eq!(titled("Ada\n    continued\n===\n"), "continued");
+    }
+
+    #[test]
+    fn a_body_answers_its_title_and_the_references_its_prose_writes() {
+        let prose = "# Ada Lovelace\n\nWorked with [[Charles Babbage]] on [[Analytical Engine]].\n";
+        let body = read(prose.to_owned(), LinkDialect::Wikilink);
+        assert_eq!(body.text, prose, "the body is carried uninterpreted");
+        assert_eq!(body.title.as_deref(), Some("Ada Lovelace"));
+        let written: Vec<&str> = body
+            .references
+            .iter()
+            .map(|reference| reference.written.as_str())
+            .collect();
+        assert_eq!(written, ["[[Charles Babbage]]", "[[Analytical Engine]]"]);
+        assert!(
+            body.references
+                .iter()
+                .all(|reference| reference.target.is_none()),
+            "resolution is a question about the corpus, answered elsewhere"
+        );
+    }
+
+    #[test]
+    fn a_reference_inside_a_code_fence_is_still_a_reference() {
+        // The title scan steps over fences because a heading in one is code;
+        // link extraction does not, because "the body is untouched beyond link
+        // extraction" leaves the kernel no block structure to consult, and a
+        // dangling untyped reference is a finding at no severity anyway.
+        let body = read("```\n[[Ada]]\n```\n".to_owned(), LinkDialect::Wikilink);
+        assert_eq!(body.references.len(), 1);
+        assert_eq!(body.title, None);
     }
 
     #[test]

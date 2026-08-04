@@ -20,7 +20,7 @@ use crate::contract::Contract;
 use crate::diagnostic::{Diagnostic, KernelDiagnostic, Location, VaultPath};
 use crate::encoding::{self, EncodingFault, Reading};
 
-use super::body;
+use super::body::{self, Body};
 use super::findings::Findings;
 use super::frontmatter::{self, Fault, FaultKind, Front};
 use super::model::{Binding, Note};
@@ -73,7 +73,13 @@ fn from_text(subject: Subject<'_>, reading: Reading) -> Read {
     for fault in &parsed.faults {
         frontmatter_fault(&mut findings, fault);
     }
-    let body = reading.text.as_str()[parsed.body].to_owned();
+    // The body is read whatever the frontmatter turned out to be: its title and
+    // its untyped references are properties of the prose, and no declaration
+    // bears on either.
+    let body = body::read(
+        reading.text.as_str()[parsed.body].to_owned(),
+        subject.contract.dialect().links(),
+    );
     let note = build(&mut findings, subject, &parsed.front, body);
     Read {
         note: Some(note),
@@ -82,7 +88,7 @@ fn from_text(subject: Subject<'_>, reading: Reading) -> Read {
 }
 
 /// The document model, once the note's frontmatter is in hand.
-fn build(findings: &mut Findings<'_>, subject: Subject<'_>, front: &Front, body: String) -> Note {
+fn build(findings: &mut Findings<'_>, subject: Subject<'_>, front: &Front, body: Body) -> Note {
     let (path, contract) = (subject.path, subject.contract);
     // A block that did not load leaves no discriminator to read and no keys to
     // hold against a type. Binding it to the catch-all would treat a refusal as
@@ -101,22 +107,24 @@ fn build(findings: &mut Findings<'_>, subject: Subject<'_>, front: &Front, body:
         binding: bound.binding,
         properties: contents.properties,
         relationships: contents.relationships,
+        references: body.references,
         tags: contents.tags,
-        title: body::title(&body),
-        body,
+        title: body.title,
+        body: body.text,
     }
 }
 
 /// A note that bound to no type, and so carries nothing type-directed.
-fn bare(path: &VaultPath, binding: Binding, body: String) -> Note {
+fn bare(path: &VaultPath, binding: Binding, body: Body) -> Note {
     Note {
         path: path.clone(),
         binding,
         properties: Vec::new(),
         relationships: Vec::new(),
+        references: body.references,
         tags: Vec::new(),
-        title: body::title(&body),
-        body,
+        title: body.title,
+        body: body.text,
     }
 }
 

@@ -202,20 +202,16 @@ fn relationships(
 ///
 /// A reference is carried exactly as the note wrote it, delimiters included:
 /// which note it names is a question about the corpus, answered where the whole
-/// corpus is in hand. An empty scalar is *no* edge rather than an empty one — a
-/// key with nothing after it claims no relationship.
+/// corpus is in hand. Its **location** is carried with it for the same reason —
+/// by the time the corpus is in hand this note's text is gone, and a `link.*`
+/// finding is addressed to the reference itself. An empty scalar is *no* edge
+/// rather than an empty one: a key with nothing after it claims no
+/// relationship.
 fn edges(findings: &mut Findings<'_>, predicate: &str, value: &Value) -> Vec<Edge> {
     match &value.shape {
         Shape::Scalar(text) if text.is_empty() => Vec::new(),
-        Shape::Scalar(text) => vec![edge(text)],
-        Shape::Sequence(items) => items
-            .iter()
-            .map(|item| item.scalar().map(edge))
-            .collect::<Option<Vec<Edge>>>()
-            .unwrap_or_else(|| {
-                relationship_invalid(findings, predicate, value);
-                Vec::new()
-            }),
+        Shape::Scalar(text) => vec![edge(findings, text, value)],
+        Shape::Sequence(items) => sequence(findings, predicate, value, items),
         Shape::Mapping(_) => {
             relationship_invalid(findings, predicate, value);
             Vec::new()
@@ -223,10 +219,32 @@ fn edges(findings: &mut Findings<'_>, predicate: &str, value: &Value) -> Vec<Edg
     }
 }
 
-fn edge(written: &str) -> Edge {
+/// A sequence of links, which is every item or none: one item that is not a
+/// link makes the value not a sequence of links.
+fn sequence(
+    findings: &mut Findings<'_>,
+    predicate: &str,
+    value: &Value,
+    items: &[Value],
+) -> Vec<Edge> {
+    let read: Option<Vec<Edge>> = items
+        .iter()
+        .map(|item| Some(edge(findings, item.scalar()?, item)))
+        .collect();
+    match read {
+        Some(edges) => edges,
+        None => {
+            relationship_invalid(findings, predicate, value);
+            Vec::new()
+        }
+    }
+}
+
+fn edge(findings: &Findings<'_>, written: &str, value: &Value) -> Edge {
     Edge {
         written: written.to_owned(),
         target: None,
+        at: findings.at(value.span.clone()),
     }
 }
 

@@ -47,8 +47,14 @@ toolchain = "nightly-2026-07-30"
 # named test, including the ones a note only meets by accident: a tab in the
 # indentation, an alias, a duplicate key, a shape nested past what the subset
 # reads, a leap day, and a byte order mark on a file with carriage returns.
-line = 99.49
-branch = 99.23
+# Link resolution raised the line number once more and the branch number a
+# little. The name index, the two dialects' grammars and the resolution pass are
+# small and wholly reached from tests — a bare name that one note bears and that
+# two bear, a path-qualified reference with and without its extension, a
+# reference each dialect does and does not spell, a body reference that resolves
+# and one that does not, and a caller's reference that names nothing.
+line = 99.51
+branch = 99.24
 
 [thresholds]
 line = 95.0

@@ -212,6 +212,25 @@ pub enum KernelDiagnostic {
     /// untouched at any severity: tags are content, and a corpus is never asked to
     /// enumerate all of it.
     NoteTagOutsideVocabulary,
+    /// A typed link's reference names no note in the corpus.
+    ///
+    /// A relationship was claimed, so the reference must resolve: an edge with a dangling
+    /// endpoint is not a relationship, it is a string. An *untyped* prose reference is
+    /// deliberately not this — it belongs in prose until its target exists, so a dangling
+    /// one is a finding at no severity.
+    LinkDanglingTypedLink,
+    /// A bare name several notes bear, so it names none of them.
+    ///
+    /// Ambiguity is a defect of the link rather than of the corpus, so it is reported
+    /// against the reference and carries every candidate as evidence. Two notes sharing a
+    /// name with nothing referencing the bare name is a finding at no severity.
+    LinkAmbiguousReference,
+    /// A reference a caller supplied names no note this vault holds.
+    ///
+    /// The caller's counterpart to `link.dangling-typed-link`, and a different finding for
+    /// a different subject: nothing is wrong with the corpus, which claimed nothing — the
+    /// reference in hand simply names no note. This is what `show <ref>` refuses with.
+    LinkTargetNotFound,
     /// The installation record could not be read.
     InstallationUnreadable,
     /// The installation record is not valid UTF-8.
@@ -602,6 +621,21 @@ const REGISTRY: &[(KernelDiagnostic, &str, Severity)] = &[
         Severity::Error,
     ),
     (
+        KernelDiagnostic::LinkDanglingTypedLink,
+        "link.dangling-typed-link",
+        Severity::Error,
+    ),
+    (
+        KernelDiagnostic::LinkAmbiguousReference,
+        "link.ambiguous-reference",
+        Severity::Error,
+    ),
+    (
+        KernelDiagnostic::LinkTargetNotFound,
+        "link.target-not-found",
+        Severity::Error,
+    ),
+    (
         KernelDiagnostic::InstallationUnreadable,
         "installation.unreadable",
         Severity::Error,
@@ -863,6 +897,7 @@ fn expected_id(kind: KernelDiagnostic) -> &'static str {
         "discovery" => expected_discovery_id(kind),
         "contract" => expected_contract_id(kind),
         "note" => expected_note_id(kind),
+        "link" => expected_link_id(kind),
         "installation" => expected_installation_id(kind),
         _ => expected_compat_id(kind),
     }
@@ -963,6 +998,16 @@ macro_rules! note_variants {
     };
 }
 
+/// Every `link.*` variant, as one pattern.
+#[cfg(test)]
+macro_rules! link_variants {
+    () => {
+        KernelDiagnostic::LinkDanglingTypedLink
+            | KernelDiagnostic::LinkAmbiguousReference
+            | KernelDiagnostic::LinkTargetNotFound
+    };
+}
+
 /// Every `installation.*` variant, as one pattern.
 #[cfg(test)]
 macro_rules! installation_variants {
@@ -1010,6 +1055,7 @@ fn expected_area(kind: KernelDiagnostic) -> &'static str {
         discovery_variants!() => "discovery",
         contract_variants!() => "contract",
         note_variants!() => "note",
+        link_variants!() => "link",
         installation_variants!() => "installation",
         compat_variants!() => "compat",
     }
@@ -1109,6 +1155,18 @@ fn expected_note_id(kind: KernelDiagnostic) -> &'static str {
     }
 }
 
+/// The identifier each `link.*` variant carries, and `""` for any other area.
+#[cfg(test)]
+fn expected_link_id(kind: KernelDiagnostic) -> &'static str {
+    use KernelDiagnostic::*;
+    match kind {
+        LinkDanglingTypedLink => "link.dangling-typed-link",
+        LinkAmbiguousReference => "link.ambiguous-reference",
+        LinkTargetNotFound => "link.target-not-found",
+        _ => "",
+    }
+}
+
 /// The identifier each `installation.*` variant carries, and `""` for any other area.
 #[cfg(test)]
 fn expected_installation_id(kind: KernelDiagnostic) -> &'static str {
@@ -1172,9 +1230,16 @@ mod tests {
     use super::*;
     use std::collections::BTreeSet;
 
-    /// The areas the kernel claims: M2's four, plus `note` for a single note's
-    /// own structure.
-    const AREAS: &[&str] = &["discovery", "contract", "note", "installation", "compat"];
+    /// The areas the kernel claims: M2's four, plus M3's two — `note` for a
+    /// single note's own structure, `link` for resolution between notes.
+    const AREAS: &[&str] = &[
+        "discovery",
+        "contract",
+        "note",
+        "link",
+        "installation",
+        "compat",
+    ];
 
     #[test]
     fn every_variant_carries_the_identifier_it_declares() {
@@ -1197,6 +1262,7 @@ mod tests {
         assert_eq!(expected_installation_id(contract), "");
         assert_eq!(expected_compat_id(contract), "");
         assert_eq!(expected_note_id(contract), "");
+        assert_eq!(expected_link_id(contract), "");
         let discovery = KernelDiagnostic::DiscoveryNestedVault;
         assert_eq!(expected_contract_id(discovery), "");
     }
