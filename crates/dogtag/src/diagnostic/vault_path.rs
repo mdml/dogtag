@@ -30,19 +30,21 @@ use std::path::Path;
 pub struct VaultPath(String);
 
 impl VaultPath {
-    /// `path` expressed relative to `root`, or `None` when it is not inside it.
+    /// `path` expressed relative to `root`, or `None` when it is not inside
+    /// it — or when a component's name is not valid UTF-8, because a spelling
+    /// rendered lossily would name a file that does not exist. Whoever met
+    /// the path says so honestly instead; nothing reads through a respelling.
     ///
     /// The comparison is lexical: both paths are expected to be canonical
     /// already, because a vault root is, and re-resolving here would make a
     /// rendering into a filesystem operation.
     pub(crate) fn under(root: &Path, path: &Path) -> Option<Self> {
         let relative = path.strip_prefix(root).ok()?;
-        let spelling = relative
+        let components = relative
             .components()
-            .map(|component| component.as_os_str().to_string_lossy())
-            .collect::<Vec<_>>()
-            .join("/");
-        Some(Self(spelling))
+            .map(|component| component.as_os_str().to_str())
+            .collect::<Option<Vec<_>>>()?;
+        Some(Self(components.join("/")))
     }
 
     /// One of the kernel's own committed paths.
@@ -94,6 +96,17 @@ mod tests {
     fn a_path_outside_the_root_has_no_vault_relative_spelling() {
         assert!(VaultPath::under(&root(), Path::new("/data/vaults/other/note.md")).is_none());
         assert!(VaultPath::under(&root(), Path::new("relative/note.md")).is_none());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_path_with_a_name_that_is_not_utf_8_has_no_spelling_either() {
+        // A lossy respelling would name a file that does not exist; the walk
+        // that met the path reports the name honestly instead.
+        use std::ffi::OsStr;
+        use std::os::unix::ffi::OsStrExt;
+        let path = root().join(OsStr::from_bytes(b"bad\xffname.md"));
+        assert!(VaultPath::under(&root(), &path).is_none());
     }
 
     #[test]

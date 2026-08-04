@@ -42,7 +42,9 @@ use std::fs::{self, FileType};
 use std::io;
 use std::path::Path;
 
-use crate::diagnostic::{Diagnostic, DiagnosticList, KernelDiagnostic, VaultPath};
+use crate::diagnostic::{
+    Diagnostic, DiagnosticList, FileRef, KernelDiagnostic, Location, VaultPath,
+};
 use crate::vault::VaultRoot;
 
 /// The extension that makes a file a note.
@@ -105,11 +107,15 @@ impl Walk<'_> {
         match entries(path) {
             Ok(found) => {
                 for entry in found {
-                    let name = entry.name.to_string_lossy();
-                    self.entry(&path.join(&entry.name), &join(relative, &name), entry.kind);
+                    match entry.name.to_str() {
+                        Some(name) => {
+                            self.entry(&path.join(name), &join(relative, name), entry.kind);
+                        }
+                        None => self.nameless(relative, &entry),
+                    }
                 }
             }
-            Err(error) => self.unreadable(relative, &error),
+            Err(error) => self.unreadable(path, relative, &error),
         }
     }
 
@@ -124,21 +130,68 @@ impl Walk<'_> {
             }
         } else if is_note(path) {
             // The `None` a path outside the root would give cannot arise: every
-            // path here was joined onto the root. Extending over the option
-            // says so without a branch that could never be taken.
+            // path here was joined onto the root, out of names already known to
+            // be valid UTF-8. Extending over the option says so without a
+            // branch that could never be taken.
             self.notes.extend(self.root.relative(path));
         }
     }
 
-    fn unreadable(&mut self, relative: &str, error: &io::Error) {
+    /// A directory that could not be enumerated, located at its vault-relative
+    /// path exactly as an unreadable note is. Never an abort: one unreadable
+    /// corner must not make the corpus unreadable.
+    fn unreadable(&mut self, path: &Path, relative: &str, error: &io::Error) {
+        let at = self
+            .root
+            .relative(path)
+            .map(|directory| Location::whole_file(FileRef::InVault(directory)));
+        self.diagnostics.push(Diagnostic {
+            location: at,
+            ..Diagnostic::kernel(
+                KernelDiagnostic::NoteUnreadable,
+                format!(
+                    "the directory `{}` could not be read: {error}",
+                    spell(relative)
+                ),
+            )
+        });
+    }
+
+    /// An entry whose name is not valid UTF-8, which the vault-relative
+    /// spelling cannot hold.
+    ///
+    /// Reading on through a lossy respelling would misreport the failure as
+    /// the file's absence — so the walk stops at the honest fact instead, and
+    /// only for an entry it would otherwise have read: a symlink, a hidden
+    /// directory, and a file that is not a note are passed over exactly as
+    /// their well-named counterparts are. The diagnostic carries no structured
+    /// location, because the one thing a location holds is the spelling this
+    /// name does not have.
+    fn nameless(&mut self, relative: &str, entry: &Entry) {
+        if !read_despite_name(entry) {
+            return;
+        }
+        let name = join(relative, &entry.name.to_string_lossy());
         self.diagnostics.push(Diagnostic::kernel(
             KernelDiagnostic::NoteUnreadable,
-            format!(
-                "the directory `{}` could not be read: {error}",
-                spell(relative)
-            ),
+            format!("`{name}` could not be read: its name is not valid UTF-8"),
         ));
     }
+}
+
+/// Whether a badly named entry would have been read under a well-formed name.
+///
+/// The membership rules run on the name the entry actually has: a symlink is
+/// never followed, a hidden directory is invisible wholesale, and only the
+/// note extension makes a file a note.
+fn read_despite_name(entry: &Entry) -> bool {
+    if entry.kind.is_symlink() {
+        return false;
+    }
+    if entry.kind.is_dir() {
+        return !entry.name.to_string_lossy().starts_with('.');
+    }
+    is_note(Path::new(&entry.name))
 }
 
 /// One directory entry, with the type the listing already knew.
@@ -150,9 +203,9 @@ struct Entry {
 /// Every entry of one directory, sorted by name.
 ///
 /// The sort is what the notes' own sort cannot do for the walk's diagnostics:
-/// two unreadable directories share an identifier and carry no location, so the
-/// total order leaves them tied and a stable sort keeps the order they were
-/// emitted in — which is this one.
+/// two entries whose names are not valid UTF-8 share an identifier and carry no
+/// location, so the total order leaves them tied and a stable sort keeps the
+/// order they were emitted in — which is this one.
 ///
 /// A single entry that cannot be classified fails the whole listing, which is
 /// what keeps the walk's error handling to one place: a directory is either
@@ -315,10 +368,75 @@ mod tests {
         assert_eq!(ids(&traversal), ["note.unreadable"]);
         let reported = &traversal.diagnostics()[0];
         assert!(reported.message.contains("the directory `.`"));
+        assert_eq!(
+            reported.location,
+            Some(Location::whole_file(FileRef::InVault(VaultPath::kernel(
+                ""
+            )))),
+            "the vault-relative directory path is a structured location, exactly as an \
+             unreadable note's is; only a machine path never becomes one"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn an_entry_whose_name_is_not_utf_8_is_reported_honestly_rather_than_read_lossily() {
+        use std::ffi::OsStr;
+        use std::os::unix::ffi::OsStrExt;
+        let tree = Tree::new("traverse-nameless");
+        let root = vault(&tree, "nameless", &["kept.md"]);
+        fs::write(
+            root.path().join(OsStr::from_bytes(b"bad\xffname.md")),
+            "body\n",
+        )
+        .expect("a file this test owns");
+        fs::create_dir(root.path().join(OsStr::from_bytes(b"dir\xff")))
+            .expect("a directory this test owns");
+        let traversal = traverse(&root);
+        assert_eq!(found(&traversal), ["kept.md"]);
+        assert_eq!(ids(&traversal), ["note.unreadable", "note.unreadable"]);
+        let messages: Vec<&str> = traversal
+            .diagnostics()
+            .iter()
+            .map(|diagnostic| diagnostic.message.as_str())
+            .collect();
+        for message in &messages {
+            assert!(
+                message.contains("its name is not valid UTF-8"),
+                "the failure is the name, never a misleading `No such file or directory`: \
+                 {message}"
+            );
+            assert!(
+                !message.contains("No such file"),
+                "nothing read through a lossy respelling: {message}"
+            );
+        }
+        assert!(messages[0].contains("bad\u{fffd}name.md"), "{messages:?}");
+        assert!(messages[1].contains("dir\u{fffd}"), "{messages:?}");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_badly_named_entry_the_walk_would_not_have_read_stays_as_silent_as_ever() {
+        use std::ffi::OsStr;
+        use std::os::unix::ffi::OsStrExt;
+        let tree = Tree::new("traverse-nameless-silent");
+        let root = vault(&tree, "nameless-silent", &["kept.md"]);
+        fs::write(root.path().join(OsStr::from_bytes(b"image\xff.png")), [])
+            .expect("a file this test owns");
+        fs::create_dir(root.path().join(OsStr::from_bytes(b".hidden\xff")))
+            .expect("a directory this test owns");
+        std::os::unix::fs::symlink(
+            root.path().join("kept.md"),
+            root.path().join(OsStr::from_bytes(b"alias\xff.md")),
+        )
+        .expect("a symlink this test owns");
+        let traversal = traverse(&root);
+        assert_eq!(found(&traversal), ["kept.md"]);
+        let reported = ids(&traversal);
         assert!(
-            reported.location.is_none(),
-            "a diagnostic about a directory names it in the message: a machine path is never a \
-             structured location"
+            reported.is_empty(),
+            "passed over whatever their names: {reported:?}"
         );
     }
 

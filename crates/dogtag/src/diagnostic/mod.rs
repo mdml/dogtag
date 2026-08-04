@@ -97,9 +97,12 @@ pub struct Diagnostic {
     pub message: String,
     /// Where it is, when a structured location exists.
     ///
-    /// Diagnostics about a *directory* deliberately carry `None` and name the
-    /// directory in their message: a machine path is never a structured
-    /// location, which is what keeps conformance goldens machine-independent.
+    /// A subject with no vault-relative spelling — a caller-supplied
+    /// reference, or a file whose name cannot be spelled — deliberately
+    /// carries `None` and is named in the message instead: a machine path is
+    /// never a structured location, which is what keeps conformance goldens
+    /// machine-independent. A directory *inside* the vault has a spelling like
+    /// any note's, and is located by it.
     pub location: Option<Location>,
     /// Other places worth looking.
     pub related: Vec<Related>,
