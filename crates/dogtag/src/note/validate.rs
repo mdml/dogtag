@@ -34,7 +34,7 @@
 use crate::contract::{Contract, PropertyDecl, RelationshipDecl, TagNamespaceDecl, TypeDecl};
 use crate::diagnostic::{KernelDiagnostic, Related};
 
-use super::findings::Findings;
+use super::findings::{Findings, declaration};
 use super::frontmatter::{Entry, Shape, Value};
 use super::lexical;
 use super::model::{Binding, Edge, Property, Relationship};
@@ -158,7 +158,11 @@ fn properties(
     for property in declared.properties() {
         match written(entries, property.name()) {
             Some(value) => {
-                let read = values::property(findings, property.name(), property.kind(), value);
+                let read = values::property(
+                    findings,
+                    &values::Declared::new(contract, declared.name(), property),
+                    value,
+                );
                 carried.extend(read.map(|value| Property {
                     name: property.name().to_owned(),
                     value,
@@ -221,23 +225,28 @@ fn edges(findings: &mut Findings<'_>, predicate: &str, value: &Value) -> Vec<Edg
 
 /// A sequence of links, which is every item or none: one item that is not a
 /// link makes the value not a sequence of links.
+///
+/// An empty item claims no edge, exactly as the bare empty scalar does: the
+/// spelling differs, and what the note claims does not.
 fn sequence(
     findings: &mut Findings<'_>,
     predicate: &str,
     value: &Value,
     items: &[Value],
 ) -> Vec<Edge> {
-    let read: Option<Vec<Edge>> = items
+    let read: Option<Vec<(&str, &Value)>> = items
         .iter()
-        .map(|item| Some(edge(findings, item.scalar()?, item)))
+        .map(|item| item.scalar().map(|text| (text, item)))
         .collect();
-    match read {
-        Some(edges) => edges,
-        None => {
-            relationship_invalid(findings, predicate, value);
-            Vec::new()
-        }
-    }
+    let Some(scalars) = read else {
+        relationship_invalid(findings, predicate, value);
+        return Vec::new();
+    };
+    scalars
+        .into_iter()
+        .filter(|(text, _)| !text.is_empty())
+        .map(|(text, item)| edge(findings, text, item))
+        .collect()
 }
 
 fn edge(findings: &Findings<'_>, written: &str, value: &Value) -> Edge {
@@ -422,21 +431,6 @@ fn relationship_invalid(findings: &mut Findings<'_>, predicate: &str, value: &Va
         ),
         value.span.clone(),
     );
-}
-
-/// Evidence pointing at where the contract writes the requirement.
-///
-/// A requirement is always written rather than defaulted — `required` defaults
-/// to `false` — so the provenance the contract already recorded is the location,
-/// and evidence with no location is what a contract assembled some other way
-/// gets.
-fn declaration(contract: &Contract, key: &str, message: String) -> Related {
-    let mut related = Related::new(message);
-    related.location = contract
-        .provenance()
-        .get(key)
-        .and_then(|entry| entry.location.clone());
-    related
 }
 
 #[cfg(test)]

@@ -13,28 +13,71 @@
 //! identifiers with the field path in the message: a record is a property whose
 //! value has parts, not a second schema language.
 
-use crate::contract::{FieldDecl, FieldKind, PropertyKind, ScalarKind};
-use crate::diagnostic::{KernelDiagnostic, Related};
+use crate::contract::{Contract, FieldDecl, FieldKind, PropertyDecl, PropertyKind, ScalarKind};
+use crate::diagnostic::KernelDiagnostic;
 
-use super::findings::Findings;
+use super::findings::{Findings, declaration};
 use super::frontmatter::{Entry, Value};
 use super::lexical;
 use super::model::{FieldValue, PropertyValue, RecordValue};
 
+/// One declared property, and where the contract declares it.
+///
+/// The provenance prefix travels with the declaration so that a finding about
+/// a missing record field can point its evidence at the field's own
+/// `required = true` leaf, exactly as a missing property's evidence points at
+/// the property's.
+pub(crate) struct Declared<'a> {
+    contract: &'a Contract,
+    property: &'a PropertyDecl,
+    /// The provenance prefix `type.<type>.property.<name>`.
+    prefix: String,
+}
+
+impl<'a> Declared<'a> {
+    /// The declaration `property` is, on the type named `type_name`.
+    pub(crate) fn new(contract: &'a Contract, type_name: &str, property: &'a PropertyDecl) -> Self {
+        Self {
+            contract,
+            property,
+            prefix: format!("type.{type_name}.property.{}", property.name()),
+        }
+    }
+
+    /// The record fields `declared`, carried with where they are declared.
+    fn fields<'b>(&'b self, declared: &'b [FieldDecl]) -> Fields<'b> {
+        Fields {
+            contract: self.contract,
+            prefix: &self.prefix,
+            declared,
+        }
+    }
+}
+
+/// A record's declared fields, and where the contract declares them.
+struct Fields<'a> {
+    contract: &'a Contract,
+    /// The provenance prefix `type.<type>.property.<name>` the field leaves
+    /// sit under — never carrying a sequence index, because every element of a
+    /// list of records is declared by the same fields.
+    prefix: &'a str,
+    declared: &'a [FieldDecl],
+}
+
 /// The value a note wrote for a declared property, when its shape admits one.
 pub(crate) fn property(
     findings: &mut Findings<'_>,
-    path: &str,
-    kind: &PropertyKind,
+    source: &Declared<'_>,
     value: &Value,
 ) -> Option<PropertyValue> {
+    let (path, kind) = (source.property.name(), source.property.kind());
     let read = match kind {
-        PropertyKind::Record { fields } => value
-            .mapping()
-            .map(|entries| PropertyValue::Record(record(findings, path, fields, entries))),
-        PropertyKind::ListOfRecord { fields } => value
-            .sequence()
-            .map(|items| PropertyValue::RecordList(records(findings, path, fields, items))),
+        PropertyKind::Record { fields } => value.mapping().map(|entries| {
+            PropertyValue::Record(record(findings, &source.fields(fields), path, entries))
+        }),
+        PropertyKind::ListOfRecord { fields } => value.sequence().map(|items| {
+            PropertyValue::RecordList(records(findings, &source.fields(fields), path, items))
+        }),
         PropertyKind::List { of } => value
             .sequence()
             .map(|items| PropertyValue::List(elements(findings, path, *of, items))),
@@ -88,15 +131,15 @@ fn elements(
 /// Every element of a `list` of `record`, each held to the same fields.
 fn records(
     findings: &mut Findings<'_>,
+    fields: &Fields<'_>,
     path: &str,
-    fields: &[FieldDecl],
     items: &[Value],
 ) -> Vec<RecordValue> {
     let mut records = Vec::new();
     for (index, item) in items.iter().enumerate() {
         let path = format!("{path}[{index}]");
         match item.mapping() {
-            Some(entries) => records.push(record(findings, &path, fields, entries)),
+            Some(entries) => records.push(record(findings, fields, &path, entries)),
             None => mismatch(findings, &path, "`record`", item),
         }
     }
@@ -106,28 +149,28 @@ fn records(
 /// One record value: its declared fields, and what the note wrote for them.
 fn record(
     findings: &mut Findings<'_>,
+    fields: &Fields<'_>,
     path: &str,
-    fields: &[FieldDecl],
     entries: &[Entry],
 ) -> RecordValue {
-    let values = declared(findings, path, fields, entries);
-    undeclared(findings, path, fields, entries);
+    let values = declared(findings, fields, path, entries);
+    undeclared(findings, path, fields.declared, entries);
     RecordValue { fields: values }
 }
 
 /// Every declared field, in declaration order, with what the note wrote.
 fn declared(
     findings: &mut Findings<'_>,
+    fields: &Fields<'_>,
     path: &str,
-    fields: &[FieldDecl],
     entries: &[Entry],
 ) -> Vec<FieldValue> {
     let mut values = Vec::new();
-    for field in fields {
+    for field in fields.declared {
         let path = format!("{path}.{}", field.name());
         match entries.iter().find(|entry| entry.key == field.name()) {
             Some(entry) => values.push(field_value(findings, &path, field, entry)),
-            None if field.required() => missing_field(findings, &path, field),
+            None if field.required() => missing_field(findings, fields, &path, field),
             None => {}
         }
     }
@@ -164,14 +207,21 @@ fn field_value(
     }
 }
 
-fn missing_field(findings: &mut Findings<'_>, path: &str, field: &FieldDecl) {
+/// A required field the note does not write, with evidence pointing at the
+/// field's own `required = true` leaf — exactly as a missing property's
+/// evidence points at the property's.
+fn missing_field(findings: &mut Findings<'_>, fields: &Fields<'_>, path: &str, field: &FieldDecl) {
     findings.absent(
         KernelDiagnostic::NoteMissingRequiredProperty,
         format!("the record requires the field `{path}`, and the note writes no value for it"),
-        Related::new(format!(
-            "the field is declared {} and required",
-            field.kind().describe()
-        )),
+        declaration(
+            fields.contract,
+            &format!("{}.field.{}.required", fields.prefix, field.name()),
+            format!(
+                "the field is declared {} and required",
+                field.kind().describe()
+            ),
+        ),
     );
 }
 

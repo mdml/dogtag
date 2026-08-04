@@ -17,10 +17,28 @@
 
 use core::ops::Range;
 
+use crate::contract::Contract;
 use crate::diagnostic::{
     Diagnostic, DiagnosticList, FileRef, KernelDiagnostic, Location, Related, VaultPath,
 };
 use crate::encoding::Text;
+
+/// Evidence pointing at where the contract writes the requirement.
+///
+/// A requirement is always written rather than defaulted — `required` defaults
+/// to `false` — so the provenance the contract already recorded is the location,
+/// and evidence with no location is what a contract assembled some other way
+/// gets. It sits beside [`Findings`] because it is one rule with two callers: a
+/// missing property's evidence and a missing record field's point at their
+/// declarations identically.
+pub(crate) fn declaration(contract: &Contract, key: &str, message: String) -> Related {
+    let mut related = Related::new(message);
+    related.location = contract
+        .provenance()
+        .get(key)
+        .and_then(|entry| entry.location.clone());
+    related
+}
 
 /// One note's diagnostics, and what they point at.
 pub(crate) struct Findings<'a> {
