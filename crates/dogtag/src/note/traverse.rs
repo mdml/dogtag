@@ -28,6 +28,14 @@
 //! before the walk descends, so what the filesystem happened to hand back is
 //! unobservable — including through the stable sort that carries diagnostics
 //! sharing a location and an identifier, which the total order leaves tied.
+//!
+//! Sorting each directory's entries is not on its own the path order, and the
+//! notes are sorted again before they are answered. A directory sorts by its
+//! own name, so the walk meets `projects/` before `projects.md`; the paths sort
+//! the other way, because `.` precedes `/`. Answering walk order would put a
+//! folder note after the folder's notes while every diagnostic carrying those
+//! same paths came out the other way round — two accessors of one traversal
+//! contradicting each other.
 
 use std::ffi::OsString;
 use std::fs::{self, FileType};
@@ -76,8 +84,10 @@ pub fn traverse(root: &VaultRoot) -> Traversal {
         diagnostics: DiagnosticList::new(),
     };
     walk.directory(root.path(), "");
+    let mut notes = walk.notes;
+    notes.sort_unstable();
     Traversal {
-        notes: walk.notes,
+        notes,
         diagnostics: walk.diagnostics.sorted(),
     }
 }
@@ -138,6 +148,11 @@ struct Entry {
 }
 
 /// Every entry of one directory, sorted by name.
+///
+/// The sort is what the notes' own sort cannot do for the walk's diagnostics:
+/// two unreadable directories share an identifier and carry no location, so the
+/// total order leaves them tied and a stable sort keeps the order they were
+/// emitted in — which is this one.
 ///
 /// A single entry that cannot be classified fails the whole listing, which is
 /// what keeps the walk's error handling to one place: a directory is either
@@ -316,6 +331,26 @@ mod tests {
         sorted.sort_unstable();
         assert_eq!(found(&traversal), sorted);
         assert_eq!(sorted, ["a.md", "m/a.md", "m/b.md", "z.md"]);
+    }
+
+    #[test]
+    fn a_folder_note_beside_its_own_folder_still_comes_out_in_path_order() {
+        // The one shape where sorting each directory's entries is not the path
+        // order: the walk meets `projects` before `projects.md`, because a
+        // directory sorts by its own name, while the joined paths sort the
+        // other way because `.` precedes `/`. Answering walk order here would
+        // disagree with the order the diagnostics carrying those paths take.
+        let tree = Tree::new("traverse-folder-note");
+        let root = vault(
+            &tree,
+            "folder-note",
+            &["projects/beta.md", "projects/alpha.md", "projects.md"],
+        );
+        let traversal = traverse(&root);
+        assert_eq!(
+            found(&traversal),
+            ["projects.md", "projects/alpha.md", "projects/beta.md"]
+        );
     }
 
     #[test]
