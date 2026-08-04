@@ -21,11 +21,22 @@
 //!   is `link.target-not-found`, and [`UnresolvedReference`] is what carries it
 //!   back.
 //!
-//! Ambiguity is the one finding both authored and caller-supplied references
-//! share, because it is a defect of the reference in both: `link.ambiguous-
-//! reference`, against the reference, carrying every candidate as evidence.
-//! Two notes sharing a name with nothing referencing the bare name is a finding
-//! at no severity — this rule only ever fires where something asked.
+//! # Ambiguity is every door's finding, including prose
+//!
+//! `link.ambiguous-reference` fires at all three doors, against the reference,
+//! carrying every candidate as evidence. The record states the ambiguity rule
+//! without qualifying it by plane, and carves out only *danglingness* for an
+//! untyped reference — with a reason that does not reach ambiguity: a prose
+//! reference "belongs in prose until its target exists", and an ambiguous
+//! reference's targets all exist. It names none of them, which is the
+//! markdown-flavor position that **ambiguity is a defect of the link, not of
+//! the corpus**. The record's other half of the rule points the same way: two
+//! notes sharing a name is a finding at no severity *"with nothing referencing
+//! the bare name"*, and a body that writes the bare name is something
+//! referencing it.
+//!
+//! So the plane decides one thing only — whether *absence* is reported — and
+//! nothing else.
 
 use crate::contract::LinkDialect;
 use crate::diagnostic::{Diagnostic, FileRef, KernelDiagnostic, Location, Related, VaultPath};
@@ -73,8 +84,9 @@ impl Resolver {
             reported.extend(refused);
         }
         for reference in &mut note.references {
-            let named = self.named(&reference.written);
-            reference.target = named.only();
+            let (target, refused) = self.prose(&reference.written, &reference.at);
+            reference.target = target;
+            reported.extend(refused);
         }
         reported
     }
@@ -82,14 +94,29 @@ impl Resolver {
     /// One typed link: the note it names, and what to report when that is not
     /// exactly one note.
     fn link(&self, written: &str, at: &Location) -> (Option<VaultPath>, Option<Diagnostic>) {
-        let reference = links::reference(self.dialect, written);
         match self.named(written) {
             Named::One(path) => (Some(path), None),
-            Named::Ambiguous(candidates) => {
-                (None, Some(ambiguous(reference, &candidates).at(at.clone())))
-            }
-            Named::Absent => (None, Some(dangling(reference).at(at.clone()))),
+            Named::Ambiguous(candidates) => (None, Some(self.ambiguity(written, &candidates, at))),
+            Named::Absent => (
+                None,
+                Some(dangling(links::reference(self.dialect, written)).at(at.clone())),
+            ),
         }
+    }
+
+    /// One untyped reference in prose: the same rule, minus the one finding a
+    /// claimless reference cannot carry.
+    fn prose(&self, written: &str, at: &Location) -> (Option<VaultPath>, Option<Diagnostic>) {
+        match self.named(written) {
+            Named::One(path) => (Some(path), None),
+            Named::Ambiguous(candidates) => (None, Some(self.ambiguity(written, &candidates, at))),
+            Named::Absent => (None, None),
+        }
+    }
+
+    /// A bare name this corpus's own text wrote and several notes bear.
+    fn ambiguity(&self, written: &str, candidates: &[VaultPath], at: &Location) -> Diagnostic {
+        ambiguous(links::reference(self.dialect, written), candidates).at(at.clone())
     }
 
     /// What a reference names, read in this corpus's declared dialect.
@@ -112,16 +139,6 @@ enum Named {
     One(VaultPath),
     Ambiguous(Vec<VaultPath>),
     Absent,
-}
-
-impl Named {
-    /// The one note named, when exactly one was.
-    fn only(self) -> Option<VaultPath> {
-        match self {
-            Self::One(path) => Some(path),
-            _ => None,
-        }
-    }
 }
 
 /// Why a reference a caller supplied named no note.

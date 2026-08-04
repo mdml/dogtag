@@ -45,19 +45,21 @@ pub(crate) fn reference(dialect: LinkDialect, written: &str) -> &str {
     Grammar::of(dialect).unwrap(written).unwrap_or(written)
 }
 
-/// Every link a body writes, as the note wrote it, in the order it wrote them.
+/// Every link a body writes, as byte ranges into `text`, in the order it wrote
+/// them.
 ///
-/// Delimiters included, so one answer serves both a reader who wants the bytes
-/// and [`reference`], which takes them off again.
-pub(crate) fn scan(dialect: LinkDialect, text: &str) -> Vec<&str> {
+/// Ranges rather than slices, because a `link.*` finding is addressed to the
+/// reference that carries it and a range is what a span is measured from. The
+/// delimiters are inside the range, so one answer serves both a reader who
+/// wants the bytes and [`reference`], which takes them off again.
+pub(crate) fn scan(dialect: LinkDialect, text: &str) -> Vec<Range<usize>> {
     let grammar = Grammar::of(dialect);
     let mut found = Vec::new();
     let mut cursor = 0;
     while let Some(span) = grammar.next(text, cursor) {
         cursor = span.end;
-        let written = &text[span];
-        if grammar.unwrap(written).is_some() {
-            found.push(written);
+        if grammar.unwrap(&text[span.clone()]).is_some() {
+            found.push(span);
         }
     }
     found
@@ -116,6 +118,7 @@ mod tests {
     fn found(dialect: LinkDialect, text: &str) -> Vec<(&str, &str)> {
         scan(dialect, text)
             .into_iter()
+            .map(|at| &text[at])
             .map(|written| (written, reference(dialect, written)))
             .collect()
     }
@@ -220,6 +223,15 @@ mod tests {
             found(LinkDialect::Markdown, "a (parenthetical [aside) here\n"),
         ];
         assert!(nothing.iter().all(Vec::is_empty), "{nothing:?}");
+    }
+
+    #[test]
+    fn a_scan_answers_where_in_the_prose_each_reference_is_written() {
+        // The range is what a span is measured from, so it holds the whole
+        // delimited run rather than the reference inside it.
+        let prose = "See [[Ada]] and [[Babbage]].\n";
+        assert_eq!(scan(LinkDialect::Wikilink, prose), [4..11, 16..27]);
+        assert_eq!(&prose[4..11], "[[Ada]]");
     }
 
     #[test]

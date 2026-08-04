@@ -23,7 +23,7 @@ use crate::encoding::{self, EncodingFault, Reading};
 use super::body::{self, Body};
 use super::findings::Findings;
 use super::frontmatter::{self, Fault, FaultKind, Front};
-use super::model::{Binding, Note};
+use super::model::{Binding, Note, Reference};
 use super::validate;
 
 /// One note, read — or the reasons it could not be.
@@ -77,8 +77,9 @@ fn from_text(subject: Subject<'_>, reading: Reading) -> Read {
     // its untyped references are properties of the prose, and no declaration
     // bears on either.
     let body = body::read(
-        reading.text.as_str()[parsed.body].to_owned(),
+        reading.text.as_str()[parsed.body.clone()].to_owned(),
         subject.contract.dialect().links(),
+        parsed.body.start,
     );
     let note = build(&mut findings, subject, &parsed.front, body);
     Read {
@@ -94,12 +95,12 @@ fn build(findings: &mut Findings<'_>, subject: Subject<'_>, front: &Front, body:
     // hold against a type. Binding it to the catch-all would treat a refusal as
     // an absence, which is the one thing the catch-all does not do.
     if matches!(front, Front::Refused) {
-        return bare(path, Binding::Unbound { named: None }, body);
+        return bare(findings, path, Binding::Unbound { named: None }, body);
     }
     let entries = front.entries().unwrap_or_default();
     let bound = validate::bind(findings, contract, entries);
     let Some(declared) = bound.declared else {
-        return bare(path, bound.binding, body);
+        return bare(findings, path, bound.binding, body);
     };
     let contents = validate::contents(findings, contract, declared, entries);
     Note {
@@ -107,7 +108,7 @@ fn build(findings: &mut Findings<'_>, subject: Subject<'_>, front: &Front, body:
         binding: bound.binding,
         properties: contents.properties,
         relationships: contents.relationships,
-        references: body.references,
+        references: references(findings, &body),
         tags: contents.tags,
         title: body.title,
         body: body.text,
@@ -115,17 +116,32 @@ fn build(findings: &mut Findings<'_>, subject: Subject<'_>, front: &Front, body:
 }
 
 /// A note that bound to no type, and so carries nothing type-directed.
-fn bare(path: &VaultPath, binding: Binding, body: Body) -> Note {
+fn bare(findings: &Findings<'_>, path: &VaultPath, binding: Binding, body: Body) -> Note {
     Note {
         path: path.clone(),
         binding,
         properties: Vec::new(),
         relationships: Vec::new(),
-        references: body.references,
+        references: references(findings, &body),
         tags: Vec::new(),
         title: body.title,
         body: body.text,
     }
+}
+
+/// The body's untyped references, each located where the note wrote it.
+///
+/// The prose plane is read for every note, whatever its frontmatter turned out
+/// to be, so this runs on both the bound and the bare path.
+fn references(findings: &Findings<'_>, body: &Body) -> Vec<Reference> {
+    body.references
+        .iter()
+        .map(|written| Reference {
+            written: written.text.clone(),
+            target: None,
+            at: findings.at(written.at.clone()),
+        })
+        .collect()
 }
 
 /// A note whose bytes could not be read at all.
