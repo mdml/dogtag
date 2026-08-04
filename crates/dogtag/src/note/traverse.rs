@@ -378,7 +378,9 @@ mod tests {
         );
     }
 
-    #[cfg(unix)]
+    // Linux only, not unix: APFS refuses to create a name that is not valid UTF-8
+    // (EILSEQ), so on macOS these tests would fail at their own setup.
+    #[cfg(target_os = "linux")]
     #[test]
     fn an_entry_whose_name_is_not_utf_8_is_reported_honestly_rather_than_read_lossily() {
         use std::ffi::OsStr;
@@ -415,7 +417,7 @@ mod tests {
         assert!(messages[1].contains("dir\u{fffd}"), "{messages:?}");
     }
 
-    #[cfg(unix)]
+    #[cfg(target_os = "linux")]
     #[test]
     fn a_badly_named_entry_the_walk_would_not_have_read_stays_as_silent_as_ever() {
         use std::ffi::OsStr;
