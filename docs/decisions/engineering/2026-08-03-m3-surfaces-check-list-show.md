@@ -63,3 +63,9 @@ Output per note: the vault-relative path, the bound type, and the axis value whe
 - **Bare-name `show` makes corpus ambiguity user-visible** in daily work, which is the design intent: ambiguity belongs to the reference that meets it.
 - **`--tag` exact match will surprise namespace users** expecting prefix semantics; the limit is stated in this record and the help text should state it too.
 - **Three commands share one loading, traversal, and validation path**, so a policy change in the document model reaches all three identically — which is also why none of them may own a private variant of it.
+
+## Amendments
+
+The Decision above stands as written; these later entries change parts of it, and the original text is left intact so the change is legible.
+
+- **2026-08-04 — the structured-output schema version ticked at slice 2, not at this record's surfaces, and the tick is per-milestone.** The Consequences attribute the JSON schema bump to the report shapes added here; the field set actually changed first when the tag vocabulary joined the resolved model, so `SCHEMA_VERSION` moved to 2 there. Adjudicated as one tick per milestone rather than one per shape change — the surfaces this record adds ride the same version. A consumer pinning the schema version sees one bump for the whole of M3.

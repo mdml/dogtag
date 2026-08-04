@@ -1,6 +1,6 @@
 # Contract version 2: the tag vocabulary, the record kind, and the per-version machinery
 
-- Status: accepted
+- Status: accepted (amended 2026-08-04 — see [Amendments](#amendments))
 - Date: 2026-08-03
 
 ## Context
@@ -94,3 +94,13 @@ The rule is **version-scoped to 2 and above, deliberately.** A version-1 contrac
 - **A version-1 vault sees a new info diagnostic** (`compat.newer-format-available`) on every run once `1..=2` ships. That is the classification working as designed, and it is `info` for precisely the reason the severity got created.
 - **`installation_version` stays at 1.** Nothing in this milestone touches the installation record's schema, and bumping it in sympathy would be symmetry for its own sake.
 - **The `[tags]` property is declared per type like any property**, so a corpus can have typed tag vocabularies on some types and no tag property on others; a namespace-less type with the tag property is ordinary tagging, undescribed and unenforced.
+
+## Amendments
+
+The Decision above stands as written; these later entries change parts of it, and the original text is left intact so the change is legible. All three arise from the slices 1–5 implementation's findings, adjudicated 2026-08-04.
+
+- **2026-08-04 — the catch-all rule composes with the named-ordinary lifecycle rule, and the composition is accepted: at version 2, capture has no lifecycle.** [The lifecycle record](2026-07-31-lifecycle-declaration-and-the-seam.md) makes a named ordinary state require its axis `required = true` on every type declaring it; this record forbids the catch-all any `required = true` property. Composed: **a version-2 corpus whose lifecycle names an ordinary value cannot have its catch-all declare the axis at all.** That consequence is not a defect — it is [the document-model record's](2026-08-03-m3-document-model.md) catch-all binding doing its job, since any required property on the catch-all fails every untyped note — and it carries a product statement now made deliberately: a note that has not been classified has no lifecycle state, rather than a mandatory one. Two sub-rules are decided with it: **notes of a type that does not declare the axis are outside the lifecycle domain** — no lifecycle filter matches them, in either direction — and `starter`'s profile claim narrows accordingly ([the fixtures record](2026-08-03-m3-fixtures-and-conformance.md), amended in step). The rejected carve-outs: letting the catch-all require the axis breaks untyped binding outright, and making the axis optional on the catch-all alone makes absence ambiguous in exactly the corpus where absence must not be a state.
+
+- **2026-08-04 — version 1's default table is one rule, not two literals.** The ratification above says "exactly the two implemented literals," but the M2 tree defaults three leaves — `required` on a property *and* on a relationship, with an M2 test pinning the relationship leaf as `Source::Default` — so the sentence undercounted what it ratified. Restated as the rule it always was: **`required = false` at every leaf spelled `required`, plus `capabilities = []`.** Version 2's table extends the same rule to the two new `required` leaves (tag-namespace, record field) exactly as this record's Decision already declares. Nothing in the tree changes; the wording does.
+
+- **2026-08-04 — the seven contract-side identifiers the implementation minted are ratified.** The Decision states six tag-vocabulary refusals and the record-field refusals without naming an identifier for any. The implementation minted, and this amendment adopts: `contract.duplicate-tag-namespace`, `contract.invalid-tag-namespace` (the `values`/`open` XOR, either direction), `contract.tags-table-missing`, `contract.tag-property-undeclared`, `contract.tag-property-not-list-of-string`, `contract.invalid-record-fields`, and `contract.duplicate-field` — the last unstated by the Decision but forced by provenance addressing fields on the dotted path. All seven are permanent public API from this date. The `SCHEMA_VERSION` tick to 2 also happened here rather than at the surfaces milestone entry: one tick per milestone, taken at the first field-set change, ratified in [the surfaces record's amendment](2026-08-03-m3-surfaces-check-list-show.md#amendments).

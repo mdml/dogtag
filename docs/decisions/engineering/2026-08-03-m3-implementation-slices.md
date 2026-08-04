@@ -1,6 +1,6 @@
 # The M3 implementation slices and the harness-trial flags
 
-- Status: accepted
+- Status: accepted (amended 2026-08-04 — see [Amendments](#amendments))
 - Date: 2026-08-03
 
 ## Context
@@ -42,3 +42,9 @@ Slices 1–5 are the critical path; 6–8 parallelize once 4 and 5 merge; 9–10
 - **Three slices are implemented three times and two implementations of each are discarded.** That cost belongs to the trial, not to M3, and is why the flags sit off the critical path.
 - **The flagged slices' packet records are their specifications**, so any ambiguity a lane hits is a packet defect worth recording — the trial doubles as a legibility test of this packet.
 - **Slice 9's privacy-gated steps cannot be fully delegated**, and the slice list says which half is whose, so the boundary is never negotiated mid-implementation.
+
+## Amendments
+
+The Decision above stands as written; these later entries change parts of it, and the original text is left intact so the change is legible.
+
+- **2026-08-04 — the fixture-contract migration belongs to slice 1, and a lane brief may not fence what the packet requires.** Slices 1–5 ran; every lane independently found that widening the supported range while the committed fixtures declare version 1 turns fourteen green scenario pairs red, so the migration this record filed under slice 9 executes with the version machinery instead ([the fixtures record](2026-08-03-m3-fixtures-and-conformance.md#amendments) carries the reasoning). The launch brief's out-of-scope list said "fixtures" anyway — a fence contradicting the packet it was meant to protect — and the lanes rightly resolved the contradiction toward the packet while reporting it. The rule this teaches is recorded for the trial fan-out and every later brief: **the packet is the specification and a brief is scaffolding; where they conflict, the packet wins and the conflict is a finding.** The slices 1–5 build also validated the process shape itself: ten adversarial verify passes returned twenty-six confirmed findings including four blocking, and all seventy-six packet-defect reports arrived through the report-don't-guess channel rather than as silent guesses — the M2 retrospective's failure mode, not repeated.

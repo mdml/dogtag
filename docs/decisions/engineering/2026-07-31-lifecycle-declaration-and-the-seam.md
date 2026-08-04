@@ -1,6 +1,6 @@
 # The lifecycle declaration, and resolving the golden-scenario assumption
 
-- Status: accepted
+- Status: accepted (amended 2026-08-04 — see [Amendments](#amendments))
 - Date: 2026-07-31
 
 ## Context
@@ -69,3 +69,9 @@ The result is a stronger seam test than the original scenario could give. The or
 - **The consistency checks give M2 real validation work that touches no note**, which is what keeps the milestone's contract-versus-corpus line clean while still producing something worth running.
 - **`docs` and `records` will most likely declare `none`**, which means the profiles carrying the closed-write and repeated-basename axes contribute nothing to the lifecycle seam. The seam's *filtering* evidence arrives at M3, since `list-filters-by-declared-lifecycle-axis` is an M3 scenario, and rests on `dense` and `starter` alone; M2 contributes only the load-time declaration check. That is deliberate — [beta.md](../../beta.md#fixture-profiles) pairs the two profiles for exactly this — but worth stating plainly rather than letting a four-profile matrix imply four-profile evidence.
 - **This record moves a line the [lifecycle PDR](../product/lifecycle.md) drew as an invariant**, so that PDR is amended rather than left to contradict it. "Whether a corpus has a life axis at all" was not among its config-points; it is now, and the PDR's header says so, because turning an invariant into a config-point is a deliberate and visible act in that trail. The product argument lives there; the TOML spelling lives here.
+
+## Amendments
+
+The Decision above stands as written; these later entries change parts of it, and the original text is left intact so the change is legible.
+
+- **2026-08-04 — composed with the version-2 catch-all rule, a named ordinary state cannot live on the catch-all, and capture therefore has no lifecycle.** This record's rule that `ordinary = { value = … }` requires the axis `required = true` on every declaring type composes with [the contract-version-2 record's](2026-08-03-contract-version-2.md) rule that the catch-all requires nothing. The consequence — a version-2 corpus with a named ordinary state has a lifecycle-less catch-all, and unclassified notes sit outside the lifecycle domain — is accepted deliberately there, with the sub-rule that no lifecycle filter matches a note whose type declares no axis. The seam this record built is narrowed, not broken: the two encodings still answer one question, over the notes that participate.
