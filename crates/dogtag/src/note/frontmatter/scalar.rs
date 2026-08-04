@@ -186,11 +186,15 @@ impl<'a> Head<'a> {
         self.plain_key()
     }
 
+    /// A quoted key tolerates spaces before its colon, exactly as a plain key
+    /// and a flow mapping's do: `'on' : one` reads as `on : one` does.
     fn quoted_key(self) -> Option<Key> {
         let read = self.quoted().ok()?;
-        let rest = self.0[read.length..].strip_prefix(':')?;
+        let after = &self.0[read.length..];
+        let spaces = after.len() - after.trim_start_matches(' ').len();
+        let rest = after[spaces..].strip_prefix(':')?;
         (rest.is_empty() || rest.starts_with(' ')).then(|| Key {
-            value_at: Self(rest).value_at(read.length + 1),
+            value_at: Self(rest).value_at(read.length + spaces + 1),
             text: read.text,
             length: read.length,
         })
@@ -362,6 +366,21 @@ mod tests {
         assert_eq!(read, Some(("a: b".to_owned(), 6, 8)));
         let bare = key_of("'on':");
         assert_eq!(bare, Some(("on".to_owned(), 4, 5)));
+    }
+
+    #[test]
+    fn a_quoted_key_tolerates_spaces_before_its_colon_as_a_plain_key_does() {
+        // `'on' : one` parses like `on : one`: the same key and the same
+        // value, with the quotes counted only in the key's own extent.
+        let spaced = key_of("'on' : one");
+        assert_eq!(spaced, Some(("on".to_owned(), 4, 7)));
+        let wide = key_of("\"on\"   :   one");
+        assert_eq!(wide, Some(("on".to_owned(), 4, 11)));
+        let bare = key_of("'on' :");
+        assert_eq!(bare, Some(("on".to_owned(), 4, 6)));
+        // Spaces end the tolerance at the colon: quoted text followed by
+        // anything else is still a value rather than a key.
+        assert_eq!(key_of("'on' x: y"), None);
     }
 
     #[test]
