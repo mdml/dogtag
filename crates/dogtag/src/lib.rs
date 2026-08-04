@@ -43,8 +43,11 @@
 //!
 //! ## Current surface
 //!
-//! This release opens a vault, diagnoses it, and finds its notes. No link is
-//! resolved and no index is built.
+//! This release opens a vault, diagnoses it, and reads its corpus: which files
+//! are notes, what their frontmatter says, and how each one measures up against
+//! the type the contract declares for it. No link is resolved and no index is
+//! built, so a typed link is carried as the reference the note wrote and
+//! nothing more.
 //!
 //! - `diagnostic` — the envelope every failure is reported as: the exhaustive
 //!   kernel identifier set, the `ext.` namespace consumers mint their own
