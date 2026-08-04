@@ -60,8 +60,14 @@ toolchain = "nightly-2026-07-30"
 # fragment empty and nonempty, the empty target that names the containing note,
 # and the wholly empty reference that still dangles — is reached from a named
 # test.
-line = 99.52
-branch = 99.25
+#
+# The adjudicated review repairs moved both numbers up another hundredth.
+# Code-block-aware link extraction, the innermost-run link spans, universal
+# newlines in frontmatter, the spaced quoted key, the located directory
+# diagnostic, and the traversal's honest answer for a name that is not valid
+# UTF-8 are each a few lines, and every one is reached from a named test.
+line = 99.53
+branch = 99.26
 
 [thresholds]
 line = 95.0
