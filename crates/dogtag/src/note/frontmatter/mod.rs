@@ -314,7 +314,7 @@ fn lines(text: &str) -> Vec<Line<'_>> {
     };
     let mut lines = Vec::new();
     let mut start = base;
-    for raw in text.split_inclusive('\n') {
+    for raw in split_lines(text) {
         let content = raw.trim_end_matches('\n').trim_end_matches('\r').trim_end();
         let indent = content.len() - content.trim_start_matches(' ').len();
         lines.push(Line {
@@ -326,6 +326,29 @@ fn lines(text: &str) -> Vec<Line<'_>> {
         start += raw.len();
     }
     lines
+}
+
+/// Splits at every line terminator a corpus writes — `\n`, `\r\n`, and the
+/// classic-Mac lone `\r` — keeping each terminator with its line.
+///
+/// Universal newlines are what let a classic-Mac note's frontmatter be *seen*
+/// rather than silently binding the note to the catch-all; the carriage
+/// returns are still a warning where the encoding is inspected. Terminators
+/// stay in the yielded slices so every offset, and so every span, is measured
+/// over the file's actual bytes.
+fn split_lines(text: &str) -> impl Iterator<Item = &str> {
+    let mut rest = text;
+    core::iter::from_fn(move || {
+        if rest.is_empty() {
+            return None;
+        }
+        let length = rest.find(['\n', '\r']).map_or(rest.len(), |at| {
+            at + if rest[at..].starts_with("\r\n") { 2 } else { 1 }
+        });
+        let (line, remaining) = rest.split_at(length);
+        rest = remaining;
+        Some(line)
+    })
 }
 
 #[cfg(test)]
@@ -416,6 +439,21 @@ mod tests {
         let entries = entries_of("---\r\ntype: person\r\n---\r\n");
         assert_eq!(entries[0].key, "type");
         assert_eq!(entries[0].value.scalar(), Some("person"));
+    }
+
+    #[test]
+    fn a_lone_carriage_return_terminates_a_line_just_as_a_line_feed_does() {
+        // Classic-Mac line endings: the frontmatter is seen rather than the
+        // note silently binding to the catch-all, and the spans stay measured
+        // over the file's actual bytes — a `\r` is one byte, like a `\n`.
+        let entries = entries_of("---\rtype: person\r---\rbody\r");
+        assert_eq!(entries[0].key, "type");
+        assert_eq!(entries[0].key_span, 4..8);
+        assert_eq!(entries[0].value.scalar(), Some("person"));
+        assert_eq!(entries[0].value.span, 10..16);
+        let mixed = read("---\r\ntype: person\r---\n");
+        assert_eq!(mixed.body, 22..22);
+        assert!(mixed.front.entries().is_some(), "terminators may even mix");
     }
 
     #[test]
