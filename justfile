@@ -60,6 +60,10 @@ build:
 coverage:
     python3 scripts/gate.py coverage
 
+# The scripted smoke sequence over the fixtures — release criterion 10; run before every tag
+smoke:
+    bash scripts/smoke.sh
+
 # Coverage with the full per-file evidence table
 coverage-verbose:
     python3 scripts/gate.py coverage --verbose
