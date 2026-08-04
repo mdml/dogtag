@@ -7,10 +7,11 @@
 //! retitled without breaking a single link.
 //!
 //! The references are the *other* half of "body content is untouched beyond
-//! link extraction": the dialect's delimited form is found in the prose and
-//! resolved, and nothing else about the prose is interpreted — a reference
-//! inside a code fence is still a reference, because refusing it would need the
-//! block structure this milestone declines to grow.
+//! link extraction": the dialect's delimited form is found in the **prose**
+//! and resolved, and nothing else about the prose is interpreted. A code block
+//! is not prose — a note quoting example `[[links]]` in one is quoting, not
+//! referencing — so link extraction steps over fenced and indented code blocks
+//! with exactly the block structure the title scan already has, and no more.
 //!
 //! Beyond those two, there is no outline, no section model, no task list —
 //! "body content is untouched beyond link extraction" reads as *no structure*,
@@ -69,24 +70,67 @@ pub(crate) struct Body {
 pub(crate) fn read(text: String, dialect: LinkDialect, offset: usize) -> Body {
     Body {
         title: title(&text),
-        references: links::scan(dialect, &text)
-            .into_iter()
-            .map(|at| Written {
-                text: text[at.clone()].to_owned(),
-                at: offset + at.start..offset + at.end,
-            })
-            .collect(),
+        references: references(&text, dialect, offset),
         text,
     }
 }
 
 /// The note's title: its first H1, when it has one.
 fn title(body: &str) -> Option<String> {
-    let mut scan = Scan {
-        fence: None,
-        previous: None,
-    };
-    body.lines().find_map(|raw| scan.read(Line::of(raw)))
+    let mut scan = Scan::new();
+    body.lines().find_map(|raw| {
+        let line = Line::of(raw);
+        let above = scan.previous;
+        scan.prose(line).then(|| heading(line, above)).flatten()
+    })
+}
+
+/// The untyped references the prose writes, each located in the note.
+///
+/// Only the prose is scanned: a reference inside a code block is a line of
+/// code, stepped over by the same block structure the title scan reads.
+fn references(body: &str, dialect: LinkDialect, offset: usize) -> Vec<Written> {
+    prose(body)
+        .into_iter()
+        .flat_map(|region| {
+            links::scan(dialect, &body[region.clone()])
+                .into_iter()
+                .map(move |at| region.start + at.start..region.start + at.end)
+        })
+        .map(|at| Written {
+            text: body[at.clone()].to_owned(),
+            at: offset + at.start..offset + at.end,
+        })
+        .collect()
+}
+
+/// The byte ranges of the body that are prose rather than code.
+///
+/// Contiguous prose lines merge into one range, so a reference is found
+/// wherever its paragraph puts it; a code line splits the prose either side
+/// of it, so no scan ever reads across a code block.
+fn prose(body: &str) -> Vec<Range<usize>> {
+    let mut scan = Scan::new();
+    let mut regions: Vec<Range<usize>> = Vec::new();
+    let mut at = 0;
+    for raw in body.split_inclusive('\n') {
+        let end = at + raw.len();
+        if scan.prose(Line::of(raw)) {
+            match regions.last_mut() {
+                Some(last) if last.end == at => last.end = end,
+                _ => regions.push(at..end),
+            }
+        }
+        at = end;
+    }
+    regions
+}
+
+/// The H1 `line` is: an ATX heading of its own, or the underline of the
+/// paragraph line `above` it.
+fn heading(line: Line<'_>, above: Option<&str>) -> Option<String> {
+    line.atx()
+        .or_else(|| above.filter(|_| line.underlines()).map(str::to_owned))
 }
 
 /// One line of a body, with its indentation measured off.
@@ -134,7 +178,11 @@ impl<'a> Line<'a> {
     }
 }
 
-/// A walk down the body, holding only what a heading depends on.
+/// A walk down the body, holding the block structure a line's reading needs.
+///
+/// The one walk serves both readers: the title scan asks it which lines are
+/// prose so a `#` inside a code block stays code, and link extraction asks it
+/// the same question so a `[[link]]` inside one stays code too.
 struct Scan<'a> {
     /// The fence that opened the code block being stepped over.
     fence: Option<&'static str>,
@@ -143,22 +191,34 @@ struct Scan<'a> {
 }
 
 impl<'a> Scan<'a> {
-    /// Reads one line, answering with the title when that line is one.
-    fn read(&mut self, line: Line<'a>) -> Option<String> {
+    fn new() -> Self {
+        Self {
+            fence: None,
+            previous: None,
+        }
+    }
+
+    /// Reads one line, answering whether it is prose rather than code.
+    ///
+    /// Code is a fence, a line inside a fenced block, or an indented code
+    /// block; an indented line continuing a paragraph is still prose, because
+    /// CommonMark says an indented code block cannot interrupt one.
+    fn prose(&mut self, line: Line<'a>) -> bool {
         if let Some(fence) = self.fence {
             self.close(line, fence);
-            return None;
+            return false;
         }
         self.previous = self.previous.filter(|_| !line.is_blank());
         if line.indent >= CODE_INDENT && self.previous.is_none() {
-            return None;
+            return false;
         }
         if let Some(fence) = line.opens() {
             self.fence = Some(fence);
             self.previous = None;
-            return None;
+            return false;
         }
-        self.heading(line)
+        self.previous = (!line.is_blank()).then_some(line.content);
+        true
     }
 
     /// Leaves the code block when this line closes it.
@@ -167,19 +227,6 @@ impl<'a> Scan<'a> {
         if line.content.starts_with(fence) {
             self.fence = None;
         }
-    }
-
-    /// The heading this line is, or the paragraph text it becomes.
-    fn heading(&mut self, line: Line<'a>) -> Option<String> {
-        if let Some(text) = line.atx() {
-            return Some(text);
-        }
-        if let Some(text) = self.previous.filter(|_| line.underlines()) {
-            self.previous = None;
-            return Some(text.to_owned());
-        }
-        self.previous = (!line.is_blank()).then_some(line.content);
-        None
     }
 }
 
@@ -316,14 +363,57 @@ mod tests {
     }
 
     #[test]
-    fn a_reference_inside_a_code_fence_is_still_a_reference() {
-        // The title scan steps over fences because a heading in one is code;
-        // link extraction does not, because "the body is untouched beyond link
-        // extraction" leaves the kernel no block structure to consult, and a
-        // dangling untyped reference is a finding at no severity anyway.
-        let body = read("```\n[[Ada]]\n```\n".to_owned(), LinkDialect::Wikilink, 0);
+    fn a_reference_inside_a_code_block_is_a_line_of_code() {
+        // Link extraction steps over exactly the code blocks the title scan
+        // does: both fences, an unclosed fence, and an indented code block. A
+        // note quoting example `[[links]]` in one is quoting, not referencing.
+        let quoted = [
+            read("```\n[[Ada]]\n```\n".to_owned(), LinkDialect::Wikilink, 0),
+            read("~~~\n[[Ada]]\n~~~\n".to_owned(), LinkDialect::Wikilink, 0),
+            read(
+                "```\n[[Ada]] unclosed\n".to_owned(),
+                LinkDialect::Wikilink,
+                0,
+            ),
+            read(
+                "intro\n\n    [[Ada]]\n".to_owned(),
+                LinkDialect::Wikilink,
+                0,
+            ),
+            read(
+                "```\n[Ada](people/ada.md)\n```\n".to_owned(),
+                LinkDialect::Markdown,
+                0,
+            ),
+        ];
+        for body in &quoted {
+            assert!(body.references.is_empty(), "{:?}", body.text);
+            assert_eq!(body.title, None);
+        }
+    }
+
+    #[test]
+    fn prose_around_a_code_block_still_writes_its_references() {
+        // The block splits the prose rather than swallowing it, and a span
+        // after the block still points where the note wrote the reference.
+        let prose = "See [[Ada]].\n```\n[[code]]\n```\nAnd [[Babbage]].\n";
+        let body = read(prose.to_owned(), LinkDialect::Wikilink, 0);
+        let written: Vec<(&str, Range<usize>)> = body
+            .references
+            .iter()
+            .map(|reference| (reference.text.as_str(), reference.at.clone()))
+            .collect();
+        assert_eq!(written, [("[[Ada]]", 4..11), ("[[Babbage]]", 34..45)]);
+        assert_eq!(&prose[34..45], "[[Babbage]]");
+    }
+
+    #[test]
+    fn an_indented_line_continuing_a_paragraph_still_writes_references() {
+        // The same CommonMark rule the title reads by: an indented code block
+        // cannot interrupt a paragraph, so the reference is prose.
+        let body = read("See\n    [[Ada]]\n".to_owned(), LinkDialect::Wikilink, 0);
         assert_eq!(body.references.len(), 1);
-        assert_eq!(body.title, None);
+        assert_eq!(body.references[0].text, "[[Ada]]");
     }
 
     #[test]
