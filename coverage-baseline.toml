@@ -53,8 +53,15 @@ toolchain = "nightly-2026-07-30"
 # two bear, a path-qualified reference with and without its extension, a
 # reference each dialect does and does not spell, a body reference that resolves
 # and one that does not, and a caller's reference that names nothing.
-line = 99.51
-branch = 99.24
+#
+# The wikilink alias and anchor moved both numbers up a hundredth. The two
+# splits are a few lines in the link grammar plus one self-reference branch in
+# resolution, and every shape — an alias with and without display text, a
+# fragment empty and nonempty, the empty target that names the containing note,
+# and the wholly empty reference that still dangles — is reached from a named
+# test.
+line = 99.52
+branch = 99.25
 
 [thresholds]
 line = 95.0
