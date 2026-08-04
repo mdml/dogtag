@@ -44,10 +44,12 @@
 //! ## Current surface
 //!
 //! This release opens a vault, diagnoses it, and reads its corpus: which files
-//! are notes, what their frontmatter says, and how each one measures up against
-//! the type the contract declares for it. No link is resolved and no index is
-//! built, so a typed link is carried as the reference the note wrote and
-//! nothing more.
+//! are notes, what their frontmatter says, how each one measures up against the
+//! type the contract declares for it, and which note each of its references
+//! names. A typed link must resolve, and one that does not is reported against
+//! the reference itself. Nothing is persisted: the name index is built while a
+//! corpus is read and answered from memory, and no surface reads a corpus yet —
+//! `check`, `list`, and `show` are the commands that will.
 //!
 //! - `diagnostic` — the envelope every failure is reported as: the exhaustive
 //!   kernel identifier set, the `ext.` namespace consumers mint their own
@@ -62,8 +64,8 @@
 //! - `contract` — the committed vault contract, its two-pass parse, and the
 //!   validity rules enforced at load.
 //! - `installation` — the local installation record, read and never written.
-//! - `note` — the public document model: which files are notes, and what
-//!   reading one says.
+//! - `note` — the public document model: which files are notes, what reading
+//!   one says, and which note each of its references names.
 //! - `vault` — discovery, exact-path verification, root trust, and `open`.
 //! - `provenance` — where each resolved leaf value came from.
 //! - `report` — the `doctor` report, its structured schema, and the generated

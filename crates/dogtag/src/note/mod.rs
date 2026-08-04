@@ -2,15 +2,21 @@
 //!
 //! A note is a plain Markdown file whose frontmatter is the schema'd plane and
 //! whose body is unschema'd prose. This module is where the corpus is finally
-//! read: which files are notes ([`traverse`]), what their frontmatter says, and
-//! how each note measures up against the type the contract declares for it.
+//! read: which files are notes ([`traverse`]), what their frontmatter says, how
+//! each note measures up against the type the contract declares for it, and
+//! which note each of its references names.
 //!
-//! Two rules run through everything here and are worth stating once.
+//! Three rules run through everything here and are worth stating once.
 //!
 //! **Identity is the path.** A note's identity is its vault-relative path, and
 //! nothing else — not its name, not its title, not a key in its frontmatter. A
 //! bare name is a per-reference resolution shorthand, and two notes may
 //! legitimately share one.
+//!
+//! **A typed link must resolve; a prose reference need not.** A relationship a
+//! note claims and cannot back is reported against the reference that claims
+//! it, while an untyped reference in the body may legitimately point at a note
+//! that does not exist yet.
 //!
 //! **The declared kind decides what a value means.** Every scalar is read as
 //! its bytes and validated against the kind its declaration names; nothing is
