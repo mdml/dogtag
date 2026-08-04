@@ -132,6 +132,20 @@ mod tests {
         "\n[[type]]\nname = \"capture\"\ncapabilities = [\"catch-all\"]\n",
     );
 
+    /// A contract whose one identity-bearing type describes its own tagging.
+    const NAMESPACED: &str = concat!(
+        "contract_version = 2\n",
+        "\n[dialect]\nlinks = \"wikilink\"\n",
+        "\n[lifecycle]\nnone = true\n",
+        "\n[tags]\nproperty = \"labels\"\n",
+        "\n[[type]]\nname = \"person\"\ncapabilities = [\"identity-bearing\"]\n",
+        "\n  [[type.property]]\n  name = \"labels\"\n  kind = \"list\"\n  of = \"string\"\n",
+        "\n  [[type.tag-namespace]]\n  prefix = \"role/\"\n  required = true\n",
+        "  values = [\"founder\", \"advisor\"]\n",
+        "\n  [[type.tag-namespace]]\n  prefix = \"topic/\"\n  open = true\n",
+        "\n[[type]]\nname = \"capture\"\ncapabilities = [\"catch-all\"]\n",
+    );
+
     /// A note of the `person` type that satisfies every rule the type states.
     const CONFORMING: &str = concat!(
         "---\n",
@@ -566,6 +580,81 @@ mod tests {
             .records()[0];
         assert_eq!(record.field("family"), None);
         assert_eq!(record.field("given"), Some("Augusta"));
+    }
+
+    /// A corpus of one `person` note carrying `labels`, read against the
+    /// contract that describes its tagging.
+    fn tagged(tree: &Tree, labels: &str) -> Corpus {
+        let note = format!("---\ntype: person\nlabels: {labels}\n---\n");
+        read_against(tree, NAMESPACED, &[("ada.md", &note)])
+    }
+
+    #[test]
+    fn a_required_namespace_with_no_tag_in_it_points_at_the_tags_the_note_wrote() {
+        let tree = Tree::new("corpus-namespace-missing");
+        let corpus = tagged(&tree, "[topic/computing]");
+        let message = one_finding(&corpus, "note.required-namespace-missing");
+        assert!(message.contains("`role/`"), "{message}");
+        let span = corpus.diagnostics()[0]
+            .location
+            .as_ref()
+            .expect("located")
+            .span
+            .expect("spanned");
+        assert_eq!((span.start.line, span.start.column), (3, 9));
+    }
+
+    #[test]
+    fn a_note_carrying_no_tags_at_all_is_told_so_against_the_note_itself() {
+        let tree = Tree::new("corpus-namespace-untagged");
+        let corpus = read_against(&tree, NAMESPACED, &[("ada.md", "---\ntype: person\n---\n")]);
+        let message = one_finding(&corpus, "note.required-namespace-missing");
+        assert!(message.contains("`role/`"), "{message}");
+        let location = corpus.diagnostics()[0].location.as_ref().expect("located");
+        assert!(
+            location.span.is_none(),
+            "an absence has no bytes to point at"
+        );
+        assert!(
+            corpus.diagnostics()[0].related[0]
+                .message
+                .contains("required")
+        );
+    }
+
+    #[test]
+    fn a_tag_outside_a_closed_namespaces_vocabulary_is_reported_against_the_tag() {
+        let tree = Tree::new("corpus-namespace-vocabulary");
+        let corpus = tagged(&tree, "[role/chair]");
+        let message = one_finding(&corpus, "note.tag-outside-vocabulary");
+        assert!(message.contains("`role/chair`"), "{message}");
+    }
+
+    #[test]
+    fn an_open_namespace_bounds_nothing_and_an_undeclared_prefix_is_untouched() {
+        let tree = Tree::new("corpus-namespace-open");
+        let corpus = tagged(
+            &tree,
+            "[role/advisor, topic/anything-at-all, other/entirely]",
+        );
+        let reported = ids(&corpus);
+        assert!(reported.is_empty(), "{reported:?}");
+        assert_eq!(
+            only(&corpus).tags(),
+            ["role/advisor", "topic/anything-at-all", "other/entirely"],
+            "tags are content: what no namespace describes still reaches the model"
+        );
+    }
+
+    #[test]
+    fn every_namespace_is_evaluated_independently_of_every_other() {
+        let tree = Tree::new("corpus-namespace-independent");
+        let corpus = tagged(&tree, "[role/chair, role/founder]");
+        assert_eq!(
+            ids(&corpus),
+            ["note.tag-outside-vocabulary"],
+            "one tag satisfies the requirement while another is outside the vocabulary"
+        );
     }
 
     #[test]

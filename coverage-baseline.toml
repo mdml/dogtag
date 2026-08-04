@@ -48,7 +48,7 @@ toolchain = "nightly-2026-07-30"
 # indentation, an alias, a duplicate key, a shape nested past what the subset
 # reads, a leap day, and a byte order mark on a file with carriage returns.
 line = 99.49
-branch = 99.22
+branch = 99.23
 
 [thresholds]
 line = 95.0

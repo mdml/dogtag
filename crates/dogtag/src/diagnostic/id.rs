@@ -203,6 +203,15 @@ pub enum KernelDiagnostic {
     /// A note writes something under a declared predicate that is not a link, or a sequence
     /// of them.
     NoteRelationshipValueInvalid,
+    /// A note of a type declaring a `required` tag namespace carries no tag in it.
+    NoteRequiredNamespaceMissing,
+    /// A note carries a tag matching a closed namespace's prefix whose remainder the
+    /// namespace does not declare.
+    ///
+    /// Namespaces are evaluated independently, and a tag matching no declared namespace is
+    /// untouched at any severity: tags are content, and a corpus is never asked to
+    /// enumerate all of it.
+    NoteTagOutsideVocabulary,
     /// The installation record could not be read.
     InstallationUnreadable,
     /// The installation record is not valid UTF-8.
@@ -583,6 +592,16 @@ const REGISTRY: &[(KernelDiagnostic, &str, Severity)] = &[
         Severity::Error,
     ),
     (
+        KernelDiagnostic::NoteRequiredNamespaceMissing,
+        "note.required-namespace-missing",
+        Severity::Error,
+    ),
+    (
+        KernelDiagnostic::NoteTagOutsideVocabulary,
+        "note.tag-outside-vocabulary",
+        Severity::Error,
+    ),
+    (
         KernelDiagnostic::InstallationUnreadable,
         "installation.unreadable",
         Severity::Error,
@@ -939,6 +958,8 @@ macro_rules! note_variants {
             | KernelDiagnostic::NoteMissingRequiredRelationship
             | KernelDiagnostic::NotePropertyKindInvalid
             | KernelDiagnostic::NoteRelationshipValueInvalid
+            | KernelDiagnostic::NoteRequiredNamespaceMissing
+            | KernelDiagnostic::NoteTagOutsideVocabulary
     };
 }
 
@@ -1082,6 +1103,8 @@ fn expected_note_id(kind: KernelDiagnostic) -> &'static str {
         NoteMissingRequiredRelationship => "note.missing-required-relationship",
         NotePropertyKindInvalid => "note.property-kind-invalid",
         NoteRelationshipValueInvalid => "note.relationship-value-invalid",
+        NoteRequiredNamespaceMissing => "note.required-namespace-missing",
+        NoteTagOutsideVocabulary => "note.tag-outside-vocabulary",
         _ => "",
     }
 }
