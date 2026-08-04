@@ -46,6 +46,7 @@
 //!
 //! [`FileRef::INSTALLATION_RECORD_PATH`]: crate::diagnostic::FileRef::INSTALLATION_RECORD_PATH
 
+mod check;
 mod doctor;
 mod json;
 mod list;
@@ -69,8 +70,9 @@ use crate::diagnostic::{Diagnostic, DiagnosticList, SeverityCounts};
 use crate::installation::{Installation, InstallationRecord, VaultEntry};
 use crate::vault::{Opened, VaultRoot};
 
+pub use check::{CheckReport, check_report, check_text};
 pub use doctor::doctor_text;
-pub use json::{contract_json, doctor_json, list_json, show_json};
+pub use json::{check_json, contract_json, doctor_json, list_json, show_json};
 pub use list::list_text;
 pub use markdown::contract_markdown;
 pub use show::{ShowReport, show_report, show_text};

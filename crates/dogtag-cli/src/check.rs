@@ -1,31 +1,32 @@
-//! `dogtag show` — one note's SDK-owned document-model rendering.
+//! `dogtag check` — a thin stream-routing consumer of the SDK's corpus report.
 
-use dogtag::diagnostic::render_plain;
 use dogtag::installation::Installation;
 use dogtag::note::read_corpus;
-use dogtag::report::{ShowReport, show_json, show_report, show_text};
+use dogtag::report::{check_json, check_report, check_text};
+
+use dogtag::diagnostic::render_plain;
 
 use crate::environment::Environment;
 use crate::exit;
 use crate::output::{self, Rendering};
 use crate::preflight::{prepare, refuse_selection, refuse_unresolved};
 use crate::select::{Selected, select};
-use crate::{ShowArgs, ShowFormat};
+use crate::{CheckArgs, CheckFormat};
 
-const POINTER: &str = "\nthe contract did not resolve, so no note can be shown: run \
+const POINTER: &str = "\nthe contract did not resolve, so the corpus cannot be checked: run \
                        `dogtag doctor` for the vault's full diagnosis\n";
 
-pub fn run(environment: &Environment, args: &ShowArgs) -> i32 {
+pub fn run(environment: &Environment, args: &CheckArgs) -> i32 {
     let installation = environment.installation();
     match select(environment, args.vault.requested(), &installation) {
-        Ok(selected) => show(environment, args, selected, installation),
+        Ok(selected) => check(environment, args, selected, installation),
         Err(refused) => refuse_selection(environment, &refused.diagnostics, args.strict),
     }
 }
 
-fn show(
+fn check(
     environment: &Environment,
-    args: &ShowArgs,
+    args: &CheckArgs,
     selected: Selected,
     installation: Installation,
 ) -> i32 {
@@ -34,23 +35,17 @@ fn show(
         return refuse_unresolved(environment, &prepared, POINTER);
     };
     let corpus = read_corpus(prepared.opened.root(), contract);
-    let report = show_report(&corpus, contract, &args.reference, &prepared.diagnostics);
-    deliver(environment, args, &report)
-}
-
-fn deliver(environment: &Environment, args: &ShowArgs, report: &ShowReport) -> i32 {
+    let report = check_report(&corpus, &prepared.diagnostics);
     match args.format {
-        ShowFormat::Text => {
-            let result = show_text(report);
-            output::to_stdout(environment, Rendering::verbatim(&result));
+        CheckFormat::Text => {
+            output::to_stdout(environment, Rendering::verbatim(&check_text(&report)));
             output::to_stderr(
                 environment,
                 Rendering::diagnostics(&render_plain(report.diagnostics())),
             );
         }
-        ShowFormat::Json => {
-            let result = show_json(report);
-            output::to_stdout(environment, Rendering::verbatim(&result));
+        CheckFormat::Json => {
+            output::to_stdout(environment, Rendering::verbatim(&check_json(&report)));
         }
     }
     exit::code_for(report.diagnostics(), args.strict)

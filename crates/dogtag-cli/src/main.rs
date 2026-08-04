@@ -16,6 +16,8 @@
 //!   two files, writes nothing anywhere, and never refuses to run.
 //! - `dogtag contract explain` — the resolved contract rendered as the
 //!   instructions an agent follows, and a refusal when it did not resolve.
+//! - `dogtag check` — the whole corpus's health: every finding, in order,
+//!   with summary counts.
 //! - `dogtag list` — body-free corpus summaries with composable SDK-owned
 //!   filters.
 //! - `dogtag show` — one note's SDK-rendered document model.
@@ -27,12 +29,14 @@
 
 #![forbid(unsafe_code)]
 
+mod check;
 mod doctor;
 mod environment;
 mod exit;
 mod explain;
 mod listing;
 mod output;
+mod preflight;
 mod select;
 mod show;
 
@@ -62,6 +66,8 @@ enum Command {
     Version,
     /// Report a vault's configuration health.
     Doctor(DoctorArgs),
+    /// Report the corpus's health: every finding, with summary counts.
+    Check(CheckArgs),
     /// Enumerate a vault's notes with composable filters.
     List(ListArgs),
     /// Render one note's document model.
@@ -115,6 +121,28 @@ struct DoctorArgs {
     /// rendering and no severity.
     #[arg(long)]
     strict: bool,
+}
+
+#[derive(Args)]
+struct CheckArgs {
+    #[command(flatten)]
+    vault: VaultArg,
+    /// The report's format.
+    #[arg(long, value_enum, default_value_t = CheckFormat::Text)]
+    format: CheckFormat,
+    /// Treat warnings as failures — for the exit code only, changing no
+    /// rendering and no severity. An `info` finding is never promoted.
+    #[arg(long)]
+    strict: bool,
+}
+
+/// How `check` reports.
+#[derive(Clone, Copy, ValueEnum)]
+enum CheckFormat {
+    /// The summary on stdout; findings as diagnostics on stderr.
+    Text,
+    /// One structured report carrying the findings and their summary.
+    Json,
 }
 
 #[derive(Args)]
@@ -226,6 +254,8 @@ fn dispatch(environment: &Environment, command: Command) -> i32 {
         Command::Version => version(environment),
         Command::Doctor(args) => refuse_empty(environment, args.vault.requested())
             .unwrap_or_else(|| doctor::run(environment, &args)),
+        Command::Check(args) => refuse_empty(environment, args.vault.requested())
+            .unwrap_or_else(|| check::run(environment, &args)),
         Command::List(args) => refuse_empty(environment, args.vault.requested())
             .unwrap_or_else(|| listing::run(environment, &args)),
         Command::Show(args) => refuse_empty(environment, args.vault.requested())

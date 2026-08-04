@@ -58,6 +58,36 @@ pub fn doctor_json(report: &DoctorReport) -> String {
     })
 }
 
+/// Renders the check aggregate and its diagnostic envelope as one JSON document.
+pub fn check_json(report: &super::CheckReport) -> String {
+    document(&CheckWire {
+        schema_version: SCHEMA_VERSION,
+        report: "check",
+        summary: summary_wire(report.counts()),
+        by_identifier: report
+            .by_identifier()
+            .iter()
+            .map(|(id, count)| IdentifierCountWire { id, count: *count })
+            .collect(),
+        diagnostics: report.diagnostics().iter().map(diagnostic_wire).collect(),
+    })
+}
+
+#[derive(Serialize)]
+struct CheckWire<'a> {
+    schema_version: u32,
+    report: &'static str,
+    summary: SummaryWire,
+    by_identifier: Vec<IdentifierCountWire<'a>>,
+    diagnostics: Vec<DiagnosticWire<'a>>,
+}
+
+#[derive(Serialize)]
+struct IdentifierCountWire<'a> {
+    id: &'a str,
+    count: usize,
+}
+
 /// Renders a list result and its diagnostic envelope as one JSON document.
 pub fn list_json(result: &ListResult, reported: &[Diagnostic]) -> String {
     let mut diagnostics = crate::diagnostic::DiagnosticList::new();
