@@ -31,11 +31,12 @@
 //! let a value reach `show` as tags without ever having been validated against
 //! a declaration, which is the premise the whole format rests on.
 
-use crate::contract::{Contract, PropertyDecl, RelationshipDecl, TypeDecl};
+use crate::contract::{Contract, PropertyDecl, RelationshipDecl, TagNamespaceDecl, TypeDecl};
 use crate::diagnostic::{KernelDiagnostic, Related};
 
 use super::findings::Findings;
 use super::frontmatter::{Entry, Shape, Value};
+use super::lexical;
 use super::model::{Binding, Edge, Property, Relationship};
 use super::values;
 
@@ -132,6 +133,13 @@ pub(crate) fn contents(
     let properties = properties(findings, contract, declared, entries);
     let relationships = relationships(findings, contract, declared, entries);
     undeclared(findings, declared, entries);
+    // A type declaring a namespace declares the tag property too — the contract
+    // refuses one without the other — so the key is looked up by name with no
+    // second check that the type admits it.
+    let tagged = contract
+        .tags()
+        .and_then(|tags| written(entries, tags.property()));
+    namespaces(findings, declared, tagged);
     Contents {
         tags: tags(contract, &properties),
         properties,
@@ -237,6 +245,77 @@ fn undeclared(findings: &mut Findings<'_>, declared: &TypeDecl, entries: &[Entry
             ),
             entry.key_span.clone(),
         );
+    }
+}
+
+/// Holds a note's tags to the namespaces its type declares.
+///
+/// **Namespaces are evaluated independently, and a tag matching no declared
+/// namespace is untouched at any severity.** Tags are content; what a namespace
+/// describes is the part of a corpus's tagging the corpus chose to schematize,
+/// never a licence to enumerate the rest.
+///
+/// A prefix is matched against the start of a tag and the tag is never split:
+/// the kernel owns no separator convention, so the prefix carries whatever
+/// separator the corpus writes and a member names the remainder after it.
+fn namespaces(findings: &mut Findings<'_>, declared: &TypeDecl, tagged: Option<&Value>) {
+    let items: &[Value] = tagged.and_then(Value::sequence).unwrap_or_default();
+    for namespace in declared.tag_namespaces() {
+        let matching: Vec<(&str, &Value)> = items
+            .iter()
+            .filter_map(|item| Some((item.scalar()?.strip_prefix(namespace.prefix())?, item)))
+            .collect();
+        if namespace.required() && matching.is_empty() {
+            required_namespace(findings, namespace, tagged);
+        }
+        bounded(findings, namespace, &matching);
+    }
+}
+
+/// A closed namespace admits only the members it declares.
+fn bounded(findings: &mut Findings<'_>, namespace: &TagNamespaceDecl, matching: &[(&str, &Value)]) {
+    let Some(values) = namespace.values() else {
+        return;
+    };
+    for (remainder, tag) in matching {
+        if !lexical::member(values, remainder) {
+            outside(findings, namespace.prefix(), remainder, tag);
+        }
+    }
+}
+
+fn outside(findings: &mut Findings<'_>, prefix: &str, remainder: &str, tag: &Value) {
+    findings.spanned(
+        KernelDiagnostic::NoteTagOutsideVocabulary,
+        format!("the namespace `{prefix}` does not declare the tag `{prefix}{remainder}`"),
+        tag.span.clone(),
+    );
+}
+
+/// A required namespace with no tag in it.
+///
+/// It points at the tags the note wrote when it wrote any, because that is
+/// where the repair goes; a note that wrote none has no bytes to point at and
+/// the finding is against the note itself.
+fn required_namespace(
+    findings: &mut Findings<'_>,
+    namespace: &TagNamespaceDecl,
+    tagged: Option<&Value>,
+) {
+    let prefix = namespace.prefix();
+    let message =
+        format!("the type requires a tag beginning `{prefix}`, and the note carries none");
+    match tagged {
+        Some(value) => findings.spanned(
+            KernelDiagnostic::NoteRequiredNamespaceMissing,
+            message,
+            value.span.clone(),
+        ),
+        None => findings.absent(
+            KernelDiagnostic::NoteRequiredNamespaceMissing,
+            message,
+            Related::new(format!("the namespace `{prefix}` is declared required")),
+        ),
     }
 }
 
