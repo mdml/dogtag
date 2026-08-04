@@ -40,6 +40,7 @@ use crate::contract::{
     PropertyKind, RelationshipDecl, TagNamespaceDecl, TagsDecl, TypeDecl,
 };
 use crate::diagnostic::{Diagnostic, FileRef, Location, Position, Related, SeverityCounts, Span};
+use crate::note::{ListResult, NoteSummary};
 use crate::provenance::{ProvenanceEntry, Source};
 use crate::vault::VaultRoot;
 
@@ -55,6 +56,44 @@ pub fn doctor_json(report: &DoctorReport) -> String {
         diagnostics: report.diagnostics().iter().map(diagnostic_wire).collect(),
         summary: summary_wire(report.counts()),
     })
+}
+
+/// Renders a list result and its diagnostic envelope as one JSON document.
+pub fn list_json(result: &ListResult, reported: &[Diagnostic]) -> String {
+    let mut diagnostics = crate::diagnostic::DiagnosticList::new();
+    diagnostics.extend(reported.iter().cloned());
+    document(&ListWire {
+        schema_version: SCHEMA_VERSION,
+        report: "list",
+        notes: result.notes().iter().map(listed_wire).collect(),
+        diagnostics: reported.iter().map(diagnostic_wire).collect(),
+        summary: summary_wire(diagnostics.counts()),
+    })
+}
+
+#[derive(Serialize)]
+struct ListWire<'a> {
+    schema_version: u32,
+    report: &'static str,
+    notes: Vec<ListedWire<'a>>,
+    diagnostics: Vec<DiagnosticWire<'a>>,
+    summary: SummaryWire,
+}
+
+#[derive(Serialize)]
+struct ListedWire<'a> {
+    path: &'a str,
+    #[serde(rename = "type")]
+    type_name: Option<&'a str>,
+    lifecycle: Option<&'a str>,
+}
+
+fn listed_wire(note: &NoteSummary) -> ListedWire<'_> {
+    ListedWire {
+        path: note.path().as_str(),
+        type_name: note.type_name(),
+        lifecycle: note.lifecycle(),
+    }
 }
 
 /// Renders a resolved contract as JSON, with per-leaf provenance.

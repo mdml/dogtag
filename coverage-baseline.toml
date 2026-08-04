@@ -66,8 +66,12 @@ toolchain = "nightly-2026-07-30"
 # newlines in frontmatter, the spaced quoted key, the located directory
 # diagnostic, and the traversal's honest answer for a name that is not valid
 # UTF-8 are each a few lines, and every one is reached from a named test.
-line = 99.53
-branch = 99.26
+# Corpus listing raised both numbers again. Its body-free read path, four
+# composable filters, both ordinary-state encodings, lifecycle-less types, the
+# no-axis refusal, and both renderings are each reached from named SDK and CLI
+# tests.
+line = 99.54
+branch = 99.28
 
 [thresholds]
 line = 95.0

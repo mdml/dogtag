@@ -212,6 +212,8 @@ pub enum KernelDiagnostic {
     /// untouched at any severity: tags are content, and a corpus is never asked to
     /// enumerate all of it.
     NoteTagOutsideVocabulary,
+    /// A lifecycle filter was requested for a corpus that explicitly declares no axis.
+    NoteLifecycleAxisAbsent,
     /// A typed link's reference names no note in the corpus.
     ///
     /// A relationship was claimed, so the reference must resolve: an edge with a dangling
@@ -621,6 +623,11 @@ const REGISTRY: &[(KernelDiagnostic, &str, Severity)] = &[
         Severity::Error,
     ),
     (
+        KernelDiagnostic::NoteLifecycleAxisAbsent,
+        "note.lifecycle-axis-absent",
+        Severity::Error,
+    ),
+    (
         KernelDiagnostic::LinkDanglingTypedLink,
         "link.dangling-typed-link",
         Severity::Error,
@@ -995,6 +1002,7 @@ macro_rules! note_variants {
             | KernelDiagnostic::NoteRelationshipValueInvalid
             | KernelDiagnostic::NoteRequiredNamespaceMissing
             | KernelDiagnostic::NoteTagOutsideVocabulary
+            | KernelDiagnostic::NoteLifecycleAxisAbsent
     };
 }
 
@@ -1151,6 +1159,7 @@ fn expected_note_id(kind: KernelDiagnostic) -> &'static str {
         NoteRelationshipValueInvalid => "note.relationship-value-invalid",
         NoteRequiredNamespaceMissing => "note.required-namespace-missing",
         NoteTagOutsideVocabulary => "note.tag-outside-vocabulary",
+        NoteLifecycleAxisAbsent => "note.lifecycle-axis-absent",
         _ => "",
     }
 }

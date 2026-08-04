@@ -48,6 +48,7 @@
 
 mod doctor;
 mod json;
+mod list;
 mod markdown;
 
 #[cfg(test)]
@@ -68,7 +69,8 @@ use crate::installation::{Installation, InstallationRecord, VaultEntry};
 use crate::vault::{Opened, VaultRoot};
 
 pub use doctor::doctor_text;
-pub use json::{contract_json, doctor_json};
+pub use json::{contract_json, doctor_json, list_json};
+pub use list::list_text;
 pub use markdown::contract_markdown;
 
 /// The version of the structured output this module emits.

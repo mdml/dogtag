@@ -9,13 +9,15 @@
 //! carries no version string of its own: everything it reports comes from
 //! [`dogtag::version`].
 //!
-//! Three surfaces:
+//! Four surfaces:
 //!
 //! - `dogtag version` — the SDK's version, and nothing else.
 //! - `dogtag doctor` — a vault's configuration health check. It opens exactly
 //!   two files, writes nothing anywhere, and never refuses to run.
 //! - `dogtag contract explain` — the resolved contract rendered as the
 //!   instructions an agent follows, and a refusal when it did not resolve.
+//! - `dogtag list` — body-free corpus summaries with composable SDK-owned
+//!   filters.
 //!
 //! Exit codes are `0`, `1` and `2`, and no more. Severity alone decides `0`
 //! from `1`; `2` is reserved for an argument-parsing failure that produces no
@@ -28,6 +30,7 @@ mod doctor;
 mod environment;
 mod exit;
 mod explain;
+mod listing;
 mod output;
 mod select;
 
@@ -57,6 +60,8 @@ enum Command {
     Version,
     /// Report a vault's configuration health.
     Doctor(DoctorArgs),
+    /// Enumerate a vault's notes with composable filters.
+    List(ListArgs),
     /// Work with the vault's committed contract.
     Contract {
         #[command(subcommand)]
@@ -129,6 +134,30 @@ struct ExplainArgs {
     strict: bool,
 }
 
+#[derive(Args)]
+struct ListArgs {
+    #[command(flatten)]
+    vault: VaultArg,
+    /// The report's format.
+    #[arg(long, value_enum, default_value_t = ListFormat::Text)]
+    format: ListFormat,
+    /// Treat warnings as failures for the exit code only.
+    #[arg(long)]
+    strict: bool,
+    /// Match the bound type exactly.
+    #[arg(long = "type", value_name = "NAME")]
+    type_name: Option<String>,
+    /// Match one literal, complete tag exactly (not a namespace prefix).
+    #[arg(long, value_name = "TAG")]
+    tag: Option<String>,
+    /// Match the declared lifecycle axis value exactly.
+    #[arg(long, value_name = "VALUE", conflicts_with = "ordinary")]
+    lifecycle: Option<String>,
+    /// Match the ordinary state in its declared encoding.
+    #[arg(long, conflicts_with = "lifecycle")]
+    ordinary: bool,
+}
+
 /// How `doctor` reports.
 #[derive(Clone, Copy, ValueEnum)]
 enum DoctorFormat {
@@ -147,6 +176,14 @@ enum ExplainFormat {
     Json,
 }
 
+#[derive(Clone, Copy, ValueEnum)]
+enum ListFormat {
+    /// One tab-separated summary per line.
+    Text,
+    /// One structured report carrying summaries and diagnostics.
+    Json,
+}
+
 fn main() {
     let command = Cli::parse().command;
     process::exit(dispatch(&Environment::from_process(), command));
@@ -161,6 +198,8 @@ fn dispatch(environment: &Environment, command: Command) -> i32 {
         Command::Version => version(environment),
         Command::Doctor(args) => refuse_empty(environment, args.vault.requested())
             .unwrap_or_else(|| doctor::run(environment, &args)),
+        Command::List(args) => refuse_empty(environment, args.vault.requested())
+            .unwrap_or_else(|| listing::run(environment, &args)),
         Command::Contract {
             command: ContractCommand::Explain(args),
         } => refuse_empty(environment, args.vault.requested())
