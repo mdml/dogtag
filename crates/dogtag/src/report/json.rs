@@ -1,4 +1,4 @@
-//! The two structured reports.
+//! The structured reports.
 //!
 //! Both are one JSON document carrying its own [`SCHEMA_VERSION`], pretty
 //! printed and newline-terminated. `serde`'s derive is used here and **only**
@@ -33,14 +33,14 @@ use serde::Serialize;
 
 use super::{
     ContractFacts, DoctorReport, Evaluated, InstallationFacts, SCHEMA_VERSION, Sections,
-    VersionFacts,
+    ShowReport, VersionFacts,
 };
 use crate::contract::{
     CONTRACT_PATH, Capability, Contract, FieldDecl, LifecycleDecl, Ordinary, PropertyDecl,
     PropertyKind, RelationshipDecl, TagNamespaceDecl, TagsDecl, TypeDecl,
 };
 use crate::diagnostic::{Diagnostic, FileRef, Location, Position, Related, SeverityCounts, Span};
-use crate::note::{ListResult, NoteSummary};
+use crate::note::{Binding, ListResult, Note, NoteSummary, PropertyValue, RecordValue};
 use crate::provenance::{ProvenanceEntry, Source};
 use crate::vault::VaultRoot;
 
@@ -117,6 +117,143 @@ pub fn contract_json(root: &VaultRoot, contract: &Contract) -> String {
             .map(provenance_wire)
             .collect(),
     })
+}
+
+/// Renders a `show` result and its diagnostic envelope as one JSON document.
+pub fn show_json(report: &ShowReport) -> String {
+    document(&ShowWire {
+        schema_version: SCHEMA_VERSION,
+        report: "show",
+        note: report.note().map(|note| note_wire(report, note)),
+        diagnostics: report.diagnostics().iter().map(diagnostic_wire).collect(),
+        summary: summary_wire(report.counts()),
+    })
+}
+
+#[derive(Serialize)]
+struct ShowWire<'a> {
+    schema_version: u32,
+    report: &'static str,
+    note: Option<NoteWire<'a>>,
+    diagnostics: Vec<DiagnosticWire<'a>>,
+    summary: SummaryWire,
+}
+
+#[derive(Serialize)]
+struct NoteWire<'a> {
+    path: &'a str,
+    title: Option<&'a str>,
+    r#type: BindingWire<'a>,
+    properties: Vec<ShownPropertyWire<'a>>,
+    relationships: Vec<ShownRelationshipWire<'a>>,
+    tags: &'a [String],
+    body: &'a str,
+}
+
+#[derive(Serialize)]
+struct BindingWire<'a> {
+    name: Option<&'a str>,
+    bound_by: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    declared_as: Option<&'a str>,
+}
+
+#[derive(Serialize)]
+struct ShownPropertyWire<'a> {
+    name: &'a str,
+    kind: &'static str,
+    value: ShownValueWire<'a>,
+}
+
+#[derive(Serialize)]
+#[serde(untagged)]
+enum ShownValueWire<'a> {
+    Scalar(&'a str),
+    List(&'a [String]),
+    Record(Vec<ShownFieldWire<'a>>),
+    RecordList(Vec<Vec<ShownFieldWire<'a>>>),
+}
+
+#[derive(Serialize)]
+struct ShownFieldWire<'a> {
+    name: &'a str,
+    value: &'a str,
+}
+
+#[derive(Serialize)]
+struct ShownRelationshipWire<'a> {
+    predicate: &'a str,
+    edges: Vec<ShownEdgeWire<'a>>,
+}
+
+#[derive(Serialize)]
+struct ShownEdgeWire<'a> {
+    written: &'a str,
+    target: Option<&'a str>,
+}
+
+fn note_wire<'a>(report: &'a ShowReport, note: &'a Note) -> NoteWire<'a> {
+    NoteWire {
+        path: note.path().as_str(),
+        title: note.title(),
+        r#type: binding_wire(note.binding()),
+        properties: note
+            .properties()
+            .iter()
+            .map(|property| ShownPropertyWire {
+                name: property.name(),
+                kind: report.kind(property.name()).as_str(),
+                value: shown_value(property.value()),
+            })
+            .collect(),
+        relationships: note
+            .relationships()
+            .iter()
+            .map(|relationship| ShownRelationshipWire {
+                predicate: relationship.predicate(),
+                edges: relationship
+                    .edges()
+                    .iter()
+                    .map(|edge| ShownEdgeWire {
+                        written: edge.written(),
+                        target: edge.target().map(|path| path.as_str()),
+                    })
+                    .collect(),
+            })
+            .collect(),
+        tags: note.tags(),
+        body: note.body(),
+    }
+}
+
+fn binding_wire(binding: &Binding) -> BindingWire<'_> {
+    BindingWire {
+        name: binding.type_name(),
+        bound_by: binding.bound_by(),
+        declared_as: binding.discriminator(),
+    }
+}
+
+fn shown_value(value: &PropertyValue) -> ShownValueWire<'_> {
+    match value {
+        PropertyValue::Scalar(value) => ShownValueWire::Scalar(value),
+        PropertyValue::List(values) => ShownValueWire::List(values),
+        PropertyValue::Record(record) => ShownValueWire::Record(shown_record(record)),
+        PropertyValue::RecordList(records) => {
+            ShownValueWire::RecordList(records.iter().map(shown_record).collect())
+        }
+    }
+}
+
+fn shown_record(record: &RecordValue) -> Vec<ShownFieldWire<'_>> {
+    record
+        .fields()
+        .iter()
+        .map(|field| ShownFieldWire {
+            name: field.name(),
+            value: field.value(),
+        })
+        .collect()
 }
 
 /// One JSON document, pretty printed and newline-terminated.

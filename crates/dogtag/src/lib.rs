@@ -52,6 +52,9 @@
 //! reference rather than of the corpus. Nothing is persisted: the name index is
 //! built while a corpus is read and answered from memory. `list` is the first
 //! corpus-reading surface; `check` and `show` remain later slices of M3.
+//! built while a corpus is read and answered from memory, and no surface reads
+//! a corpus for `show`; `check` and `list` remain the later surfaces that will
+//! consume the same model.
 //!
 //! - `diagnostic` — the envelope every failure is reported as: the exhaustive
 //!   kernel identifier set, the `ext.` namespace consumers mint their own
@@ -70,8 +73,8 @@
 //!   one says, and which note each of its references names.
 //! - `vault` — discovery, exact-path verification, root trust, and `open`.
 //! - `provenance` — where each resolved leaf value came from.
-//! - `report` — the `doctor` report, its structured schema, and the generated
-//!   agent contract.
+//! - `report` — the `doctor` and `show` reports, their SDK-owned renderings,
+//!   the structured schema, and the generated agent contract.
 //!
 //! [`VERSION`] and [`version`] report the SDK's own version, and every
 //! official surface reports that value rather than carrying one of its own.

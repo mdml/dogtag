@@ -18,6 +18,7 @@
 //!   instructions an agent follows, and a refusal when it did not resolve.
 //! - `dogtag list` — body-free corpus summaries with composable SDK-owned
 //!   filters.
+//! - `dogtag show` — one note's SDK-rendered document model.
 //!
 //! Exit codes are `0`, `1` and `2`, and no more. Severity alone decides `0`
 //! from `1`; `2` is reserved for an argument-parsing failure that produces no
@@ -33,6 +34,7 @@ mod explain;
 mod listing;
 mod output;
 mod select;
+mod show;
 
 use std::process;
 
@@ -62,6 +64,8 @@ enum Command {
     Doctor(DoctorArgs),
     /// Enumerate a vault's notes with composable filters.
     List(ListArgs),
+    /// Render one note's document model.
+    Show(ShowArgs),
     /// Work with the vault's committed contract.
     Contract {
         #[command(subcommand)]
@@ -158,6 +162,21 @@ struct ListArgs {
     ordinary: bool,
 }
 
+#[derive(Args)]
+struct ShowArgs {
+    /// A vault-relative path (`.md` optional) or an unambiguous bare name.
+    #[arg(value_name = "REF")]
+    reference: String,
+    #[command(flatten)]
+    vault: VaultArg,
+    /// The rendering's format.
+    #[arg(long, value_enum, default_value_t = ShowFormat::Text)]
+    format: ShowFormat,
+    /// Treat warnings as failures — for the exit code only.
+    #[arg(long)]
+    strict: bool,
+}
+
 /// How `doctor` reports.
 #[derive(Clone, Copy, ValueEnum)]
 enum DoctorFormat {
@@ -184,6 +203,15 @@ enum ListFormat {
     Json,
 }
 
+/// How `show` renders the document model.
+#[derive(Clone, Copy, ValueEnum)]
+enum ShowFormat {
+    /// SDK-owned human-readable text.
+    Text,
+    /// The structured result and diagnostic envelope.
+    Json,
+}
+
 fn main() {
     let command = Cli::parse().command;
     process::exit(dispatch(&Environment::from_process(), command));
@@ -200,6 +228,8 @@ fn dispatch(environment: &Environment, command: Command) -> i32 {
             .unwrap_or_else(|| doctor::run(environment, &args)),
         Command::List(args) => refuse_empty(environment, args.vault.requested())
             .unwrap_or_else(|| listing::run(environment, &args)),
+        Command::Show(args) => refuse_empty(environment, args.vault.requested())
+            .unwrap_or_else(|| show::run(environment, &args)),
         Command::Contract {
             command: ContractCommand::Explain(args),
         } => refuse_empty(environment, args.vault.requested())
