@@ -1071,6 +1071,140 @@ mod tests {
     }
 
     #[test]
+    fn an_alias_and_a_fragment_come_off_before_a_typed_link_resolves() {
+        // `[[target|display]]` and `[[target#heading]]`: the alias and the
+        // fragment are cosmetic and unvalidated, never part of resolution —
+        // and bare-name against path-qualified is read off the stripped target.
+        let tree = Tree::new("corpus-alias-fragment");
+        for (reference, resolved) in [
+            ("\"[[engine#history|the Engine]]\"", "engine.md"),
+            ("\"[[engines/analytical#top]]\"", "engines/analytical.md"),
+            ("\"[[engine|]]\"", "engine.md"),
+        ] {
+            let corpus = read(
+                &tree,
+                &[
+                    ("people/ada.md", &linking(reference)),
+                    ("engines/analytical.md", "# The Analytical Engine\n"),
+                ],
+            );
+            let reported = ids(&corpus);
+            assert!(reported.is_empty(), "{reference}: {reported:?}");
+            let note = corpus_note(&corpus, "people/ada.md");
+            let edge = &note.relationship("works-at").expect("declared")[0];
+            assert_eq!(edge.target().map(VaultPath::as_str), Some(resolved));
+        }
+    }
+
+    #[test]
+    fn a_markdown_target_strips_its_fragment_before_it_resolves() {
+        // The alias plane is native to the markdown spelling — `[label](…)` —
+        // so the symmetric half of the rule is the fragment, on both planes.
+        let tree = Tree::new("corpus-markdown-fragment");
+        let note = concat!(
+            "---\ntype: person\nworks-at: \"[The Engine](engines/analytical.md#history)\"\n---\n",
+            "# Ada\n\nAs described [above](#overview).\n",
+        );
+        let corpus = read_against(
+            &tree,
+            MARKDOWN,
+            &[
+                ("ada.md", note),
+                ("engines/analytical.md", "# The Analytical Engine\n"),
+            ],
+        );
+        let reported = ids(&corpus);
+        assert!(reported.is_empty(), "{reported:?}");
+        let ada = corpus_note(&corpus, "ada.md");
+        let edge = &ada.relationship("works-at").expect("declared")[0];
+        assert_eq!(
+            edge.target().map(VaultPath::as_str),
+            Some("engines/analytical.md")
+        );
+        assert_eq!(
+            ada.body_references()[0].target().map(VaultPath::as_str),
+            Some("ada.md"),
+            "an empty target with a fragment names the containing note in either dialect"
+        );
+    }
+
+    #[test]
+    fn an_empty_target_with_a_fragment_names_the_note_it_is_written_in() {
+        // `[[#heading]]` is a reference to the containing note itself: it
+        // always resolves — to the one note that certainly exists — so it is
+        // never dangling on either plane.
+        let tree = Tree::new("corpus-own-note");
+        let note = concat!(
+            "---\ntype: person\nfull_name: Ada\nworks-at: \"[[#overview]]\"\n---\n",
+            "# Ada\n\nSee [[#overview]] below.\n",
+        );
+        let corpus = read(&tree, &[("ada.md", note)]);
+        let reported = ids(&corpus);
+        assert!(reported.is_empty(), "{reported:?}");
+        let ada = corpus_note(&corpus, "ada.md");
+        let edge = &ada.relationship("works-at").expect("declared")[0];
+        assert_eq!(edge.target().map(VaultPath::as_str), Some("ada.md"));
+        assert_eq!(
+            ada.body_references()[0].target().map(VaultPath::as_str),
+            Some("ada.md")
+        );
+    }
+
+    #[test]
+    fn a_wholly_empty_reference_dangles_rather_than_naming_the_note_itself() {
+        // Only a *nonempty* fragment turns an empty target into the containing
+        // note. `[[]]`, `[[|alias]]` and `[[#]]` all spell the empty reference,
+        // which is a name no note bears — a typed link written as one dangles,
+        // exactly as it did before the alias and anchor syntax landed.
+        let tree = Tree::new("corpus-empty-reference");
+        let note = concat!(
+            "---\ntype: person\nfull_name: Ada\n",
+            "works-at:\n  - \"[[]]\"\n  - \"[[|alias]]\"\n  - \"[[#]]\"\n---\n",
+        );
+        let corpus = read(&tree, &[("ada.md", note)]);
+        assert_eq!(
+            ids(&corpus),
+            [
+                "link.dangling-typed-link",
+                "link.dangling-typed-link",
+                "link.dangling-typed-link"
+            ]
+        );
+    }
+
+    #[test]
+    fn a_link_finding_names_the_stripped_target_rather_than_the_cosmetic_parts() {
+        // What failed to resolve is the target, so that is what the finding
+        // names: the alias and the fragment could not have changed the answer.
+        let tree = Tree::new("corpus-finding-target");
+        let dangling = read(
+            &tree,
+            &[(
+                "ada.md",
+                &linking("\"[[difference#no-1|the Difference Engine]]\""),
+            )],
+        );
+        let message = one_finding(&dangling, "link.dangling-typed-link");
+        assert!(message.contains("`difference`"), "{message}");
+        let leaked = ["no-1", "Difference"].map(|part| message.contains(part));
+        assert_eq!(leaked, [false, false], "{message}");
+        let prose = concat!(
+            "---\ntype: person\nfull_name: Ada\nworks-at: \"[[engine]]\"\n---\n",
+            "# Ada\n\nSee [[daily#june|the June log]].\n",
+        );
+        let ambiguous = read(
+            &tree,
+            &[
+                ("ada.md", prose),
+                ("2025/daily.md", "# Daily\n"),
+                ("2026/daily.md", "# Daily\n"),
+            ],
+        );
+        let message = one_finding(&ambiguous, "link.ambiguous-reference");
+        assert!(message.contains("`daily`"), "{message}");
+    }
+
+    #[test]
     fn the_bodys_untyped_references_resolve_and_a_dangling_one_is_never_a_finding() {
         let tree = Tree::new("corpus-body-references");
         let note = concat!(

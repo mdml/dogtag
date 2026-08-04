@@ -24,6 +24,21 @@
 //! module sees it. That is the ecosystem's own convention and it costs a note
 //! two characters.
 //!
+//! # The alias and the anchor
+//!
+//! Inside a wikilink's inner text, the first `|` splits off a **display
+//! alias**: everything after it is cosmetic — never validated, never part of
+//! resolution. A markdown link's label is native to its syntax and comes off
+//! with the delimiters, and a value carrying no delimiters is the reference
+//! part itself, so the alias split runs only between a wikilink's brackets.
+//!
+//! Within the reference part — whichever dialect and spelling produced it —
+//! the first `#` splits the **target** from a **fragment**. The fragment is
+//! unvalidated at M3 and never part of resolution, with one shape it alone
+//! expresses: an empty target with a nonempty fragment (`[[#heading]]`) names
+//! the note it is written in, so it is never dangling. Bare-name against
+//! path-qualified is classified on the target after both splits.
+//!
 //! # What this module deliberately does not know
 //!
 //! No markdown beyond the delimiters. An image (`![alt](pic.png)`) reads as a
@@ -36,13 +51,41 @@ use core::ops::Range;
 
 use crate::contract::LinkDialect;
 
+/// One link's value, split into the parts resolution reads.
+///
+/// The display alias is not carried: it is cosmetic and nothing downstream may
+/// consult it, so the parse discards it where a field would invite a reader.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) struct Reference<'a> {
+    /// What resolution reads: the reference part before any `#`.
+    pub(crate) target: &'a str,
+    /// What follows the first `#` of the reference part, when one is written.
+    /// Unvalidated at M3, and never part of resolution.
+    pub(crate) fragment: Option<&'a str>,
+}
+
+impl Reference<'_> {
+    /// Whether this is `[[#heading]]`: an empty target with a nonempty
+    /// fragment, which names the note it is written in and never dangles.
+    pub(crate) fn names_own_note(&self) -> bool {
+        self.target.is_empty() && self.fragment.is_some_and(|fragment| !fragment.is_empty())
+    }
+}
+
 /// The reference a link's value names.
 ///
 /// The whole value is one link or it is none: a scalar that opens with the
 /// dialect's opening delimiter and ends with its closing one names what sits
-/// between them, and every other scalar is the reference it spells.
-pub(crate) fn reference(dialect: LinkDialect, written: &str) -> &str {
-    Grammar::of(dialect).unwrap(written).unwrap_or(written)
+/// between them — its alias split off under `wikilink` — and every other
+/// scalar is the reference part it spells. Either way, the first `#` of the
+/// reference part then splits the target from its fragment.
+pub(crate) fn reference(dialect: LinkDialect, written: &str) -> Reference<'_> {
+    let part = Grammar::of(dialect).unwrap(written).unwrap_or(written);
+    let (target, fragment) = match part.split_once('#') {
+        Some((target, fragment)) => (target, Some(fragment)),
+        None => (part, None),
+    };
+    Reference { target, fragment }
 }
 
 /// Every link a body writes, as byte ranges into `text`, in the order it wrote
@@ -69,12 +112,14 @@ pub(crate) fn scan(dialect: LinkDialect, text: &str) -> Vec<Range<usize>> {
 ///
 /// `split` is what a dialect writing a label alongside its target needs: a
 /// markdown link is `[label](target)`, so the target is what follows the last
-/// `](` inside the outer pair. A wikilink carries no label, and the whole
-/// inside is the reference.
+/// `](` inside the outer pair. A wikilink instead writes its label *after* the
+/// reference — `alias` is the `|` that introduces it, and the reference is
+/// what sits before the first one.
 struct Grammar {
     open: &'static str,
     close: &'static str,
     split: Option<&'static str>,
+    alias: Option<char>,
 }
 
 impl Grammar {
@@ -84,11 +129,13 @@ impl Grammar {
                 open: "[[",
                 close: "]]",
                 split: None,
+                alias: Some('|'),
             },
             LinkDialect::Markdown => Self {
                 open: "[",
                 close: ")",
                 split: Some("]("),
+                alias: None,
             },
         }
     }
@@ -96,10 +143,16 @@ impl Grammar {
     /// The reference `text` names, when the whole of it is one link.
     fn unwrap<'a>(&self, text: &'a str) -> Option<&'a str> {
         let inside = text.strip_prefix(self.open)?.strip_suffix(self.close)?;
-        match self.split {
-            Some(split) => inside.rsplit_once(split).map(|(_, target)| target),
-            None => Some(inside),
-        }
+        let labelled = match self.split {
+            Some(split) => inside.rsplit_once(split)?.1,
+            None => inside,
+        };
+        Some(match self.alias {
+            Some(alias) => labelled
+                .split_once(alias)
+                .map_or(labelled, |(reference, _)| reference),
+            None => labelled,
+        })
     }
 
     /// The next delimited run at or after `cursor`, delimiters included.
@@ -115,20 +168,24 @@ impl Grammar {
 mod tests {
     use super::*;
 
+    fn target(dialect: LinkDialect, written: &str) -> &str {
+        reference(dialect, written).target
+    }
+
     fn found(dialect: LinkDialect, text: &str) -> Vec<(&str, &str)> {
         scan(dialect, text)
             .into_iter()
             .map(|at| &text[at])
-            .map(|written| (written, reference(dialect, written)))
+            .map(|written| (written, target(dialect, written)))
             .collect()
     }
 
     #[test]
     fn a_wikilink_value_names_what_its_brackets_hold() {
         let read = [
-            reference(LinkDialect::Wikilink, "[[Analytical Engine]]"),
-            reference(LinkDialect::Wikilink, "[[people/ada]]"),
-            reference(LinkDialect::Wikilink, "[[]]"),
+            target(LinkDialect::Wikilink, "[[Analytical Engine]]"),
+            target(LinkDialect::Wikilink, "[[people/ada]]"),
+            target(LinkDialect::Wikilink, "[[]]"),
         ];
         assert_eq!(read, ["Analytical Engine", "people/ada", ""]);
     }
@@ -136,10 +193,107 @@ mod tests {
     #[test]
     fn a_markdown_value_names_its_target_rather_than_its_label() {
         let read = [
-            reference(LinkDialect::Markdown, "[Ada Lovelace](people/ada.md)"),
-            reference(LinkDialect::Markdown, "[](ada.md)"),
+            target(LinkDialect::Markdown, "[Ada Lovelace](people/ada.md)"),
+            target(LinkDialect::Markdown, "[](ada.md)"),
         ];
         assert_eq!(read, ["people/ada.md", "ada.md"]);
+    }
+
+    #[test]
+    fn an_alias_splits_at_the_first_pipe_and_only_between_a_wikilinks_brackets() {
+        let read = [
+            target(LinkDialect::Wikilink, "[[Analytical Engine|the Engine]]"),
+            target(LinkDialect::Wikilink, "[[Analytical Engine|]]"),
+            target(LinkDialect::Wikilink, "[[a|b|c]]"),
+            // No delimiters means no inner text: the scalar is the reference
+            // part itself, and a `|` in it is bytes rather than an alias.
+            target(LinkDialect::Wikilink, "a|b"),
+        ];
+        assert_eq!(read, ["Analytical Engine", "Analytical Engine", "a", "a|b"]);
+    }
+
+    #[test]
+    fn a_fragment_splits_at_the_first_hash_of_the_reference_part() {
+        let read = [
+            reference(LinkDialect::Wikilink, "[[engine#history]]"),
+            reference(LinkDialect::Wikilink, "[[engine#a#b]]"),
+            reference(LinkDialect::Wikilink, "[[engine#]]"),
+            reference(LinkDialect::Wikilink, "[[engine]]"),
+            // An undelimited scalar is the reference part, so it splits too.
+            reference(LinkDialect::Wikilink, "engine#history"),
+        ];
+        let parts: Vec<(&str, Option<&str>)> = read
+            .iter()
+            .map(|parsed| (parsed.target, parsed.fragment))
+            .collect();
+        assert_eq!(
+            parts,
+            [
+                ("engine", Some("history")),
+                ("engine", Some("a#b")),
+                ("engine", Some("")),
+                ("engine", None),
+                ("engine", Some("history")),
+            ]
+        );
+    }
+
+    #[test]
+    fn the_alias_comes_off_before_the_fragment_is_looked_for() {
+        // The `|` splits the inner text first; the `#` then splits only the
+        // reference part, so a `#` in the display text is display text.
+        let read = [
+            reference(LinkDialect::Wikilink, "[[engine#history|the Engine]]"),
+            reference(LinkDialect::Wikilink, "[[engine|see #3]]"),
+        ];
+        let parts: Vec<(&str, Option<&str>)> = read
+            .iter()
+            .map(|parsed| (parsed.target, parsed.fragment))
+            .collect();
+        assert_eq!(parts, [("engine", Some("history")), ("engine", None)]);
+    }
+
+    #[test]
+    fn a_markdown_target_strips_its_fragment_the_same_way() {
+        let read = [
+            reference(LinkDialect::Markdown, "[Ada](people/ada.md#early-life)"),
+            reference(LinkDialect::Markdown, "people/ada.md#early-life"),
+        ];
+        let parts: Vec<(&str, Option<&str>)> = read
+            .iter()
+            .map(|parsed| (parsed.target, parsed.fragment))
+            .collect();
+        let expected = ("people/ada.md", Some("early-life"));
+        assert_eq!(parts, [expected, expected]);
+    }
+
+    #[test]
+    fn an_empty_target_with_a_nonempty_fragment_names_the_containing_note() {
+        let own = [
+            reference(LinkDialect::Wikilink, "[[#heading]]"),
+            reference(LinkDialect::Markdown, "[above](#heading)"),
+        ];
+        assert!(own.iter().all(Reference::names_own_note), "{own:?}");
+        // A wholly empty reference is not a self-reference — with no fragment
+        // or an empty one, there is nothing said to be in the containing note.
+        let elsewhere = [
+            reference(LinkDialect::Wikilink, "[[]]"),
+            reference(LinkDialect::Wikilink, "[[|alias]]"),
+            reference(LinkDialect::Wikilink, "[[#]]"),
+            reference(LinkDialect::Wikilink, "[[engine#history]]"),
+        ];
+        assert!(
+            !elsewhere.iter().any(Reference::names_own_note),
+            "{elsewhere:?}"
+        );
+    }
+
+    #[test]
+    fn a_parsed_reference_clones_compares_and_formats() {
+        let parsed = reference(LinkDialect::Wikilink, "[[engine#history|the Engine]]");
+        assert_eq!(parsed.clone(), parsed);
+        assert_ne!(parsed, reference(LinkDialect::Wikilink, "[[engine]]"));
+        assert!(format!("{parsed:?}").contains("history"));
     }
 
     #[test]
@@ -147,11 +301,11 @@ mod tests {
         // The reading this module states: no lexical-fault identifier, because
         // the value either names a note or it does not.
         let plain = [
-            reference(LinkDialect::Wikilink, "Acme Corp"),
-            reference(LinkDialect::Wikilink, "[[unclosed"),
-            reference(LinkDialect::Wikilink, "[[closed]] and more"),
-            reference(LinkDialect::Markdown, "[no target]"),
-            reference(LinkDialect::Markdown, "people/ada.md"),
+            target(LinkDialect::Wikilink, "Acme Corp"),
+            target(LinkDialect::Wikilink, "[[unclosed"),
+            target(LinkDialect::Wikilink, "[[closed]] and more"),
+            target(LinkDialect::Markdown, "[no target]"),
+            target(LinkDialect::Markdown, "people/ada.md"),
         ];
         assert_eq!(
             plain,
@@ -171,7 +325,7 @@ mod tests {
         // already spells. A scalar carrying two is read as the one reference
         // its outer delimiters mark — and names no note, which is reported.
         assert_eq!(
-            reference(LinkDialect::Wikilink, "[[a]] and [[b]]"),
+            target(LinkDialect::Wikilink, "[[a]] and [[b]]"),
             "a]] and [[b"
         );
     }
@@ -180,8 +334,8 @@ mod tests {
     fn the_dialect_the_contract_declares_is_the_only_one_read() {
         // A corpus declares one spelling; the other is bytes.
         let crossed = (
-            reference(LinkDialect::Wikilink, "[Ada](ada.md)"),
-            reference(LinkDialect::Markdown, "[[Ada]]"),
+            target(LinkDialect::Wikilink, "[Ada](ada.md)"),
+            target(LinkDialect::Markdown, "[[Ada]]"),
         );
         assert_eq!(crossed, ("[Ada](ada.md)", "[[Ada]]"));
     }

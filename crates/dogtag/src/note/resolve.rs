@@ -37,6 +37,16 @@
 //!
 //! So the plane decides one thing only — whether *absence* is reported — and
 //! nothing else.
+//!
+//! # What resolves is the target, and the target alone
+//!
+//! [`super::links`] splits a written reference into target, fragment, and (for
+//! a wikilink) display alias. Resolution reads the target: the alias is
+//! cosmetic and the fragment is unvalidated at M3, so `[[engine#history|the
+//! Engine]]` resolves — and, when it must, is reported — as `engine`. The one
+//! shape the fragment decides is the self-reference: an empty target with a
+//! nonempty fragment (`[[#heading]]`) names the note it is written in, which
+//! always exists, so it is never dangling and never ambiguous.
 
 use crate::contract::LinkDialect;
 use crate::diagnostic::{Diagnostic, FileRef, KernelDiagnostic, Location, Related, VaultPath};
@@ -73,65 +83,100 @@ impl Resolver {
     /// references in document order — so what a note reports never depends on
     /// anything but the note and the corpus.
     fn note(&self, note: &mut Note) -> Vec<Diagnostic> {
+        let resolver = InNote {
+            corpus: self,
+            own: note.path.clone(),
+        };
         let mut reported = Vec::new();
         let edges = note
             .relationships
             .iter_mut()
             .flat_map(|relationship| relationship.edges.iter_mut());
         for edge in edges {
-            let (target, refused) = self.link(&edge.written, &edge.at);
+            let (target, refused) = resolver.resolve(&edge.written, &edge.at, Absence::Reported);
             edge.target = target;
             reported.extend(refused);
         }
         for reference in &mut note.references {
-            let (target, refused) = self.prose(&reference.written, &reference.at);
+            let (target, refused) =
+                resolver.resolve(&reference.written, &reference.at, Absence::Excused);
             reference.target = target;
             reported.extend(refused);
         }
         reported
     }
+}
 
-    /// One typed link: the note it names, and what to report when that is not
-    /// exactly one note.
-    fn link(&self, written: &str, at: &Location) -> (Option<VaultPath>, Option<Diagnostic>) {
-        match self.named(written) {
-            Named::One(path) => (Some(path), None),
-            Named::Ambiguous(candidates) => (None, Some(self.ambiguity(written, &candidates, at))),
-            Named::Absent => (
-                None,
-                Some(dangling(links::reference(self.dialect, written)).at(at.clone())),
-            ),
-        }
-    }
+/// The corpus, seen from the one note whose references are being resolved.
+///
+/// The containing note is part of what a reference means — `[[#heading]]`
+/// names it — so it is held here rather than passed alongside every reference.
+struct InNote<'a> {
+    corpus: &'a Resolver,
+    own: VaultPath,
+}
 
-    /// One untyped reference in prose: the same rule, minus the one finding a
-    /// claimless reference cannot carry.
-    fn prose(&self, written: &str, at: &Location) -> (Option<VaultPath>, Option<Diagnostic>) {
-        match self.named(written) {
-            Named::One(path) => (Some(path), None),
-            Named::Ambiguous(candidates) => (None, Some(self.ambiguity(written, &candidates, at))),
-            Named::Absent => (None, None),
+impl InNote<'_> {
+    /// One reference: the note it names, and what to report when that is not
+    /// exactly one note. The same rule at both doors — only `absence` differs.
+    fn resolve(
+        &self,
+        written: &str,
+        at: &Location,
+        absence: Absence,
+    ) -> (Option<VaultPath>, Option<Diagnostic>) {
+        match (self.named(written), absence) {
+            (Named::One(path), _) => (Some(path), None),
+            (Named::Ambiguous(candidates), _) => {
+                (None, Some(self.ambiguity(written, &candidates, at)))
+            }
+            (Named::Absent, Absence::Reported) => {
+                (None, Some(dangling(self.target(written)).at(at.clone())))
+            }
+            (Named::Absent, Absence::Excused) => (None, None),
         }
     }
 
     /// A bare name this corpus's own text wrote and several notes bear.
     fn ambiguity(&self, written: &str, candidates: &[VaultPath], at: &Location) -> Diagnostic {
-        ambiguous(links::reference(self.dialect, written), candidates).at(at.clone())
+        ambiguous(self.target(written), candidates).at(at.clone())
+    }
+
+    /// The target `written` resolves by: the reference part with its dialect's
+    /// delimiters, alias, and fragment split away.
+    fn target<'a>(&self, written: &'a str) -> &'a str {
+        links::reference(self.corpus.dialect, written).target
     }
 
     /// What a reference names, read in this corpus's declared dialect.
+    ///
+    /// An empty target with a nonempty fragment — `[[#heading]]` — names the
+    /// note it is written in, which always exists, so it never dangles.
     fn named(&self, written: &str) -> Named {
-        match self.index.resolve(links::reference(self.dialect, written)) {
-            Resolution::One(at) => Named::One(self.paths[at].clone()),
-            Resolution::Ambiguous(candidates) => Named::Ambiguous(
-                candidates
-                    .iter()
-                    .map(|at| self.paths[*at].clone())
-                    .collect(),
-            ),
+        let reference = links::reference(self.corpus.dialect, written);
+        if reference.names_own_note() {
+            return Named::One(self.own.clone());
+        }
+        let paths = &self.corpus.paths;
+        match self.corpus.index.resolve(reference.target) {
+            Resolution::One(at) => Named::One(paths[at].clone()),
+            Resolution::Ambiguous(candidates) => {
+                Named::Ambiguous(candidates.iter().map(|at| paths[*at].clone()).collect())
+            }
             Resolution::Absent => Named::Absent,
         }
     }
+}
+
+/// The one thing a reference's plane decides: whether *absence* is reported.
+#[derive(Clone, Copy)]
+enum Absence {
+    /// A typed link claims a relationship, so a target that is not there is
+    /// `link.dangling-typed-link`.
+    Reported,
+    /// A prose reference claims nothing, and belongs in prose until its
+    /// target exists.
+    Excused,
 }
 
 /// What a reference named, in paths rather than positions.
