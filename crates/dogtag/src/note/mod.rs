@@ -16,7 +16,10 @@
 //! **A typed link must resolve; a prose reference need not.** A relationship a
 //! note claims and cannot back is reported against the reference that claims
 //! it, while an untyped reference in the body may legitimately point at a note
-//! that does not exist yet.
+//! that does not exist yet. That excuses a prose reference from *danglingness*
+//! and from nothing else: a bare name several notes bear names none of them
+//! wherever it is written, because ambiguity is a defect of the reference
+//! rather than of the corpus.
 //!
 //! **The declared kind decides what a value means.** Every scalar is read as
 //! its bytes and validated against the kind its declaration names; nothing is
@@ -1094,6 +1097,57 @@ mod tests {
                 ("[[difference]]", None),
             ],
             "a prose reference belongs in prose until its target exists"
+        );
+    }
+
+    #[test]
+    fn an_ambiguous_prose_reference_is_reported_although_a_dangling_one_is_not() {
+        // The plane decides whether *absence* is reported, and nothing else.
+        // A prose reference belongs in prose until its target exists — but an
+        // ambiguous reference's targets all exist and it names none of them,
+        // which is a defect of the reference wherever it is written.
+        let tree = Tree::new("corpus-body-ambiguous");
+        let note = concat!(
+            "---\ntype: person\nfull_name: Ada\nworks-at: \"[[engine]]\"\n---\n",
+            "# Ada\n\nSee [[daily]], and one day [[difference]].\n",
+        );
+        let corpus = read(
+            &tree,
+            &[
+                ("ada.md", note),
+                ("2025/daily.md", "# Daily\n"),
+                ("2026/daily.md", "# Daily\n"),
+            ],
+        );
+        let message = one_finding(&corpus, "link.ambiguous-reference");
+        assert!(message.contains("`daily`"), "{message}");
+        let location = corpus.diagnostics()[0].location.as_ref().expect("located");
+        assert_eq!(location.file.display_path(), "ada.md");
+        let span = location.span.expect("the reference has bytes to point at");
+        assert_eq!(
+            (span.start.line, span.start.column),
+            (8, 5),
+            "against the reference in the prose, not against the note"
+        );
+        let evidence: Vec<&str> = corpus.diagnostics()[0]
+            .related
+            .iter()
+            .map(|related| {
+                related
+                    .location
+                    .as_ref()
+                    .expect("located")
+                    .file
+                    .display_path()
+            })
+            .collect();
+        assert_eq!(evidence, ["2025/daily.md", "2026/daily.md"]);
+        let references = corpus_note(&corpus, "ada.md").body_references();
+        assert!(
+            references
+                .iter()
+                .all(|reference| reference.target().is_none()),
+            "neither names one note: the first several, the second none"
         );
     }
 

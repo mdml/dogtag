@@ -30,16 +30,27 @@
 //! immediately above the underline, where CommonMark folds the whole paragraph.
 //! A title written across two lines is not a title anyone writes.
 
+use core::ops::Range;
+
 use crate::contract::LinkDialect;
 
 use super::links;
-use super::model::Reference;
 
 /// How far a line is indented before it is a code block rather than prose.
 const CODE_INDENT: usize = 4;
 
 /// The two fences CommonMark opens a code block with.
 const FENCES: [&str; 2] = ["```", "~~~"];
+
+/// One untyped reference the prose writes, and where the note wrote it.
+pub(crate) struct Written {
+    /// The reference as the note wrote it, delimiters included.
+    pub(crate) text: String,
+    /// Its byte range **in the note**, not in the body: an ambiguous prose
+    /// reference is reported against the reference itself, and a reader is
+    /// looking at the file rather than at the body alone.
+    pub(crate) at: Range<usize>,
+}
 
 /// A note's body, and everything read out of it.
 pub(crate) struct Body {
@@ -48,18 +59,21 @@ pub(crate) struct Body {
     /// The first H1, when the note has one.
     pub(crate) title: Option<String>,
     /// The untyped references the prose writes, unresolved.
-    pub(crate) references: Vec<Reference>,
+    pub(crate) references: Vec<Written>,
 }
 
 /// Reads a note's body, in the dialect its contract declares.
-pub(crate) fn read(text: String, dialect: LinkDialect) -> Body {
+///
+/// `offset` is where the body begins in the note, and is carried straight into
+/// the references so that nothing downstream has to remember to add it.
+pub(crate) fn read(text: String, dialect: LinkDialect, offset: usize) -> Body {
     Body {
         title: title(&text),
         references: links::scan(dialect, &text)
             .into_iter()
-            .map(|written| Reference {
-                written: written.to_owned(),
-                target: None,
+            .map(|at| Written {
+                text: text[at.clone()].to_owned(),
+                at: offset + at.start..offset + at.end,
             })
             .collect(),
         text,
@@ -276,21 +290,29 @@ mod tests {
     #[test]
     fn a_body_answers_its_title_and_the_references_its_prose_writes() {
         let prose = "# Ada Lovelace\n\nWorked with [[Charles Babbage]] on [[Analytical Engine]].\n";
-        let body = read(prose.to_owned(), LinkDialect::Wikilink);
+        let body = read(prose.to_owned(), LinkDialect::Wikilink, 0);
         assert_eq!(body.text, prose, "the body is carried uninterpreted");
         assert_eq!(body.title.as_deref(), Some("Ada Lovelace"));
         let written: Vec<&str> = body
             .references
             .iter()
-            .map(|reference| reference.written.as_str())
+            .map(|reference| reference.text.as_str())
             .collect();
         assert_eq!(written, ["[[Charles Babbage]]", "[[Analytical Engine]]"]);
-        assert!(
-            body.references
-                .iter()
-                .all(|reference| reference.target.is_none()),
-            "resolution is a question about the corpus, answered elsewhere"
-        );
+    }
+
+    #[test]
+    fn a_reference_is_located_in_the_note_rather_than_in_the_body() {
+        // The offset is the body's own start, so a span measured from the range
+        // points where a reader of the file would look.
+        let prose = "See [[Ada]] and [[Babbage]].\n".to_owned();
+        let body = read(prose, LinkDialect::Wikilink, 40);
+        let located: Vec<Range<usize>> = body
+            .references
+            .iter()
+            .map(|reference| reference.at.clone())
+            .collect();
+        assert_eq!(located, [44..51, 56..67]);
     }
 
     #[test]
@@ -299,7 +321,7 @@ mod tests {
         // link extraction does not, because "the body is untouched beyond link
         // extraction" leaves the kernel no block structure to consult, and a
         // dangling untyped reference is a finding at no severity anyway.
-        let body = read("```\n[[Ada]]\n```\n".to_owned(), LinkDialect::Wikilink);
+        let body = read("```\n[[Ada]]\n```\n".to_owned(), LinkDialect::Wikilink, 0);
         assert_eq!(body.references.len(), 1);
         assert_eq!(body.title, None);
     }

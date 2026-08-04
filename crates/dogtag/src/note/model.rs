@@ -344,10 +344,21 @@ impl Edge {
 /// no severity**: a reference to a note that does not exist yet belongs in
 /// prose until it does, and danglingness is only a defect where a relationship
 /// was claimed.
+///
+/// Danglingness is the *only* thing prose is excused from. **Ambiguity is a
+/// defect of the reference itself** — its candidates all exist and it names
+/// none of them — so a bare name several notes bear is reported here exactly as
+/// it is on a typed link.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Reference {
     pub(crate) written: String,
     pub(crate) target: Option<VaultPath>,
+    /// Where the reference is written, for the one finding prose can carry.
+    ///
+    /// Held for the same reason [`Edge::at`] is: resolution runs once the whole
+    /// corpus is in hand, by which time the note's text — the only thing that
+    /// turns a byte range into a line and a column — has been dropped.
+    pub(crate) at: Location,
 }
 
 impl Reference {
@@ -357,6 +368,9 @@ impl Reference {
     }
 
     /// The note the reference resolves to, when it resolves to exactly one.
+    ///
+    /// `None` where the reference names nothing — which is no finding — and
+    /// where a bare name is one several notes bear, which is reported.
     pub fn target(&self) -> Option<&VaultPath> {
         self.target.as_ref()
     }
@@ -393,6 +407,7 @@ mod tests {
             references: vec![Reference {
                 written: "[[Charles Babbage]]".to_owned(),
                 target: None,
+                at: at(),
             }],
             tags: vec!["role/founder".to_owned()],
             title: Some("Ada Lovelace".to_owned()),
