@@ -159,6 +159,50 @@ pub enum KernelDiagnostic {
     /// reported here too: the record groups the two as a file that cannot be honestly read,
     /// and a consumer's next move — open the path and look — is the same for both.
     NoteUnreadable,
+    /// A note begins with a byte order mark.
+    ///
+    /// A warning rather than a refusal, unlike the contract's: the contract is dogtag's own
+    /// file and can be held to one encoding, while a corpus is decades of files written by
+    /// whatever wrote them.
+    NoteByteOrderMark,
+    /// A note uses carriage-return line endings.
+    ///
+    /// A warning, for the reason above. Nothing is normalized either way, so every span is
+    /// still measured over the bytes the file holds.
+    NoteCarriageReturnLineEnding,
+    /// A note's frontmatter block is not the subset's grammar.
+    NoteFrontmatterInvalid,
+    /// A note's frontmatter uses YAML the subset refuses: an anchor, an alias, a tag, a
+    /// multi-document stream, a non-string key, a duplicate key, or a shape nested deeper
+    /// than a record value.
+    ///
+    /// One identifier for the class, one diagnostic per occurrence, and the construct named
+    /// in the message — the shape `contract.unknown-key` already sets for a class of faults
+    /// whose repair is read off the span.
+    NoteFrontmatterUnsupported,
+    /// A note's `type` is not a scalar, so it names nothing.
+    NoteTypeInvalid,
+    /// A note's `type` names no type the contract declares.
+    ///
+    /// The catch-all binds *absence*, never *error*, so such a note binds to no type at all
+    /// and no type-directed rule is applied to it.
+    NoteUnknownType,
+    /// A note carries a frontmatter key its bound type declares nothing for.
+    ///
+    /// Info, permanently, and `--strict` never promotes it. A foreign editor writes its own
+    /// keys on essentially every note of a real corpus and no contract can describe them: an
+    /// error would make that corpus unopenable, and a warning that recurs benignly forever
+    /// trains its reader to ignore warnings.
+    NoteUndeclaredProperty,
+    /// A note omits a property its type requires, or a field its record requires.
+    NoteMissingRequiredProperty,
+    /// A note omits every edge for a predicate its type requires at least one of.
+    NoteMissingRequiredRelationship,
+    /// A note's value does not satisfy the lexical form of the kind its declaration names.
+    NotePropertyKindInvalid,
+    /// A note writes something under a declared predicate that is not a link, or a sequence
+    /// of them.
+    NoteRelationshipValueInvalid,
     /// The installation record could not be read.
     InstallationUnreadable,
     /// The installation record is not valid UTF-8.
@@ -481,6 +525,61 @@ const REGISTRY: &[(KernelDiagnostic, &str, Severity)] = &[
     (
         KernelDiagnostic::NoteUnreadable,
         "note.unreadable",
+        Severity::Error,
+    ),
+    (
+        KernelDiagnostic::NoteByteOrderMark,
+        "note.byte-order-mark",
+        Severity::Warning,
+    ),
+    (
+        KernelDiagnostic::NoteCarriageReturnLineEnding,
+        "note.carriage-return-line-ending",
+        Severity::Warning,
+    ),
+    (
+        KernelDiagnostic::NoteFrontmatterInvalid,
+        "note.frontmatter-invalid",
+        Severity::Error,
+    ),
+    (
+        KernelDiagnostic::NoteFrontmatterUnsupported,
+        "note.frontmatter-unsupported",
+        Severity::Error,
+    ),
+    (
+        KernelDiagnostic::NoteTypeInvalid,
+        "note.type-invalid",
+        Severity::Error,
+    ),
+    (
+        KernelDiagnostic::NoteUnknownType,
+        "note.unknown-type",
+        Severity::Error,
+    ),
+    (
+        KernelDiagnostic::NoteUndeclaredProperty,
+        "note.undeclared-property",
+        Severity::Info,
+    ),
+    (
+        KernelDiagnostic::NoteMissingRequiredProperty,
+        "note.missing-required-property",
+        Severity::Error,
+    ),
+    (
+        KernelDiagnostic::NoteMissingRequiredRelationship,
+        "note.missing-required-relationship",
+        Severity::Error,
+    ),
+    (
+        KernelDiagnostic::NotePropertyKindInvalid,
+        "note.property-kind-invalid",
+        Severity::Error,
+    ),
+    (
+        KernelDiagnostic::NoteRelationshipValueInvalid,
+        "note.relationship-value-invalid",
         Severity::Error,
     ),
     (
@@ -829,6 +928,17 @@ macro_rules! contract_variants {
 macro_rules! note_variants {
     () => {
         KernelDiagnostic::NoteUnreadable
+            | KernelDiagnostic::NoteByteOrderMark
+            | KernelDiagnostic::NoteCarriageReturnLineEnding
+            | KernelDiagnostic::NoteFrontmatterInvalid
+            | KernelDiagnostic::NoteFrontmatterUnsupported
+            | KernelDiagnostic::NoteTypeInvalid
+            | KernelDiagnostic::NoteUnknownType
+            | KernelDiagnostic::NoteUndeclaredProperty
+            | KernelDiagnostic::NoteMissingRequiredProperty
+            | KernelDiagnostic::NoteMissingRequiredRelationship
+            | KernelDiagnostic::NotePropertyKindInvalid
+            | KernelDiagnostic::NoteRelationshipValueInvalid
     };
 }
 
@@ -961,6 +1071,17 @@ fn expected_note_id(kind: KernelDiagnostic) -> &'static str {
     use KernelDiagnostic::*;
     match kind {
         NoteUnreadable => "note.unreadable",
+        NoteByteOrderMark => "note.byte-order-mark",
+        NoteCarriageReturnLineEnding => "note.carriage-return-line-ending",
+        NoteFrontmatterInvalid => "note.frontmatter-invalid",
+        NoteFrontmatterUnsupported => "note.frontmatter-unsupported",
+        NoteTypeInvalid => "note.type-invalid",
+        NoteUnknownType => "note.unknown-type",
+        NoteUndeclaredProperty => "note.undeclared-property",
+        NoteMissingRequiredProperty => "note.missing-required-property",
+        NoteMissingRequiredRelationship => "note.missing-required-relationship",
+        NotePropertyKindInvalid => "note.property-kind-invalid",
+        NoteRelationshipValueInvalid => "note.relationship-value-invalid",
         _ => "",
     }
 }
@@ -1007,14 +1128,16 @@ fn expected_compat_id(kind: KernelDiagnostic) -> &'static str {
 /// The severity each identifier must carry.
 ///
 /// Stated as the exceptions it is: every kernel diagnostic is an error unless
-/// it is one of the six named here.
+/// it is one of the nine named here.
 #[cfg(test)]
 fn expected_severity(id: &str) -> Severity {
     match id {
         "discovery.nested-vault"
         | "discovery.root-outside-home"
         | "discovery.root-group-or-world-writable" => Severity::Warning,
+        "note.byte-order-mark" | "note.carriage-return-line-ending" => Severity::Warning,
         "discovery.root-resolved-through-symlink"
+        | "note.undeclared-property"
         | "compat.newer-format-available"
         | "compat.newer-installation-format-available" => Severity::Info,
         _ => Severity::Error,

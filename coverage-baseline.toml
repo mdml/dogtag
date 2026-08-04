@@ -40,8 +40,15 @@ toolchain = "nightly-2026-07-30"
 # predicates and one walk, and every arm of it — a note in a folder, a file that
 # is not Markdown, a dotted directory, a dotted file, a symlink, an empty vault,
 # and a directory that cannot be read at all — is reached from a named test.
-line = 99.39
-branch = 98.82
+#
+# The document model raised them furthest. It is the largest thing this kernel
+# has grown at once — a traversal, a frontmatter subset, the lexical forms, the
+# binding, and the note-side rules — and every refusal in it is reached from a
+# named test, including the ones a note only meets by accident: a tab in the
+# indentation, an alias, a duplicate key, a shape nested past what the subset
+# reads, a leap day, and a byte order mark on a file with carriage returns.
+line = 99.49
+branch = 99.22
 
 [thresholds]
 line = 95.0
