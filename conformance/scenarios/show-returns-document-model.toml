@@ -1,7 +1,7 @@
 id = "show-returns-document-model"
 title = "Show returns the one shared document-model shape"
 milestone = "M3"
-status = "pending"
+status = "executable"
 contract = """
 Given any note in a conforming corpus.
 

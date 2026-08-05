@@ -1,7 +1,7 @@
 id = "path-qualified-link-resolves"
 title = "A path-qualified reference resolves to exactly one note"
 milestone = "M3"
-status = "pending"
+status = "executable"
 contract = """
 Given a corpus in which more than one note bears the same name, and a
 reference qualified by path that targets one of them.

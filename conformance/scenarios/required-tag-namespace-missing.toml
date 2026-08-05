@@ -1,0 +1,15 @@
+id = "required-tag-namespace-missing"
+title = "A note of a declaring type without a tag in a required namespace is diagnosed"
+milestone = "M3"
+status = "executable"
+contract = """
+Given a contract declaring a tag namespace with `required = true` on a type,
+and a note of that type carrying no tag matching the namespace's prefix.
+
+When the corpus is validated.
+
+Then validation reports `note.required-namespace-missing`, addressed to the
+note, naming the namespace whose requirement it does not meet. The
+requirement is the declaring type's, not the corpus's: notes of other types
+carry no such obligation.
+"""

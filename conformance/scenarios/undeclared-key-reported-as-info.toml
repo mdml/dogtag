@@ -1,0 +1,14 @@
+id = "undeclared-key-reported-as-info"
+title = "An undeclared frontmatter key is information, never a failure"
+milestone = "M3"
+status = "executable"
+contract = """
+Given a note carrying a frontmatter key its bound type does not declare.
+
+When the corpus is validated.
+
+Then validation reports `note.undeclared-property` at `info` severity,
+addressed to the note and naming the key. The finding appears in the
+aggregate report and changes no exit decision, strict or not: an undeclared
+key is a fact about the note, not a fault in it.
+"""

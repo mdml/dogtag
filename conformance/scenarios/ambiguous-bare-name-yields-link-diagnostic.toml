@@ -1,7 +1,7 @@
 id = "ambiguous-bare-name-yields-link-diagnostic"
 title = "An ambiguous bare-name reference yields a link diagnostic, never a corpus error"
 milestone = "M3"
-status = "pending"
+status = "executable"
 contract = """
 Given a corpus in which more than one note bears the same name — repeated
 names are legal — and a reference written as that bare name in the profile's

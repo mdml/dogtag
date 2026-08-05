@@ -2,6 +2,7 @@
 //! supplied it.
 
 use dogtag::contract::{Contract, LifecycleDecl, Ordinary, TypeDecl};
+use dogtag::contract::{NamespaceMembership, PropertyKind, TagNamespaceDecl};
 use dogtag::installation::{InstallationRecord, load_installation};
 use dogtag::provenance::{Provenance, Source};
 use dogtag::vault::open;
@@ -174,6 +175,10 @@ fn a_default_names_the_contract_version(contract: &Contract, merged: &Provenance
 pub(super) fn contract_keys(contract: &Contract) -> Vec<String> {
     let mut keys = vec!["contract_version".to_owned(), "dialect.links".to_owned()];
     keys.extend(lifecycle_keys(contract.lifecycle()));
+    if let Some(tags) = contract.tags() {
+        let _ = tags;
+        keys.push("tags.property".to_owned());
+    }
     keys.extend(
         contract
             .flags()
@@ -217,10 +222,37 @@ fn type_keys(declared: &TypeDecl) -> Vec<String> {
         ]);
         keys.extend(property.kind().values().map(|_| format!("{at}.values")));
         keys.extend(property.kind().element().map(|_| format!("{at}.of")));
+        if matches!(property.kind(), PropertyKind::ListOfRecord { .. }) {
+            keys.push(format!("{at}.of"));
+        }
+        for field in property.kind().fields().into_iter().flatten() {
+            let field_at = format!("{at}.field.{}", field.name());
+            keys.extend([
+                format!("{field_at}.name"),
+                format!("{field_at}.kind"),
+                format!("{field_at}.required"),
+            ]);
+            keys.extend(field.kind().values().map(|_| format!("{field_at}.values")));
+        }
     }
     for relationship in declared.relationships() {
         let at = format!("type.{name}.relationship.{}", relationship.predicate());
         keys.extend([format!("{at}.predicate"), format!("{at}.required")]);
+    }
+    for namespace in declared.tag_namespaces() {
+        keys.extend(namespace_keys(name, namespace));
+    }
+    keys
+}
+
+/// One tag namespace's leaves: every namespace has a prefix and a
+/// requiredness; a closed one has its vocabulary, an open one its openness.
+fn namespace_keys(type_name: &str, namespace: &TagNamespaceDecl) -> Vec<String> {
+    let at = format!("type.{type_name}.tag-namespace.{}", namespace.prefix());
+    let mut keys = vec![format!("{at}.prefix"), format!("{at}.required")];
+    match namespace.membership() {
+        NamespaceMembership::Closed { .. } => keys.push(format!("{at}.values")),
+        NamespaceMembership::Open => keys.push(format!("{at}.open")),
     }
     keys
 }

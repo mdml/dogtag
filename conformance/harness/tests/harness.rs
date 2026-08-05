@@ -22,7 +22,7 @@ fn all_scenario_files_parse_with_unique_kebab_case_ids() {
     let scenarios = load_scenarios().expect("every scenario file parses and validates");
     assert_eq!(
         scenarios.len(),
-        19,
+        24,
         "every scenario file on disk is loaded; this count moves with the set"
     );
 
@@ -57,7 +57,7 @@ fn every_m2_scenario_has_graduated_and_nothing_has_graduated_early() {
     for scenario in &scenarios {
         let expected = match scenario.milestone {
             Milestone::M2 => ScenarioStatus::Executable,
-            Milestone::M3 => ScenarioStatus::Pending,
+            Milestone::M3 => ScenarioStatus::Executable,
         };
         assert_eq!(
             scenario.status, expected,
@@ -71,8 +71,8 @@ fn every_m2_scenario_has_graduated_and_nothing_has_graduated_early() {
         .filter(|s| s.status == ScenarioStatus::Executable)
         .count();
     assert_eq!(
-        executable, 10,
-        "the ten M2 scenarios graduated together, all at once"
+        executable, 24,
+        "the ten M2 and fourteen M3 scenarios graduated together, all at once"
     );
     assert_eq!(
         graduated_case_count(),
@@ -427,8 +427,8 @@ fn every_pair_reports_what_its_two_halves_make_it() {
     }
     assert_eq!(
         ran,
-        10 * 2,
-        "the ten graduated scenarios ran against the two built corpora"
+        24 * 2,
+        "the twenty-four graduated scenarios ran against the two built corpora"
     );
 }
 

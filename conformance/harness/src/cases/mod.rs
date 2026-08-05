@@ -13,12 +13,16 @@
 
 mod contract;
 mod corpus;
+mod derive;
 mod discovery;
 mod expect;
 mod explain;
 mod installation;
+mod link;
+mod note;
 mod provenance;
 mod scan;
+mod surface;
 mod version;
 
 use std::path::Path;
@@ -37,13 +41,26 @@ type Case = fn(&Corpus) -> Checked;
 /// missing.
 const CASES: &[(&str, Case)] = &[
     (
+        "ambiguous-bare-name-yields-link-diagnostic",
+        link::ambiguous_bare_name,
+    ),
+    (
+        "bare-name-link-resolves-when-unambiguous",
+        link::bare_name_resolves,
+    ),
+    (
         "capability-cardinality-enforced",
         contract::capability_cardinality,
+    ),
+    (
+        "closed-namespace-value-outside-vocabulary",
+        note::closed_namespace_outside_vocabulary,
     ),
     (
         "conforming-contract-loads-with-zero-diagnostics",
         contract::conforming_contract,
     ),
+    ("conforming-corpus-zero-diagnostics", note::conforming),
     (
         "contract-explain-renders-every-declaration",
         explain::contract_explain,
@@ -52,6 +69,7 @@ const CASES: &[(&str, Case)] = &[
         "contract-loads-with-provenance",
         provenance::contract_loads_with_provenance,
     ),
+    ("dangling-typed-link-diagnostic", link::dangling_typed_link),
     (
         "explicit-vault-root-is-used-exactly",
         discovery::explicit_root_used_exactly,
@@ -69,8 +87,41 @@ const CASES: &[(&str, Case)] = &[
         contract::lifecycle_declaration,
     ),
     (
+        "list-filters-by-declared-lifecycle-axis",
+        surface::list_filters_by_axis,
+    ),
+    (
+        "missing-required-property-diagnostic",
+        note::missing_required_property,
+    ),
+    (
+        "path-qualified-link-resolves",
+        link::path_qualified_resolves,
+    ),
+    (
+        "required-tag-namespace-missing",
+        note::required_namespace_missing,
+    ),
+    (
+        "show-returns-document-model",
+        surface::show_returns_document_model,
+    ),
+    (
+        "supported-contract-version-loads-with-info",
+        version::supported_version_loads_with_info,
+    ),
+    (
+        "undeclared-key-reported-as-info",
+        note::undeclared_key_is_info,
+    ),
+    ("unknown-type-diagnostic", note::unknown_type),
+    (
         "unsupported-contract-version-refuses-with-diagnosis",
         version::unsupported_version_refuses,
+    ),
+    (
+        "untyped-note-binds-to-catch-all",
+        note::untyped_binds_to_catch_all,
     ),
     (
         "vault-root-discovered-from-a-nested-path",

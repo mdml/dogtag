@@ -1,7 +1,7 @@
 id = "missing-required-property-diagnostic"
 title = "A missing required property yields a stable diagnostic"
 milestone = "M3"
-status = "pending"
+status = "executable"
 contract = """
 Given a corpus that conforms except for one note omitting a property its
 declared type requires.

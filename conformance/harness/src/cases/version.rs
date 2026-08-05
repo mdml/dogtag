@@ -8,7 +8,11 @@ use dogtag::vault::Opened;
 use crate::transform::set_contract_version;
 
 use super::corpus::Corpus;
-use super::expect::{Checked, Subject, rendered, require, require_contains, require_only};
+use dogtag::diagnostic::Severity;
+
+use super::expect::{
+    Checked, Subject, rendered, require, require_contains, require_id, require_only,
+};
 
 /// The two out-of-range versions and the identifier each must yield.
 ///
@@ -150,6 +154,40 @@ fn sections_are_not_evaluated(json: &str, text: &str, subject: Subject<'_>) -> C
         require_contains(text, &format!("{section:<16}not evaluated ("), subject)?;
     }
     Ok(())
+}
+
+/// `supported-contract-version-loads-with-info`.
+///
+/// The derived case the fixtures record specifies: rewrite `contract_version`
+/// to `1` and load. Against a contract free of version-2-only constructs the
+/// load is full and `supported`, with the one compat info diagnostic; against
+/// a contract using them, the load fails loudly — the guard that keeps the
+/// derivation honest, asserted rather than assumed.
+pub fn supported_version_loads_with_info(corpus: &Corpus) -> Checked {
+    let original = corpus.contract_text()?;
+    let derived = corpus.derived("supported-v1", |text| set_contract_version(text, 1))?;
+    let load = derived.load()?;
+    let uses_version_two = original.contains("[tags]") || original.contains("\"record\"");
+    if uses_version_two {
+        return require(load.contract.is_err(), || {
+            "a version-1 contract carrying version-2 constructs must fail loudly, not load"
+                .to_string()
+        });
+    }
+    require(load.contract.is_ok(), || {
+        "a supported below-current contract loads fully".to_string()
+    })?;
+    require_id(
+        &load.diagnostics,
+        "compat.newer-format-available",
+        Subject::new("a contract declaring the supported version 1"),
+    )?;
+    require(
+        load.diagnostics
+            .iter()
+            .all(|diagnostic| diagnostic.severity == Severity::Info),
+        || "the classification is information, never a failure severity".to_string(),
+    )
 }
 
 #[cfg(test)]
