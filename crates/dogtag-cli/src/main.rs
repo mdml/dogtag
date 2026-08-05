@@ -192,7 +192,7 @@ struct ListArgs {
 
 #[derive(Args)]
 struct ShowArgs {
-    /// A vault-relative path (`.md` optional) or an unambiguous bare name.
+    /// A vault-relative path (any `/` or a trailing `.md`) or an unambiguous bare name.
     #[arg(value_name = "REF")]
     reference: String,
     #[command(flatten)]

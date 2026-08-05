@@ -74,10 +74,11 @@ impl Corpus {
     /// One rule, at every door — the rule this corpus's own typed links
     /// resolved by, and the rule a reference handed in from outside obeys:
     ///
-    /// - a reference containing no `/` is a **bare name**, and resolves iff
-    ///   exactly one note bears it;
-    /// - a reference containing a `/` is **path-qualified**, resolved against
-    ///   the vault root, with `.md` appended when it is absent.
+    /// - a reference containing no `/` and not ending in `.md` is a **bare
+    ///   name**, and resolves iff exactly one note bears it;
+    /// - a reference containing a `/`, or ending in `.md`, is
+    ///   **path-qualified**, resolved against the vault root, with `.md`
+    ///   appended when it is absent.
     ///
     /// Nothing here touches the filesystem: a reference is matched against the
     /// notes this corpus holds, so no spelling reaches outside the vault.
@@ -1049,14 +1050,16 @@ mod tests {
     }
 
     #[test]
-    fn a_reference_with_no_slash_is_a_bare_name_even_when_it_carries_the_extension() {
-        // The two halves of the rule read the reference, never the corpus: a
-        // reference with no `/` is a name, and `engine.md` is not the name any
-        // note bears — `engine` is. Appending the extension is the
-        // path-qualified half's business.
-        let tree = Tree::new("corpus-bare-extension");
+    fn a_reference_carrying_the_extension_is_path_qualified_even_at_the_root() {
+        // The extension routes to the path-qualified half exactly as a `/`
+        // does (amended 2026-08-05): `engine.md` is the root-level note's
+        // path, so the link resolves — it is not the name of any note.
+        let tree = Tree::new("corpus-root-extension");
         let corpus = read(&tree, &[("ada.md", &linking("\"[[engine.md]]\""))]);
-        assert_eq!(ids(&corpus), ["link.dangling-typed-link"]);
+        assert!(ids(&corpus).is_empty(), "{:?}", ids(&corpus));
+        let note = corpus_note(&corpus, "ada.md");
+        let edge = &note.relationship("works-at").expect("declared")[0];
+        assert_eq!(edge.target().map(VaultPath::as_str), Some("engine.md"));
     }
 
     #[test]

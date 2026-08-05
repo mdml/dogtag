@@ -9,10 +9,10 @@
 //! The rule, which is one rule for every door — a typed link in frontmatter, an
 //! untyped reference in prose, and a reference a caller hands the SDK:
 //!
-//! - a reference containing no `/` is a **bare name**, and resolves iff exactly
-//!   one note in the corpus bears it;
-//! - a reference containing a `/` is **path-qualified**, resolved against the
-//!   vault root, with `.md` appended when it is absent.
+//! - a reference containing no `/` and not ending in `.md` is a **bare
+//!   name**, and resolves iff exactly one note in the corpus bears it;
+//! - a reference containing a `/`, or ending in `.md`, is **path-qualified**,
+//!   resolved against the vault root, with `.md` appended when it is absent.
 //!
 //! Nothing here touches the filesystem. A path-qualified reference is matched
 //! against the paths the traversal already found, so `../elsewhere` and an
@@ -21,15 +21,18 @@
 //!
 //! # One narrowing the rule states and is worth stating twice
 //!
-//! The `/` is what picks the half, and the extension is appended only by the
-//! path-qualified half. So `engine.md` — no `/` — is a **bare name**, and no
-//! note bears the name `engine.md`; the note at `engine.md` is named `engine`.
-//! The rule is taken as written rather than made lenient, because stripping an
-//! extension off a bare name is a rule the packet does not state and would
-//! make `engine` and `engine.md` two spellings of one name forever. It has a
-//! visible cost under the `markdown` dialect, whose destinations carry the
-//! extension by convention: `[Engine](engine.md)` beside a root-level
-//! `engine.md` does not resolve, while `[Engine](engines/analytical.md)` does.
+//! The extension picks the path-qualified half exactly as the `/` does, and no
+//! extension is ever stripped off a bare name. *(Amended 2026-08-05 — the rule
+//! previously read only the `/`, so a root-level path like `engine.md` parsed
+//! as a bare name, which nothing bears, and resolved nothing: `show
+//! welcome.md` failed while `show welcome` worked, and under the `markdown`
+//! dialect `[Engine](engine.md)` beside a root-level `engine.md` dangled.)*
+//! The amendment routes rather than strips: `engine.md` is the *path* of the
+//! root-level note, not a second spelling of the name `engine` — a bare name
+//! still never carries the extension, so `engine` and `engine.md` do not
+//! become two names for one note. The cost is a pathological corner narrowed
+//! deliberately: a note whose file is `x.md.md`, and whose *name* is
+//! therefore `x.md`, has no bare-name shorthand and is referenced by path.
 
 use std::collections::BTreeMap;
 
@@ -73,7 +76,7 @@ impl Index {
 
     /// The note `reference` names, under the standing resolution rule.
     pub(crate) fn resolve(&self, reference: &str) -> Resolution {
-        if reference.contains('/') {
+        if reference.contains('/') || reference.ends_with(NOTE_EXTENSION) {
             self.at_path(reference)
         } else {
             self.named(reference)
@@ -164,6 +167,27 @@ mod tests {
             resolve(&corpus, "people/ada.md"),
         );
         assert_eq!(found, (Resolution::One(0), Resolution::One(0)));
+    }
+
+    #[test]
+    fn a_root_level_path_is_path_qualified_by_its_extension_alone() {
+        // A root-level path carries no `/`, so the extension is what routes it
+        // to the path-qualified half: `welcome.md` is the path of the
+        // root-level note, and `welcome` remains its bare name.
+        let corpus = ["welcome.md", "people/ada.md"];
+        let found = (resolve(&corpus, "welcome.md"), resolve(&corpus, "welcome"));
+        assert_eq!(found, (Resolution::One(1), Resolution::One(1)));
+    }
+
+    #[test]
+    fn a_name_that_itself_ends_in_the_extension_has_no_bare_name_shorthand() {
+        // The narrowing the amended rule accepts: the note at `notes/x.md.md`
+        // is named `x.md`, and a reference spelled `x.md` is path-qualified —
+        // the root-level path, which nothing here occupies. The note is
+        // reachable by its path alone.
+        let corpus = ["notes/x.md.md"];
+        let found = (resolve(&corpus, "x.md"), resolve(&corpus, "notes/x.md.md"));
+        assert_eq!(found, (Resolution::Absent, Resolution::One(0)));
     }
 
     #[test]

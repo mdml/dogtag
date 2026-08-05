@@ -22,16 +22,7 @@ pub fn show_returns_document_model(corpus: &Corpus) -> Checked {
     let notes = derive::notes(corpus)?;
     for note in notes.notes() {
         let path = note.path().as_str();
-        // A root-level path carries no separator, so the reference grammar
-        // reads it as a bare *name* — `.md` included — which names nothing.
-        // Resolving such a note by its name is the workaround the grammar
-        // leaves; the gap itself is recorded for adjudication.
-        let reference = if path.contains('/') {
-            path
-        } else {
-            note.name()
-        };
-        let report = show_report(&notes, &contract, reference, &[]);
+        let report = show_report(&notes, &contract, path, &[]);
         require_clean(report.diagnostics(), Subject::new(path))?;
         let shown = report
             .note()
