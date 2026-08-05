@@ -1,0 +1,16 @@
+id = "closed-namespace-value-outside-vocabulary"
+title = "A tag inside a closed namespace's prefix but outside its vocabulary is diagnosed"
+milestone = "M3"
+status = "executable"
+contract = """
+Given a contract declaring a tag namespace with an explicit `values`
+vocabulary, and a note tagged with the namespace's prefix followed by a
+remainder outside that vocabulary.
+
+When the corpus is validated.
+
+Then validation reports `note.tag-outside-vocabulary`, addressed to the note
+and naming the offending tag. A closed namespace admits its declared values
+and nothing else; an open namespace admits any remainder and is not this
+scenario's subject.
+"""

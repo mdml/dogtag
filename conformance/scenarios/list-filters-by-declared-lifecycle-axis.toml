@@ -1,7 +1,7 @@
 id = "list-filters-by-declared-lifecycle-axis"
 title = "Lifecycle filtering is answered from the declaration, including when a corpus declares it has none"
 milestone = "M3"
-status = "pending"
+status = "executable"
 contract = """
 Given a contract that declares whether the corpus has a lifecycle axis: either
 naming the property that carries it together with how the ordinary state is

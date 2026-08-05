@@ -1,7 +1,7 @@
 id = "bare-name-link-resolves-when-unambiguous"
 title = "An unambiguous bare-name reference resolves"
 milestone = "M3"
-status = "pending"
+status = "executable"
 contract = """
 Given a corpus containing a reference written as a bare name in the profile's
 declared dialect, where exactly one note in the corpus bears that name.

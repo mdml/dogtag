@@ -303,3 +303,129 @@ fn flip_boolean(doc: &Doc, at: usize) -> Option<String> {
         .find(|(written, _)| line.contains(*written))
         .map(|(written, opposite)| line.replacen(written, opposite, 1))
 }
+
+/// One edit to a note's frontmatter block.
+///
+/// The three note-level derivations the fixtures record inventories are one
+/// operation each: an undeclared type name or corrupted lexical form or
+/// repointed link (`Set`), a deleted required property (`Delete`), and an
+/// undeclared key (`Insert`).
+pub enum NoteEdit<'a> {
+    /// Rewrite `key`'s value.
+    Set(&'a str, &'a str),
+    /// Remove `key`'s line.
+    Delete(&'a str),
+    /// Insert `key: value` before the closing fence.
+    Insert(&'a str, &'a str),
+}
+
+/// A note's committed text, distinguished from a contract's.
+///
+/// The two travel through the same derivation machinery, and a typed wrapper
+/// is what keeps a note from being handed to a contract transformation.
+pub struct NoteText<'a>(pub &'a str);
+
+/// Applies one [`NoteEdit`] inside a note's frontmatter.
+///
+/// # Errors
+///
+/// [`TargetNotFound`] when the note has no frontmatter, or when a `Set` or
+/// `Delete` names a key its frontmatter does not carry.
+pub fn edit_note_key(note: &NoteText<'_>, edit: &NoteEdit<'_>) -> Transformed {
+    let mut doc = Doc::parse(note.0);
+    match edit {
+        NoteEdit::Set(key, value) => {
+            let at = frontmatter_key(&doc, key).ok_or_else(|| {
+                TargetNotFound::new("edit_note_key", format!("frontmatter key `{key}`"))
+            })?;
+            doc.lines[at] = format!("{key}: {value}\n");
+        }
+        NoteEdit::Delete(key) => {
+            let at = frontmatter_key(&doc, key).ok_or_else(|| {
+                TargetNotFound::new("edit_note_key", format!("frontmatter key `{key}`"))
+            })?;
+            doc.lines.remove(at);
+        }
+        NoteEdit::Insert(key, value) => {
+            let (_, close) = frontmatter_bounds(&doc)
+                .ok_or_else(|| TargetNotFound::new("edit_note_key", "a frontmatter block"))?;
+            doc.lines.insert(close, format!("{key}: {value}\n"));
+        }
+    }
+    Ok(doc.render())
+}
+
+/// The line indices strictly inside a note's frontmatter fences.
+///
+/// `None` when the note has no frontmatter at all — the transformations below
+/// refuse such a note rather than inventing a block, because a note the
+/// transformation cannot find its target in would make the derived case test
+/// nothing.
+fn frontmatter_bounds(doc: &Doc) -> Option<(usize, usize)> {
+    if doc.lines.first()?.trim_end() != "---" {
+        return None;
+    }
+    let close = doc
+        .lines
+        .iter()
+        .skip(1)
+        .position(|line| line.trim_end() == "---")?;
+    Some((1, close + 1))
+}
+
+/// The index of `key`'s line within the frontmatter block.
+fn frontmatter_key(doc: &Doc, key: &str) -> Option<usize> {
+    let (open, close) = frontmatter_bounds(doc)?;
+    let prefix = format!("{key}:");
+    doc.lines[open..close]
+        .iter()
+        .position(|line| line.trim_start().starts_with(&prefix))
+        .map(|offset| open + offset)
+}
+
+/// The name of the type the tag-namespace derivations append.
+///
+/// Like [`DERIVED_CATCH_ALL_TYPE`], deliberately not a word any corpus would
+/// use: the appended type must collide with nothing, and a reader meeting it
+/// in a diagnostic should know it came from the harness.
+pub const DERIVED_TAGGED_TYPE: &str = "derived_tagged";
+
+/// The tag namespace the derivations declare on that type: a required, closed
+/// namespace whose whole vocabulary is one value.
+pub const DERIVED_NAMESPACE_PREFIX: &str = "derived/";
+
+/// The single value inside the derived namespace's closed vocabulary.
+pub const DERIVED_NAMESPACE_VALUE: &str = "present";
+
+/// Appends a type declaring a required, closed tag namespace — and the
+/// `[tags]` table itself when the contract has none.
+///
+/// One transformation serves both tag scenarios: a planted note of the
+/// appended type with no matching tag misses the required namespace, and one
+/// tagged outside the one-word vocabulary breaks the closed namespace. The
+/// appended declaration is identical on every profile, so neither scenario
+/// depends on a profile's own taxonomy.
+///
+/// # Errors
+///
+/// [`TargetNotFound`] when the contract declares no `contract_version` line —
+/// the marker that this is a contract at all.
+pub fn append_derived_tagged_type(text: &str) -> Transformed {
+    let doc = Doc::parse(text);
+    doc.find(|line| line.trim_start().starts_with("contract_version"))
+        .ok_or_else(|| TargetNotFound::new("append_derived_tagged_type", "contract_version"))?;
+    let mut rendered = doc.render();
+    if !rendered.ends_with('\n') {
+        rendered.push('\n');
+    }
+    if doc.find(|line| line.trim_end() == "[tags]").is_none() {
+        rendered.push_str("\n[tags]\nproperty = \"tags\"\n");
+    }
+    rendered.push_str(&format!(
+        "\n[[type]]\nname = \"{DERIVED_TAGGED_TYPE}\"\n\n  [[type.property]]\n  name = \"tags\"\n  \
+         kind = \"list\"\n  of = \"string\"\n\n  [[type.tag-namespace]]\n  prefix = \
+         \"{DERIVED_NAMESPACE_PREFIX}\"\n  required = true\n  values = \
+         [\"{DERIVED_NAMESPACE_VALUE}\"]\n"
+    ));
+    Ok(rendered)
+}

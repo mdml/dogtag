@@ -53,13 +53,30 @@ fn names_agree(contract: &Contract, rendered: &Rendered) -> Checked {
         contract
             .types()
             .iter()
-            .flat_map(|t| t.properties().iter().map(|p| p.name().to_owned())),
+            .flat_map(|t| t.properties().iter())
+            .flat_map(|p| {
+                // A record property renders its fields as rows of their own,
+                // so the fields' names are declared labels too.
+                std::iter::once(p.name().to_owned()).chain(
+                    p.kind()
+                        .fields()
+                        .into_iter()
+                        .flatten()
+                        .map(|field| field.name().to_owned()),
+                )
+            }),
     );
     let predicates = scan::unique(
         contract
             .types()
             .iter()
             .flat_map(|t| t.relationships().iter().map(|r| r.predicate().to_owned())),
+    );
+    let namespaces = scan::unique(
+        contract
+            .types()
+            .iter()
+            .flat_map(|t| t.tag_namespaces().iter().map(|n| n.prefix().to_owned())),
     );
 
     require_same_names(
@@ -69,6 +86,7 @@ fn names_agree(contract: &Contract, rendered: &Rendered) -> Checked {
     )?;
     let mut labels = properties.clone();
     labels.extend(predicates.clone());
+    labels.extend(namespaces);
     require_same_names(
         &scan::unique(labels),
         &scan::unique(scan::row_labels(&rendered.markdown)),
@@ -99,8 +117,12 @@ fn flags_agree(contract: &Contract, rendered: &Rendered) -> Checked {
             .iter()
             .map(|flag| flag.property().to_owned()),
     );
+    // The `[tags]` table names its property under the same JSON key the flags
+    // use, so the scan legitimately finds it beside them.
+    let mut property_keyed = flags.clone();
+    property_keyed.extend(contract.tags().map(|tags| tags.property().to_owned()));
     require_same_names(
-        &flags,
+        &scan::unique(property_keyed),
         &scan::unique(scan::json_strings(&rendered.json, "property")),
         "the JSON's flags",
     )?;

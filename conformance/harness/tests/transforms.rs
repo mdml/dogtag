@@ -20,8 +20,10 @@ use std::fs;
 use dogtag::compat::SUPPORTED_CONTRACT_VERSIONS;
 use dogtag::contract::parse_contract;
 use dogtag_conformance::transform::{
-    DERIVED_CATCH_ALL_TYPE, TargetNotFound, Transformed, delete_lifecycle_table, drop_catch_all,
-    duplicate_catch_all, flip_property_required, replace_lifecycle_with_none, set_contract_version,
+    DERIVED_CATCH_ALL_TYPE, DERIVED_NAMESPACE_PREFIX, DERIVED_TAGGED_TYPE, NoteEdit, NoteText,
+    TargetNotFound, Transformed, append_derived_tagged_type, delete_lifecycle_table,
+    drop_catch_all, duplicate_catch_all, edit_note_key, flip_property_required,
+    replace_lifecycle_with_none, set_contract_version,
 };
 use dogtag_conformance::{CorpusStatus, load_profiles, profiles_dir};
 
@@ -371,4 +373,91 @@ fn axis_of(contract: &str) -> String {
         .nth(1)
         .expect("the axis is a quoted string")
         .to_owned()
+}
+
+/// A frontmatter-bearing note text every note-level transformation can target.
+const NOTE: &str =
+    "---\ntype: person\nname: Ada\nknows: \"[[charles]]\"\n---\n# Ada\n\nknows: not frontmatter\n";
+
+/// A note with no frontmatter at all, which every note-level transformation
+/// must refuse rather than invent a block for.
+const BARE_NOTE: &str = "# Just a body\n\ntype: looks like a key but is prose\n";
+
+#[test]
+fn set_note_key_rewrites_only_the_frontmatter_key() {
+    let transformed = edit_note_key(&NoteText(NOTE), &NoteEdit::Set("type", "derived_other"))
+        .expect("the key exists");
+    assert_ne!(transformed, NOTE);
+    assert!(transformed.contains("type: derived_other\n"));
+    assert!(
+        transformed.contains("knows: not frontmatter"),
+        "a body line that looks like the key is not the key"
+    );
+    reports_a_missing_target(
+        "edit_note_key",
+        edit_note_key(&NoteText(NOTE), &NoteEdit::Set("absent", "x")),
+    );
+    reports_a_missing_target(
+        "edit_note_key",
+        edit_note_key(&NoteText(BARE_NOTE), &NoteEdit::Set("type", "x")),
+    );
+}
+
+#[test]
+fn delete_note_key_removes_exactly_one_line() {
+    let transformed =
+        edit_note_key(&NoteText(NOTE), &NoteEdit::Delete("name")).expect("the key exists");
+    assert_ne!(transformed, NOTE);
+    assert!(!transformed.contains("name: Ada"));
+    assert_eq!(transformed.lines().count(), NOTE.lines().count() - 1);
+    reports_a_missing_target(
+        "edit_note_key",
+        edit_note_key(&NoteText(NOTE), &NoteEdit::Delete("absent")),
+    );
+    reports_a_missing_target(
+        "edit_note_key",
+        edit_note_key(&NoteText(BARE_NOTE), &NoteEdit::Delete("type")),
+    );
+}
+
+#[test]
+fn insert_note_key_lands_inside_the_frontmatter() {
+    let transformed = edit_note_key(&NoteText(NOTE), &NoteEdit::Insert("planted", "1"))
+        .expect("frontmatter exists");
+    assert_ne!(transformed, NOTE);
+    let fence = transformed
+        .match_indices("---\n")
+        .nth(1)
+        .expect("closing fence")
+        .0;
+    let planted = transformed.find("planted: 1\n").expect("the key landed");
+    assert!(
+        planted < fence,
+        "the planted key sits inside the frontmatter block"
+    );
+    reports_a_missing_target(
+        "edit_note_key",
+        edit_note_key(&NoteText(BARE_NOTE), &NoteEdit::Insert("planted", "1")),
+    );
+}
+
+#[test]
+fn append_derived_tagged_type_serves_every_built_profile() {
+    changes_every_built_contract(
+        "append_derived_tagged_type",
+        append_derived_tagged_type,
+        |original, transformed| {
+            assert!(transformed.contains(DERIVED_TAGGED_TYPE));
+            assert!(transformed.contains(DERIVED_NAMESPACE_PREFIX));
+            assert!(
+                transformed.contains("[tags]"),
+                "the derived contract always carries a tags table"
+            );
+            assert!(transformed.starts_with(original.trim_end_matches('\n')));
+        },
+    );
+    reports_a_missing_target(
+        "append_derived_tagged_type",
+        append_derived_tagged_type("# no version marker at all\n"),
+    );
 }

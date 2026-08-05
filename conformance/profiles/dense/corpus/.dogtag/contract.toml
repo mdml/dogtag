@@ -7,8 +7,13 @@
 # note is simply live, and each named value marks a departure from that. The axis is therefore
 # optional on every type that declares it, which is spelled out rather than defaulted.
 #
-# Two of the eight property kinds go unreached here, and that is the corpus speaking rather than an
+# Two of the nine property kinds go unreached here, and that is the corpus speaking rather than an
 # omission: money is recorded in minor units as an integer, and this corpus dates things by the day.
+#
+# Version 2 (M3): the [tags] table names `tags` as the corpus's tag property; four tag namespaces
+# are declared on the types that schematize their tagging; and the record kind carries the labeled
+# multi-value channel on `person`. The catch-all relaxes its formerly-required properties, because
+# a version-2 catch-all may require nothing.
 
 contract_version = 2
 
@@ -18,6 +23,12 @@ links = "wikilink"
 [lifecycle]
 axis = "standing"
 ordinary = { absent = true }
+
+# The corpus's word for tags. The named property is declared `list` of `string` on every type
+# that declares a namespace; namespaces themselves are per-type, below.
+
+[tags]
+property = "tags"
 
 # Flags are boolean properties, orthogonal to the axis above.
 
@@ -86,6 +97,46 @@ capabilities = ["identity-bearing"]
   [[type.property]]
   name = "review_after"
   kind = "date"
+
+  # Version 2: the labeled multi-value channel — how a person is reached, one
+  # labeled entry per channel — and the single record of the last time they were.
+
+  [[type.property]]
+  name = "handles"
+  kind = "list"
+  of = "record"
+
+    [[type.property.field]]
+    name = "channel"
+    kind = "enum"
+    values = ["mail", "phone", "web", "chat"]
+    required = true
+
+    [[type.property.field]]
+    name = "value"
+    kind = "string"
+    required = true
+
+    [[type.property.field]]
+    name = "preferred"
+    kind = "boolean"
+
+  [[type.property]]
+  name = "last_reached"
+  kind = "record"
+
+    [[type.property.field]]
+    name = "reached_on"
+    kind = "date"
+    required = true
+
+    [[type.property.field]]
+    name = "via"
+    kind = "string"
+
+  [[type.tag-namespace]]
+  prefix = "circle/"
+  open = true
 
   [[type.relationship]]
   predicate = "employed-by"
@@ -756,6 +807,11 @@ name = "daily_log"
   name = "review_after"
   kind = "date"
 
+  [[type.tag-namespace]]
+  prefix = "sphere/"
+  required = true
+  values = ["home", "studio", "field", "travel"]
+
   [[type.relationship]]
   predicate = "mentions"
 
@@ -1241,6 +1297,10 @@ name = "reading_log"
   name = "review_after"
   kind = "date"
 
+  [[type.tag-namespace]]
+  prefix = "shelf/"
+  values = ["fiction", "essays", "field-notes", "reference"]
+
   [[type.relationship]]
   predicate = "about"
   required = true
@@ -1557,6 +1617,10 @@ name = "project"
   [[type.property]]
   name = "review_after"
   kind = "date"
+
+  [[type.tag-namespace]]
+  prefix = "strand/"
+  open = true
 
   [[type.relationship]]
   predicate = "part-of"
@@ -3201,7 +3265,9 @@ name = "collection"
   [[type.relationship]]
   predicate = "mentions"
 
-# The bottom type. Capture never blocks on classification.
+# The bottom type. Capture never blocks on classification — and in version 2 that
+# is a load-time rule: the catch-all may require nothing, so `title` and `created`
+# are optional here and only here.
 
 [[type]]
 name = "unfiled"

@@ -1,7 +1,7 @@
 id = "conforming-corpus-zero-diagnostics"
 title = "A conforming corpus yields zero diagnostics"
 milestone = "M3"
-status = "pending"
+status = "executable"
 contract = """
 Given a corpus in which every note carries a type the contract declares,
 satisfies every required property of that type, and every declared

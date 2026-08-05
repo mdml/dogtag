@@ -1,7 +1,7 @@
 id = "dangling-typed-link-diagnostic"
 title = "A dangling typed link yields a stable diagnostic against the reference"
 milestone = "M3"
-status = "pending"
+status = "executable"
 contract = """
 Given a corpus that conforms except for one note carrying a directed, typed
 relationship whose target resolves to no note in the corpus.

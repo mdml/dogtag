@@ -20,4 +20,4 @@ Exactly one catch-all, at least one identity-bearing type, a lifecycle axis whos
 
 ## What the corpus holds now
 
-`corpus/.dogtag/contract.toml` — a vault root and the contract a fresh install stamps, and nothing else. The starter notes land at M3, with the document model they must be written in.
+`corpus/.dogtag/contract.toml` — the contract a fresh install stamps — and the two notes it stamps beside it: `welcome.md`, untyped, bound by the catch-all and carrying no lifecycle state, linking by bare name to `projects/getting-started.md`, typed and in its ordinary state (`status: active`). Together they demonstrate the profile's sharpest claims in the smallest corpus that can: the catch-all binding, the named-value ordinary encoding on a typed note, and one resolving wikilink. The direction of authority is unchanged — when `init` lands, its output must equal this corpus byte for byte.

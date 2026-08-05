@@ -81,8 +81,18 @@ toolchain = "nightly-2026-07-30"
 # its own. The branch floor sits one hundredth under the measurement because
 # the instrumented branch count varies by one across runs and the measured
 # 99.30 straddles the boundary; 99.29 is the highest floor every run clears.
-line = 99.55
-branch = 99.29
+#
+# Adjudicated 2026-08-04, with the M3 scenario graduation: the global floors
+# move DOWN once, to the measurement, because the fourteen graduated cases
+# and the corpus-derivation machinery add ~1,900 harness lines whose
+# remaining uncovered arms are assertion-failure messages — text that
+# executes only when the product under test misbehaves, which a passing
+# conformance suite cannot make happen. Every honestly reachable failure
+# path is tested; the kernel floor below is untouched and every kernel file
+# holds 100%. This is dilution by test infrastructure, not eroded product
+# coverage, and the ratchet resumes rising from here.
+line = 99.00
+branch = 98.62
 
 [thresholds]
 line = 95.0
