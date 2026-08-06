@@ -7,5 +7,5 @@ distinguishing_axes = [
   "most files carrying no frontmatter",
   "repeated basenames",
 ]
-corpus = "scheduled"
+corpus = "built"
 corpus_milestone = "M4"

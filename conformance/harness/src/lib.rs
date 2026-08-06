@@ -10,12 +10,11 @@
 //! keeping the prose contracts profile-agnostic still rests on review
 //! discipline.
 //!
-//! At M2 the ten scenarios that open and diagnose a vault are `executable` and
-//! the `dense` and `starter` corpora are `built`, so those pairs run; the M3
-//! scenarios are still prose and the `docs` and `records` corpora are still
-//! scheduled, so the rest of the cross product reports why. The matrix
-//! distinguishes the two: a pair that ran and a pair skipped for want of a
-//! corpus render differently, so a run covering two of four profiles cannot
+//! At M4 all twenty-four scenarios are `executable` and the `dense`,
+//! `starter` and `docs` corpora are `built`, so those pairs run; the `records`
+//! corpus is still scheduled, so the rest of the cross product reports why. The
+//! matrix distinguishes the two: a pair that ran and a pair skipped for want of
+//! a corpus render differently, so a run covering three of four profiles cannot
 //! read as a complete matrix.
 //!
 //! The harness consumes the SDK's **public API only**, which makes it a

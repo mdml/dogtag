@@ -1,0 +1,370 @@
+# .dogtag/contract.toml — the committed vault contract of the `docs` conformance fixture.
+# `docs` stands for the dev team: a repository documentation tree rather than a curated vault.
+# Every name in it — the product, its components, its releases — is authored fiction. What is
+# derived from real documentation trees is the corpus's *shape*, as proportions and counts.
+#
+# Three things about this contract follow from the profile's axes, and each is a deliberate
+# departure from `dense`.
+#
+# **The taxonomy is thin, on purpose.** A dev team's docs are organized by folder, not by
+# per-note metadata: a guide is a guide because it sits under `guides/`, and a decision record
+# is one because it sits under `decisions/`. Meaning of that kind cannot reach the core — no
+# contract key names a directory, and none may — so what the contract declares is the small set
+# of shapes a note may *opt into*, and the folder-borne meaning stays where it lives, in the
+# tree. The seven types here are the whole taxonomy of a corpus of forty-four notes.
+#
+# **The discriminator comes from the contract, not from the note.** The majority of these notes
+# carry no frontmatter at all, so the type most of them bind to is written nowhere in the
+# corpus: it is the declared catch-all, `page`, reached by the capability declaration alone.
+# Everything a frontmatter-less note participates in — the lifecycle filter above all — it
+# participates in through what `page` declares, which is why `page` declares the axis.
+#
+# **The dialect is `markdown`.** References are ordinary markdown links, frequently
+# path-qualified and relative — the other side of the dialect axis from `dense`'s wikilinks.
+#
+# The lifecycle axis is `state`, and its ordinary state is the ABSENCE of a value: an unmarked
+# page is simply current, and each named value marks a departure from that. The axis is
+# therefore optional on every type that declares it, which is spelled out rather than defaulted.
+
+contract_version = 2
+
+[dialect]
+links = "markdown"
+
+[lifecycle]
+axis = "state"
+ordinary = { absent = true }
+
+# The corpus's word for tags. Two namespaces are schematized — the part of the tree's tagging
+# the team agreed on — and everything else a page tags itself with is content.
+
+[tags]
+property = "tags"
+
+# Flags are boolean properties, orthogonal to the axis above.
+
+[[flag]]
+property = "needs_review"
+
+# The bottom type, and the one most of this corpus binds to. Contract version 2 refuses a
+# catch-all that requires anything, because every note with no frontmatter arrives here — which
+# in this corpus is most of them.
+
+[[type]]
+name = "page"
+capabilities = ["catch-all"]
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "needs_review"
+  kind = "boolean"
+
+  [[type.property]]
+  name = "state"
+  kind = "enum"
+  values = ["draft", "superseded", "archived"]
+  required = false
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "part-of"
+
+  [[type.relationship]]
+  predicate = "mentions"
+
+# Prose written to be followed start to finish.
+
+[[type]]
+name = "guide"
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "needs_review"
+  kind = "boolean"
+
+  [[type.property]]
+  name = "reviewed_on"
+  kind = "date"
+
+  [[type.property]]
+  name = "state"
+  kind = "enum"
+  values = ["draft", "superseded", "archived"]
+  required = false
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.tag-namespace]]
+  prefix = "area/"
+  open = true
+
+  [[type.tag-namespace]]
+  prefix = "audience/"
+  values = ["operator", "developer", "integrator"]
+
+  [[type.relationship]]
+  predicate = "part-of"
+
+  [[type.relationship]]
+  predicate = "mentions"
+
+# Prose written to be looked things up in.
+
+[[type]]
+name = "reference_page"
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "applies_to"
+  kind = "string"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "state"
+  kind = "enum"
+  values = ["draft", "superseded", "archived"]
+  required = false
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.tag-namespace]]
+  prefix = "area/"
+  open = true
+
+  [[type.relationship]]
+  predicate = "describes"
+
+  [[type.relationship]]
+  predicate = "mentions"
+
+# A decision, and the record of it. Numbered, dated, and superseded rather than edited.
+
+[[type]]
+name = "decision"
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "decided_on"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "alternatives"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "reversibility"
+  kind = "enum"
+  values = ["easy", "moderate", "hard", "one_way"]
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "state"
+  kind = "enum"
+  values = ["draft", "superseded", "archived"]
+  required = false
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "supersedes"
+
+  [[type.relationship]]
+  predicate = "part-of"
+
+  [[type.relationship]]
+  predicate = "mentions"
+
+# Steps performed under pressure, which is why the steps are a declared list and the severity
+# is a closed enumeration.
+
+[[type]]
+name = "runbook"
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "steps"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "severity"
+  kind = "enum"
+  values = ["routine", "urgent", "emergency"]
+
+  [[type.property]]
+  name = "needs_review"
+  kind = "boolean"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "state"
+  kind = "enum"
+  values = ["draft", "superseded", "archived"]
+  required = false
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "part-of"
+
+  [[type.relationship]]
+  predicate = "mentions"
+
+# What shipped, on the day it shipped. Closed-write: a release note is annotated from elsewhere
+# and never edited in place, because it is the record of what a version actually contained.
+
+[[type]]
+name = "release_note"
+capabilities = ["closed-write"]
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "released_on"
+  kind = "date"
+  required = true
+
+  [[type.property]]
+  name = "highlights"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "state"
+  kind = "enum"
+  values = ["draft", "superseded", "archived"]
+  required = false
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "mentions"
+
+# The one identity-bearing type: a named part of the system that pages refer to by name.
+
+[[type]]
+name = "component"
+capabilities = ["identity-bearing"]
+
+  [[type.property]]
+  name = "title"
+  kind = "string"
+  required = true
+
+  [[type.property]]
+  name = "summary"
+  kind = "string"
+
+  [[type.property]]
+  name = "aliases"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "owner"
+  kind = "string"
+
+  [[type.property]]
+  name = "tags"
+  kind = "list"
+  of = "string"
+
+  [[type.property]]
+  name = "state"
+  kind = "enum"
+  values = ["draft", "superseded", "archived"]
+  required = false
+
+  [[type.property]]
+  name = "updated"
+  kind = "date"
+
+  [[type.relationship]]
+  predicate = "depends-on"
+
+  [[type.relationship]]
+  predicate = "mentions"
