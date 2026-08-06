@@ -104,8 +104,17 @@ pub fn ambiguous_bare_name(corpus: &Corpus) -> Checked {
 }
 
 /// `path-qualified-link-resolves`.
+///
+/// The note this runs against is a **nested** one, because the last assertion
+/// drops the `.md` from its path and requires the remainder to resolve. For a
+/// nested note that remainder still carries a `/` and is still path-qualified;
+/// for a root-level note it carries neither a `/` nor the extension, which
+/// makes it the *bare name* — and the derivation has just given that name a
+/// second bearer, so it resolves to nothing by design. Running the assertion
+/// there would report the bare-name rule working correctly as a failure of the
+/// path-qualified one.
 pub fn path_qualified_resolves(corpus: &Corpus) -> Checked {
-    let (name, path) = first_unique_name(corpus)?;
+    let (name, path) = first_unique_nested_name(corpus)?;
     let file = path.rsplit('/').next().unwrap_or(&path);
     let second = format!("derived-second/{file}");
     let reference = format!("# A derived reference\n\nSee [[{name}]].\n");
@@ -173,17 +182,36 @@ fn first_relationship(corpus: &Corpus) -> Result<(String, String), String> {
 
 /// The first note, by corpus order, whose bare name no other note shares.
 fn first_unique_name(corpus: &Corpus) -> Result<(String, String), String> {
+    unique_name(corpus, |_| true)?
+        .ok_or_else(|| "every committed name is shared — nothing is unambiguous".to_string())
+}
+
+/// The same, narrowed to a note that sits in a directory rather than at the
+/// vault root — so its path minus the `.md` extension is still path-qualified.
+fn first_unique_nested_name(corpus: &Corpus) -> Result<(String, String), String> {
+    unique_name(corpus, |path| path.contains('/'))?.ok_or_else(|| {
+        "no committed note with an unshared name sits below the vault root, so no extensionless \
+         path-qualified spelling exists to resolve"
+            .to_string()
+    })
+}
+
+/// The first note, by corpus order, whose bare name no other note shares and
+/// whose path `admissible` accepts.
+fn unique_name(
+    corpus: &Corpus,
+    admissible: fn(&str) -> bool,
+) -> Result<Option<(String, String)>, String> {
     let notes = derive::notes(corpus)?;
     let mut counts: HashMap<&str, usize> = HashMap::new();
     for note in notes.notes() {
         *counts.entry(note.name()).or_default() += 1;
     }
-    notes
+    Ok(notes
         .notes()
         .iter()
-        .find(|note| counts[note.name()] == 1)
-        .map(|note| (note.name().to_owned(), note.path().as_str().to_owned()))
-        .ok_or_else(|| "every committed name is shared — nothing is unambiguous".to_string())
+        .find(|note| counts[note.name()] == 1 && admissible(note.path().as_str()))
+        .map(|note| (note.name().to_owned(), note.path().as_str().to_owned())))
 }
 
 #[cfg(test)]
@@ -222,5 +250,24 @@ mod tests {
             detail.contains("every committed name is shared"),
             "{detail}"
         );
+    }
+
+    /// A corpus whose only unshared name sits at the vault root has no
+    /// extensionless path-qualified spelling at all — dropping the extension
+    /// there yields the bare name, which the derivation has just made
+    /// ambiguous. The case says so rather than reporting the bare-name rule
+    /// working correctly as a path-qualification failure.
+    #[test]
+    fn a_corpus_whose_only_unique_name_is_at_the_root_refuses_the_path_qualified_case() {
+        let corpus = Corpus::holding("link-root-only-unique", CONTRACT);
+        plant(&corpus, "a.md", "---\ntype: person\nname: A\n---\n").expect("a root-level note");
+        plant(&corpus, "one/b.md", "---\ntype: person\nname: B\n---\n").expect("a nested note");
+        plant(&corpus, "two/b.md", "---\ntype: person\nname: B\n---\n").expect("its twin");
+        let detail = path_qualified_resolves(&corpus)
+            .expect_err("no nested note bears an unshared name here");
+        assert!(detail.contains("sits below the vault root"), "{detail}");
+        // The bare-name case is unaffected: the root-level note is still the
+        // one note bearing its name.
+        bare_name_resolves(&corpus).expect("a unique bare name still resolves");
     }
 }
