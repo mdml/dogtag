@@ -48,6 +48,7 @@
 
 mod check;
 mod doctor;
+mod find;
 mod json;
 mod list;
 mod markdown;
@@ -73,7 +74,10 @@ use crate::vault::{Opened, VaultRoot};
 
 pub use check::{CheckReport, check_report, check_text};
 pub use doctor::doctor_text;
-pub use json::{check_json, contract_json, doctor_json, list_json, search_json, show_json};
+pub use find::find_text;
+pub use json::{
+    check_json, contract_json, doctor_json, find_json, list_json, search_json, show_json,
+};
 pub use list::list_text;
 pub use markdown::contract_markdown;
 pub use search::search_text;

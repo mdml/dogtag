@@ -261,7 +261,9 @@ fn dangling(reference: &str) -> Diagnostic {
 }
 
 /// A caller's reference naming no note.
-fn not_found(reference: &str) -> Diagnostic {
+///
+/// `pub(super)` because `find` refuses with the same finding at its own door.
+pub(super) fn not_found(reference: &str) -> Diagnostic {
     Diagnostic::kernel(
         KernelDiagnostic::LinkTargetNotFound,
         format!("`{reference}` names no note in this vault"),
@@ -269,7 +271,11 @@ fn not_found(reference: &str) -> Diagnostic {
 }
 
 /// A bare name several notes bear, carrying every one of them as evidence.
-fn ambiguous(reference: &str, candidates: &[VaultPath]) -> Diagnostic {
+///
+/// `pub(super)` because ambiguity is the same semantic event at every door —
+/// `show`'s, a link's, and `find`'s — and one constructor is what keeps the
+/// identifier, shape, and severity from forking across them.
+pub(super) fn ambiguous(reference: &str, candidates: &[VaultPath]) -> Diagnostic {
     let mut reported = Diagnostic::kernel(
         KernelDiagnostic::LinkAmbiguousReference,
         format!(

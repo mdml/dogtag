@@ -19,6 +19,16 @@
 
 use crate::diagnostic::{Location, VaultPath};
 
+/// The declared property whose values are a note's aliases.
+///
+/// A convention on the declaration rather than a reserved word: retrieval
+/// reads the property a type declares under this name, and a corpus whose
+/// vocabulary wants `aliases` to mean something else simply is not matched by
+/// alias. The values surface only where the bound type declares the property
+/// — the tag-property precedent — so an undeclared `aliases` key stays an
+/// ordinary undeclared key whose values never reach the model.
+const ALIAS_PROPERTY: &str = "aliases";
+
 /// One note, read.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Note {
@@ -108,6 +118,19 @@ impl Note {
     /// content, and a corpus is never asked to enumerate them.
     pub fn tags(&self) -> &[String] {
         &self.tags
+    }
+
+    /// The note's aliases: its bound type's declared `aliases` property
+    /// values — one alias for a scalar, one per element for a list.
+    ///
+    /// Crate-internal: the retrieval surfaces match these beside the note's
+    /// name, and no public surface renders them yet.
+    pub(crate) fn aliases(&self) -> Vec<&str> {
+        match self.property(ALIAS_PROPERTY) {
+            Some(PropertyValue::Scalar(value)) => vec![value.as_str()],
+            Some(PropertyValue::List(values)) => values.iter().map(String::as_str).collect(),
+            _ => Vec::new(),
+        }
     }
 
     /// The note's display title: its first H1, when it has one.

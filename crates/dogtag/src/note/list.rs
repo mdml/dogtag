@@ -1,10 +1,10 @@
 //! Corpus enumeration and filtering.
 
 use crate::contract::{Contract, LifecycleDecl, Ordinary};
-use crate::diagnostic::{Diagnostic, DiagnosticList, KernelDiagnostic, VaultPath};
+use crate::diagnostic::{Diagnostic, KernelDiagnostic, VaultPath};
 use crate::vault::VaultRoot;
 
-use super::{Binding, Note, PropertyValue, read, resolve, traverse};
+use super::{Binding, Corpus, Note, PropertyValue};
 
 /// The composable filters accepted by corpus enumeration.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -72,25 +72,13 @@ pub fn list(root: &VaultRoot, contract: &Contract, filter: &ListFilter) -> ListR
         };
     }
 
-    let traversal = traverse(root);
-    let mut diagnostics = DiagnosticList::new();
-    diagnostics.extend(traversal.diagnostics().iter().cloned());
-    let mut notes = Vec::new();
-    for path in traversal.notes() {
-        let read = read::summary(&root.path().join(path.as_str()), path, contract);
-        notes.extend(read.note);
-        diagnostics.extend(read.diagnostics);
-    }
-    diagnostics.extend(resolve::corpus(&mut notes, contract.dialect().links()));
+    let Corpus { notes, diagnostics } = super::summary_corpus(root, contract);
     let notes = notes
         .iter()
         .filter(|note| matches(note, contract, filter))
         .map(|note| summarize(note, contract))
         .collect();
-    ListResult {
-        notes,
-        diagnostics: diagnostics.sorted(),
-    }
+    ListResult { notes, diagnostics }
 }
 
 /// The refusal a lifecycle filter meets against a corpus that declares no axis.
@@ -163,7 +151,8 @@ fn ordinary_matches(value: Option<&str>, ordinary: &Ordinary, requested: bool) -
         }
 }
 
-fn summarize(note: &Note, contract: &Contract) -> NoteSummary {
+/// The body-free summary a note answers as, on `list` and on `find` alike.
+pub(super) fn summarize(note: &Note, contract: &Contract) -> NoteSummary {
     let lifecycle = contract.lifecycle().axis().and_then(|axis| {
         let type_name = note.binding().type_name()?;
         contract.type_named(type_name)?.property(axis)?;
@@ -226,7 +215,7 @@ mod tests {
 
     fn read_note(root: &VaultRoot, contract: &Contract, path: &str) -> Note {
         let relative = root.relative(&root.path().join(path)).expect("inside root");
-        read::summary(&root.path().join(path), &relative, contract)
+        super::super::read::summary(&root.path().join(path), &relative, contract)
             .note
             .expect("readable note")
     }

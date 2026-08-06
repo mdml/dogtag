@@ -23,6 +23,7 @@
 //! - `dogtag show` — one note's SDK-rendered document model.
 //! - `dogtag search` — lexical retrieval over the corpus, composed with
 //!   `list`'s filters.
+//! - `dogtag find` — entity lookup: the one note a name resolves to.
 //!
 //! Exit codes are `0`, `1` and `2`, and no more. Severity alone decides `0`
 //! from `1`; `2` is reserved for an argument-parsing failure that produces no
@@ -36,6 +37,7 @@ mod doctor;
 mod environment;
 mod exit;
 mod explain;
+mod find;
 mod listing;
 mod output;
 mod preflight;
@@ -77,6 +79,8 @@ enum Command {
     Show(ShowArgs),
     /// Search the corpus: bodies, paths, titles, and aliases.
     Search(SearchArgs),
+    /// Find the one note a name resolves to.
+    Find(FindArgs),
     /// Work with the vault's committed contract.
     Contract {
         #[command(subcommand)]
@@ -238,6 +242,36 @@ enum SearchFormat {
 }
 
 #[derive(Args)]
+struct FindArgs {
+    /// The name to find: a case-insensitive match over note names and
+    /// aliases, or an exact vault-relative path (any `/` or a trailing
+    /// `.md`). An ambiguous name is an error whose diagnostic lists every
+    /// candidate.
+    #[arg(value_name = "NAME")]
+    name: String,
+    #[command(flatten)]
+    vault: VaultArg,
+    /// The report's format.
+    #[arg(long, value_enum, default_value_t = FindFormat::Text)]
+    format: FindFormat,
+    /// Treat warnings as failures for the exit code only.
+    #[arg(long)]
+    strict: bool,
+    /// Narrow the match to notes of this bound type.
+    #[arg(long = "type", value_name = "NAME")]
+    type_name: Option<String>,
+}
+
+/// How `find` reports.
+#[derive(Clone, Copy, ValueEnum)]
+enum FindFormat {
+    /// The found note as one tab-separated summary line.
+    Text,
+    /// One structured report carrying the note and diagnostics.
+    Json,
+}
+
+#[derive(Args)]
 struct ShowArgs {
     /// A vault-relative path (any `/` or a trailing `.md`) or an unambiguous bare name.
     #[arg(value_name = "REF")]
@@ -309,11 +343,17 @@ fn dispatch(environment: &Environment, command: Command) -> i32 {
             .unwrap_or_else(|| show::run(environment, &args)),
         Command::Search(args) => refuse_empty(environment, args.vault.requested())
             .unwrap_or_else(|| search::run(environment, &args)),
-        Command::Contract {
-            command: ContractCommand::Explain(args),
-        } => refuse_empty(environment, args.vault.requested())
-            .unwrap_or_else(|| explain::run(environment, &args)),
+        Command::Find(args) => refuse_empty(environment, args.vault.requested())
+            .unwrap_or_else(|| find::run(environment, &args)),
+        Command::Contract { command } => contract(environment, command),
     }
+}
+
+/// Runs a `contract` subcommand, behind the same empty-selector refusal.
+fn contract(environment: &Environment, command: ContractCommand) -> i32 {
+    let ContractCommand::Explain(args) = command;
+    refuse_empty(environment, args.vault.requested())
+        .unwrap_or_else(|| explain::run(environment, &args))
 }
 
 /// Refuses a vault selector that was given but empty.

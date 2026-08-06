@@ -27,6 +27,7 @@
 //! than a boolean, and why `1` satisfies `integer` and not `float`.
 
 mod body;
+mod find;
 mod findings;
 mod frontmatter;
 mod index;
@@ -45,6 +46,7 @@ use crate::contract::Contract;
 use crate::diagnostic::{Diagnostic, DiagnosticList, VaultPath};
 use crate::vault::VaultRoot;
 
+pub use find::{FindResult, find};
 pub use list::{ListFilter, ListResult, NoteSummary, list};
 pub use model::{
     Binding, Edge, FieldValue, Note, Property, PropertyValue, RecordValue, Reference, Relationship,
@@ -111,12 +113,32 @@ impl Corpus {
 /// note and the rest of the corpus is read anyway: one unreadable note must not
 /// make a corpus unreadable.
 pub fn read_corpus(root: &VaultRoot, contract: &Contract) -> Corpus {
+    corpus_of(root, contract, read::note)
+}
+
+/// Reads only every note's schema'd plane, for the body-free surfaces.
+///
+/// The walk, the validation, and the resolution are [`read_corpus`]'s exactly;
+/// what is skipped is each body's text, title, and untyped references — which
+/// is why `list` and `find` answer summaries without opening every body, and
+/// why their diagnostics can differ from a full read's only by the findings
+/// prose alone can raise.
+fn summary_corpus(root: &VaultRoot, contract: &Contract) -> Corpus {
+    corpus_of(root, contract, read::summary)
+}
+
+/// The one corpus walk, parameterized by how much of each note is read.
+fn corpus_of(
+    root: &VaultRoot,
+    contract: &Contract,
+    read_one: fn(&std::path::Path, &VaultPath, &Contract) -> read::Read,
+) -> Corpus {
     let traversal = traverse(root);
     let mut diagnostics = DiagnosticList::new();
     diagnostics.extend(traversal.diagnostics().iter().cloned());
     let mut notes = Vec::new();
     for path in traversal.notes() {
-        let read = read::note(&root.path().join(path.as_str()), path, contract);
+        let read = read_one(&root.path().join(path.as_str()), path, contract);
         notes.extend(read.note);
         diagnostics.extend(read.diagnostics);
     }

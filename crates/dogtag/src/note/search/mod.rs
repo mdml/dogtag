@@ -36,19 +36,11 @@ use crate::contract::Contract;
 use crate::diagnostic::{Diagnostic, DiagnosticList, VaultPath};
 use crate::vault::VaultRoot;
 
-use super::model::{Note, PropertyValue};
+use super::model::Note;
 use super::{Corpus, ListFilter, list, read_corpus};
 
 use query::Query;
 use tokens::Token;
-
-/// The declared property whose values are a note's aliases.
-///
-/// A convention on the declaration rather than a reserved word: the kernel
-/// reads the property a type declares under this name, and a corpus whose
-/// vocabulary wants `aliases` to mean something else simply is not matched by
-/// alias.
-const ALIAS_PROPERTY: &str = "aliases";
 
 /// How many bytes of the note's own text a snippet quotes on each side of the
 /// first match.
@@ -244,7 +236,8 @@ impl<'a> Fields<'a> {
             body: tokens::scan(note.body()),
             title: tokens::scan(note.title().unwrap_or("")),
             path: tokens::scan(note.path().as_str()),
-            aliases: aliases(note)
+            aliases: note
+                .aliases()
                 .into_iter()
                 .map(|alias| (alias, tokens::scan(alias)))
                 .collect(),
@@ -324,15 +317,6 @@ impl Tally {
         if earlier {
             self.first_alias = Some(index);
         }
-    }
-}
-
-/// The note's aliases: its bound type's declared `aliases` property values.
-fn aliases(note: &Note) -> Vec<&str> {
-    match note.property(ALIAS_PROPERTY) {
-        Some(PropertyValue::Scalar(value)) => vec![value.as_str()],
-        Some(PropertyValue::List(values)) => values.iter().map(String::as_str).collect(),
-        _ => Vec::new(),
     }
 }
 
