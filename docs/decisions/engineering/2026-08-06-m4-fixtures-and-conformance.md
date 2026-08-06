@@ -59,3 +59,9 @@ The matrix keeps distinguishing ran from pending, and every floor the new corpus
 - **The stats artifact is short-lived by design**, so the corpus's provenance is reconstructible only from this record and the derivation code, not from the artifact.
 - **`docs` lands as the third live column in every matrix**, which grows the conformance run and the smoke sequence; the release record carries the green-before-tag obligation.
 - **Default-bound typing becomes load-bearing for the first time** — a defect in declared-default binding now fails retrieval scenarios, not just validation ones.
+
+## Amendments
+
+The Decision above stands as written; these later entries change parts of it, and the original text is left intact so the change is legible.
+
+- **2026-08-06 — the `docs`-only set is docs-native and universal-by-derivation.** The set as decided collides with the conformance rule that admits no waivers: the harness structurally cannot scope a scenario to one profile, and this record rejected "every scenario on every corpus" for the vacuous passes it would produce. Adjudicated for derivation: each of the four cases *derives* its situation into a fresh copy of whichever corpus it runs against — planting the recurring basename, the frontmatter-less note — exactly as the standing ambiguity cases already double a name anywhere. The scenarios therefore run meaningfully on every profile, the no-waiver rule stays absolute, and what "docs-only" names is the corpus that exhibits the situations natively in its committed form, which the harness floors assert of `docs` alone.
