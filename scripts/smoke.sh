@@ -4,10 +4,10 @@
 #
 # Every surface of the built binary runs against a throwaway copy of each
 # profile corpus: the pristine subset (version, doctor, contract explain,
-# check, list) on every profile that ships a corpus, and the full seeded
-# sequence (list with content, show, refusals) on `starter`, the normative
-# initialization profile. The script writes only under mktemp and leaves the
-# tree untouched.
+# check, list, search) on every profile that ships a corpus, and the full
+# seeded sequence (list with content, show, search, find, refusals) on
+# `starter`, the normative initialization profile. The script writes only
+# under mktemp and leaves the tree untouched.
 
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -63,6 +63,12 @@ for profile in conformance/profiles/*/corpus; do
   (cd "$vault" && "$dogtag" list >/dev/null) || fail "$name: list"
   (cd "$vault" && "$dogtag" list --format json | json_ok) || fail "$name: list json"
   step "$name: list enumerates in both formats"
+
+  # An invented word no corpus carries: an empty result is a result, exit 0.
+  (cd "$vault" && "$dogtag" search smoke-pristine-sweep >/dev/null) || fail "$name: search"
+  (cd "$vault" && "$dogtag" search smoke-pristine-sweep --format json | json_ok) \
+    || fail "$name: search json"
+  step "$name: search answers in both formats"
 done
 
 # --- starter, seeded: content flows through list and show -----------------
@@ -84,11 +90,53 @@ step "starter: list filters compose"
 (cd "$vault" && "$dogtag" show smoke --format json | json_ok) || fail "show json"
 step "starter: show renders a note by path and by name"
 
+(cd "$vault" && "$dogtag" search seeded | grep -q "people/smoke.md") || fail "search body term"
+(cd "$vault" && "$dogtag" search seeded --format json | json_ok) || fail "search json"
+(cd "$vault" && "$dogtag" search seeded --type person | grep -q "people/smoke.md") \
+  || fail "search type filter"
+(cd "$vault" && "$dogtag" search thought --type person | grep -q "inbox.md") \
+  && fail "search type filter leaks"
+step "starter: search finds the seeded note and filters compose"
+
+(cd "$vault" && "$dogtag" search '"seeded smoke"' | grep -q "people/smoke.md") \
+  || fail "phrase in order"
+(cd "$vault" && "$dogtag" search '"smoke seeded"' | grep -q "people/smoke.md") \
+  && fail "phrase out of order matched"
+(cd "$vault" && "$dogtag" search 'seed*' | grep -q "people/smoke.md") || fail "prefix wildcard"
+step "starter: the phrase and prefix forms match as written"
+
+[ -z "$(cd "$vault" && "$dogtag" search seeded --limit 0)" ] || fail "limit caps the hits"
+step "starter: search caps its hits at the limit"
+
+(cd "$vault" && "$dogtag" find smoke | grep -q "people/smoke.md") || fail "find by name"
+(cd "$vault" && "$dogtag" find SMOKE | grep -q "people/smoke.md") || fail "find any case"
+(cd "$vault" && "$dogtag" find smoke --format json | json_ok) || fail "find json"
+step "starter: find resolves the note by name, any case"
+
+printf -- '# A doubled name\n' >"$vault/smoke.md"
+if (cd "$vault" && "$dogtag" find smoke >/dev/null 2>&1); then
+  fail "a doubled name must refuse as ambiguous"
+fi
+(cd "$vault" && "$dogtag" find smoke 2>&1 || true) | grep -q "people/smoke.md" \
+  || fail "the ambiguity lists its candidates"
+(cd "$vault" && "$dogtag" find smoke --type person | grep -q "people/smoke.md") \
+  || fail "the type filter narrows the doubled name"
+(cd "$vault" && "$dogtag" find people/smoke | grep -q "people/smoke.md") \
+  || fail "the path picks one bearer"
+step "starter: find refuses a doubled name and the filter or path picks one"
+
 # --- refusals keep their shape --------------------------------------------
 if (cd "$vault" && "$dogtag" show nowhere >/dev/null 2>&1); then
   fail "a missing reference must exit nonzero"
 fi
 step "starter: a missing reference refuses"
+
+if (cd "$vault" && "$dogtag" search '"never closed' >/dev/null 2>&1); then
+  fail "an unbalanced quote must exit nonzero"
+fi
+(cd "$vault" && "$dogtag" search '"never closed' 2>&1 || true) | grep -q "search.invalid-query" \
+  || fail "the query fault carries its identifier"
+step "starter: an unreadable query refuses as a query fault"
 
 broken="$HOME/vaults/broken"
 mkdir -p "$broken/.dogtag"
