@@ -43,18 +43,17 @@
 //!
 //! ## Current surface
 //!
-//! This release opens a vault, diagnoses it, and reads its corpus: which files
-//! are notes, what their frontmatter says, how each one measures up against the
-//! type the contract declares for it, and which note each of its references
-//! names. A typed link must resolve, and one that does not is reported against
-//! the reference itself; a bare name several notes bear names none of them
-//! wherever it is written, prose included, because ambiguity is a defect of the
-//! reference rather than of the corpus. Nothing is persisted: the name index is
-//! built while a corpus is read and answered from memory. `list` is the first
-//! corpus-reading surface; `check` and `show` remain later slices of M3.
-//! built while a corpus is read and answered from memory, and no surface reads
-//! a corpus for `show`; `check` and `list` remain the later surfaces that will
-//! consume the same model.
+//! This release opens a vault, diagnoses it, reads its corpus, and searches
+//! it: which files are notes, what their frontmatter says, how each one
+//! measures up against the type the contract declares for it, which note each
+//! of its references names, and which notes a lexical query matches. A typed
+//! link must resolve, and one that does not is reported against the reference
+//! itself; a bare name several notes bear names none of them wherever it is
+//! written, prose included, because ambiguity is a defect of the reference
+//! rather than of the corpus. Nothing is persisted: the name index is built
+//! while a corpus is read and answered from memory, and retrieval is a corpus
+//! scan through the same shared loading, traversal, and validation path
+//! `check`, `list`, and `show` read by.
 //!
 //! - `diagnostic` — the envelope every failure is reported as: the exhaustive
 //!   kernel identifier set, the `ext.` namespace consumers mint their own
@@ -70,11 +69,12 @@
 //!   validity rules enforced at load.
 //! - `installation` — the local installation record, read and never written.
 //! - `note` — the public document model: which files are notes, what reading
-//!   one says, and which note each of its references names.
+//!   one says, which note each of its references names, and which notes a
+//!   lexical query matches.
 //! - `vault` — discovery, exact-path verification, root trust, and `open`.
 //! - `provenance` — where each resolved leaf value came from.
-//! - `report` — the `doctor` and `show` reports, their SDK-owned renderings,
-//!   the structured schema, and the generated agent contract.
+//! - `report` — the report shapes and their SDK-owned renderings, the
+//!   structured schema, and the generated agent contract.
 //!
 //! [`VERSION`] and [`version`] report the SDK's own version, and every
 //! official surface reports that value rather than carrying one of its own.

@@ -21,6 +21,8 @@
 //! - `dogtag list` — body-free corpus summaries with composable SDK-owned
 //!   filters.
 //! - `dogtag show` — one note's SDK-rendered document model.
+//! - `dogtag search` — lexical retrieval over the corpus, composed with
+//!   `list`'s filters.
 //!
 //! Exit codes are `0`, `1` and `2`, and no more. Severity alone decides `0`
 //! from `1`; `2` is reserved for an argument-parsing failure that produces no
@@ -37,6 +39,7 @@ mod explain;
 mod listing;
 mod output;
 mod preflight;
+mod search;
 mod select;
 mod show;
 
@@ -72,6 +75,8 @@ enum Command {
     List(ListArgs),
     /// Render one note's document model.
     Show(ShowArgs),
+    /// Search the corpus: bodies, paths, titles, and aliases.
+    Search(SearchArgs),
     /// Work with the vault's committed contract.
     Contract {
         #[command(subcommand)]
@@ -191,6 +196,48 @@ struct ListArgs {
 }
 
 #[derive(Args)]
+struct SearchArgs {
+    /// The query: bare words are OR-combined and relevance-ranked, "quoted
+    /// phrases" match adjacent words in order, and a trailing * is a prefix
+    /// wildcard. Explicit AND, date bounds, tag-text matching, and
+    /// link-target matching are not part of the grammar.
+    #[arg(value_name = "QUERY")]
+    query: String,
+    #[command(flatten)]
+    vault: VaultArg,
+    /// The report's format.
+    #[arg(long, value_enum, default_value_t = SearchFormat::Text)]
+    format: SearchFormat,
+    /// Treat warnings as failures for the exit code only.
+    #[arg(long)]
+    strict: bool,
+    /// Match the bound type exactly.
+    #[arg(long = "type", value_name = "NAME")]
+    type_name: Option<String>,
+    /// Match one literal, complete tag exactly (not a namespace prefix).
+    #[arg(long, value_name = "TAG")]
+    tag: Option<String>,
+    /// Match the declared lifecycle axis value exactly.
+    #[arg(long, value_name = "VALUE", conflicts_with = "ordinary")]
+    lifecycle: Option<String>,
+    /// Match the ordinary state in its declared encoding.
+    #[arg(long, conflicts_with = "lifecycle")]
+    ordinary: bool,
+    /// Keep at most this many hits, best-ranked first.
+    #[arg(long, value_name = "N", default_value_t = 20)]
+    limit: usize,
+}
+
+/// How `search` reports.
+#[derive(Clone, Copy, ValueEnum)]
+enum SearchFormat {
+    /// One tab-separated hit per line.
+    Text,
+    /// One structured report carrying hits and diagnostics.
+    Json,
+}
+
+#[derive(Args)]
 struct ShowArgs {
     /// A vault-relative path (any `/` or a trailing `.md`) or an unambiguous bare name.
     #[arg(value_name = "REF")]
@@ -260,6 +307,8 @@ fn dispatch(environment: &Environment, command: Command) -> i32 {
             .unwrap_or_else(|| listing::run(environment, &args)),
         Command::Show(args) => refuse_empty(environment, args.vault.requested())
             .unwrap_or_else(|| show::run(environment, &args)),
+        Command::Search(args) => refuse_empty(environment, args.vault.requested())
+            .unwrap_or_else(|| search::run(environment, &args)),
         Command::Contract {
             command: ContractCommand::Explain(args),
         } => refuse_empty(environment, args.vault.requested())

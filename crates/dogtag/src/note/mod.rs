@@ -36,6 +36,7 @@ mod list;
 mod model;
 mod read;
 mod resolve;
+mod search;
 mod traverse;
 mod validate;
 mod values;
@@ -49,6 +50,7 @@ pub use model::{
     Binding, Edge, FieldValue, Note, Property, PropertyValue, RecordValue, Reference, Relationship,
 };
 pub use resolve::UnresolvedReference;
+pub use search::{SearchHit, SearchRequest, SearchResult, search};
 pub use traverse::{Traversal, traverse};
 
 /// Every note in a vault, read against its contract.

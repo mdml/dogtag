@@ -233,6 +233,13 @@ pub enum KernelDiagnostic {
     /// a different subject: nothing is wrong with the corpus, which claimed nothing — the
     /// reference in hand simply names no note. This is what `show <ref>` refuses with.
     LinkTargetNotFound,
+    /// A search query the grammar cannot read: an unbalanced quote, or a query naming no
+    /// word at all.
+    ///
+    /// The `search` area is scoped to query-expression faults and nothing else. An empty
+    /// result is a result rather than a diagnostic, and a corpus fault met during
+    /// retrieval is reported under the area that owns it.
+    SearchInvalidQuery,
     /// The installation record could not be read.
     InstallationUnreadable,
     /// The installation record is not valid UTF-8.
@@ -643,6 +650,11 @@ const REGISTRY: &[(KernelDiagnostic, &str, Severity)] = &[
         Severity::Error,
     ),
     (
+        KernelDiagnostic::SearchInvalidQuery,
+        "search.invalid-query",
+        Severity::Error,
+    ),
+    (
         KernelDiagnostic::InstallationUnreadable,
         "installation.unreadable",
         Severity::Error,
@@ -905,6 +917,7 @@ fn expected_id(kind: KernelDiagnostic) -> &'static str {
         "contract" => expected_contract_id(kind),
         "note" => expected_note_id(kind),
         "link" => expected_link_id(kind),
+        "search" => expected_search_id(kind),
         "installation" => expected_installation_id(kind),
         _ => expected_compat_id(kind),
     }
@@ -912,7 +925,7 @@ fn expected_id(kind: KernelDiagnostic) -> &'static str {
 
 /// Every `discovery.*` variant, as one pattern.
 ///
-/// The four group macros are macros rather than functions because it is the
+/// The group macros are macros rather than functions because it is the
 /// *patterns* an exhaustiveness check reads. A function could only answer
 /// whether a variant is in its area, and an answer is not a pattern — which is
 /// exactly why a match guard over such a function compiles while checking
@@ -1016,6 +1029,14 @@ macro_rules! link_variants {
     };
 }
 
+/// Every `search.*` variant, as one pattern.
+#[cfg(test)]
+macro_rules! search_variants {
+    () => {
+        KernelDiagnostic::SearchInvalidQuery
+    };
+}
+
 /// Every `installation.*` variant, as one pattern.
 #[cfg(test)]
 macro_rules! installation_variants {
@@ -1053,7 +1074,7 @@ macro_rules! compat_variants {
 
 /// The area each variant belongs to.
 ///
-/// The four groups above name every variant exactly once, and this is an
+/// The groups above name every variant exactly once, and this is an
 /// **exhaustive match** over them, so adding a variant without placing it in an
 /// area fails to compile — naming the group that must grow. That is what makes
 /// keeping the registry complete a compiler obligation rather than a review one.
@@ -1064,6 +1085,7 @@ fn expected_area(kind: KernelDiagnostic) -> &'static str {
         contract_variants!() => "contract",
         note_variants!() => "note",
         link_variants!() => "link",
+        search_variants!() => "search",
         installation_variants!() => "installation",
         compat_variants!() => "compat",
     }
@@ -1176,6 +1198,16 @@ fn expected_link_id(kind: KernelDiagnostic) -> &'static str {
     }
 }
 
+/// The identifier each `search.*` variant carries, and `""` for any other area.
+#[cfg(test)]
+fn expected_search_id(kind: KernelDiagnostic) -> &'static str {
+    use KernelDiagnostic::*;
+    match kind {
+        SearchInvalidQuery => "search.invalid-query",
+        _ => "",
+    }
+}
+
 /// The identifier each `installation.*` variant carries, and `""` for any other area.
 #[cfg(test)]
 fn expected_installation_id(kind: KernelDiagnostic) -> &'static str {
@@ -1239,13 +1271,15 @@ mod tests {
     use super::*;
     use std::collections::BTreeSet;
 
-    /// The areas the kernel claims: M2's four, plus M3's two — `note` for a
-    /// single note's own structure, `link` for resolution between notes.
+    /// The areas the kernel claims: M2's four, M3's two — `note` for a single
+    /// note's own structure, `link` for resolution between notes — and M4's
+    /// `search`, scoped to query-expression faults.
     const AREAS: &[&str] = &[
         "discovery",
         "contract",
         "note",
         "link",
+        "search",
         "installation",
         "compat",
     ];
@@ -1272,6 +1306,7 @@ mod tests {
         assert_eq!(expected_compat_id(contract), "");
         assert_eq!(expected_note_id(contract), "");
         assert_eq!(expected_link_id(contract), "");
+        assert_eq!(expected_search_id(contract), "");
         let discovery = KernelDiagnostic::DiscoveryNestedVault;
         assert_eq!(expected_contract_id(discovery), "");
     }

@@ -51,6 +51,7 @@ mod doctor;
 mod json;
 mod list;
 mod markdown;
+mod search;
 mod show;
 
 #[cfg(test)]
@@ -72,9 +73,10 @@ use crate::vault::{Opened, VaultRoot};
 
 pub use check::{CheckReport, check_report, check_text};
 pub use doctor::doctor_text;
-pub use json::{check_json, contract_json, doctor_json, list_json, show_json};
+pub use json::{check_json, contract_json, doctor_json, list_json, search_json, show_json};
 pub use list::list_text;
 pub use markdown::contract_markdown;
+pub use search::search_text;
 pub use show::{ShowReport, show_report, show_text};
 
 /// The version of the structured output this module emits.
@@ -87,9 +89,14 @@ pub use show::{ShowReport, show_report, show_text};
 ///
 /// It ticks when a field name or a field's type changes, which is the line the
 /// diagnostics record's 2026-08-01 amendment drew from the other side when it
-/// declined to tick for a change that moved no field. Version 2 is the tag
-/// vocabulary: `contract.tags` and a `tag_namespaces` collection on every type.
-pub const SCHEMA_VERSION: u32 = 2;
+/// declined to tick for a change that moved no field — and it ticks **once per
+/// milestone**, per the M3 surfaces record's 2026-08-04 amendment, so a
+/// consumer pinning the version sees one bump per milestone however many
+/// shapes the milestone adds. Version 2 is the tag vocabulary: `contract.tags`
+/// and a `tag_namespaces` collection on every type. Version 3 is M4's
+/// retrieval surface, taken when its first report shape — the `search`
+/// document — landed; the milestone's later shapes ride the same version.
+pub const SCHEMA_VERSION: u32 = 3;
 
 /// How a caller arrived at the vault it is reporting on.
 ///
@@ -879,6 +886,8 @@ mod tests {
 
     #[test]
     fn the_schema_version_is_its_own_clock() {
-        assert_eq!(SCHEMA_VERSION, 2);
+        // One tick per milestone: 2 was M3's, 3 is M4's, taken when the
+        // `search` document — the milestone's first report shape — landed.
+        assert_eq!(SCHEMA_VERSION, 3);
     }
 }
