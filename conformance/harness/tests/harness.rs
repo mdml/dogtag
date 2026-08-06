@@ -309,8 +309,8 @@ fn profile_roster_is_exactly_the_beta_roster() {
         "conformance/profiles/ must hold exactly the four docs/beta.md profiles"
     );
     // A corpus is built exactly when the ratchet says it has ever been built.
-    // At M2 that is `dense` and `starter`; `docs` and `records` are scheduled,
-    // so M2's cross-profile evidence is two profiles rather than four.
+    // At M4 that is `dense`, `starter` and `docs`; `records` is scheduled, so
+    // this milestone's cross-profile evidence is three profiles, not four.
     for profile in &profiles {
         let ever_built = CORPORA_EVER_BUILT.contains(&profile.name.as_str());
         let expected = if ever_built {
@@ -427,8 +427,8 @@ fn every_pair_reports_what_its_two_halves_make_it() {
     }
     assert_eq!(
         ran,
-        24 * 2,
-        "the twenty-four graduated scenarios ran against the two built corpora"
+        24 * 3,
+        "the twenty-four graduated scenarios ran against the three built corpora"
     );
 }
 

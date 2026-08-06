@@ -49,7 +49,7 @@ Every corpus-backed case runs against a **temporary copy** of the profile's corp
 
 The scenario schema has **no field that could name a profile**. Deserialization uses serde's `deny_unknown_fields`, so an added `profiles = ["dense"]`, `skip`, `waive`, or `only` key fails parsing instead of creating an exemption — the place where a personal invariant would hide does not exist in the format. The profile schema is locked the same way in the other direction: a profile has no field with which to name a scenario. Harness tests assert both rejections (`waiver_shaped_fields_fail_scenario_parsing`, `waiver_shaped_fields_fail_profile_parsing`); if either test ever fails, someone widened the schema, and that is the exact change this suite exists to forbid.
 
-One channel is **not** closed structurally, and pretending otherwise would be worse than naming it: `corpus = "scheduled"` removes a profile from every scenario at once. The loader checks only that the declared status matches the disk, so deleting a corpus directory and reverting the status would be a mechanically valid way to make a failing profile stop failing. The rule that closes it is written rather than typed — **a corpus that has been `built` never returns to `scheduled`** — and the harness now ratchets it: `CORPORA_EVER_BUILT` names `dense` and `starter`, and a profile named there that declares `scheduled` fails to load. The list only grows, so un-building a corpus means deleting a line from it — a named, greppable, reviewable act rather than a quiet status flip. Rejected alternatives — declared-and-reviewed exemptions, a two-tier shared/profile-specific split — both make single-profile scenarios routine, and an exemption list is exactly where a personal invariant hides.
+One channel is **not** closed structurally, and pretending otherwise would be worse than naming it: `corpus = "scheduled"` removes a profile from every scenario at once. The loader checks only that the declared status matches the disk, so deleting a corpus directory and reverting the status would be a mechanically valid way to make a failing profile stop failing. The rule that closes it is written rather than typed — **a corpus that has been `built` never returns to `scheduled`** — and the harness now ratchets it: `CORPORA_EVER_BUILT` names `dense`, `docs` and `starter`, and a profile named there that declares `scheduled` fails to load. The list only grows, so un-building a corpus means deleting a line from it — a named, greppable, reviewable act rather than a quiet status flip. Rejected alternatives — declared-and-reviewed exemptions, a two-tier shared/profile-specific split — both make single-profile scenarios routine, and an exemption list is exactly where a personal invariant hides.
 
 ## Profiles
 
@@ -68,7 +68,11 @@ The committed vault-contract format is an M2 decision. A fixture corpus written 
 
 ### What `built` means
 
-`corpus = "built"` means **the fixture vault exists**: a vault root and its committed contract. It does not promise notes. No M2 scenario reads a note, and notes for `dense` and `starter` land at M3 alongside the document model that defines how they are written — authoring them earlier would freeze a guess about a format M3 decides.
+`corpus = "built"` means **the fixture vault exists**: a vault root and its committed contract. It does not promise notes. No M2 scenario reads a note, and notes for `dense` and `starter` land at M3 alongside the document model that defines how they are written — authoring them earlier would freeze a guess about a format M3 decides. `docs` was built whole at M4, contract and notes together, because by then both formats existed.
+
+### The fixture corpora and the repository's own link check
+
+`scripts/check-links.sh` skips `conformance/profiles/*/corpus/`. A file under a corpus is a note in a **vault**, and a vault resolves a reference by its committed rule — against the vault root rather than against the linking file, with the `.md` extension optional and a bare name resolving by name alone. Checking those files against a file-relative rule would report a conforming corpus as broken. They are not unchecked: the harness reads every corpus through the SDK, and `conformance/harness/tests/floors.rs` requires every internal reference the `docs` corpus commits to resolve under the rule that actually governs it.
 
 The schema deliberately gained no third status for this. Any state between `scheduled` and `built` is somewhere a profile can sit indefinitely while the matrix reports something other than a skip, which is what a waiver looks like from the inside. Each `PROFILE.md` states exactly what its corpus holds at each stage instead.
 
@@ -93,7 +97,7 @@ The matrix distinguishes a pair that **ran** from one **skipped** for want of a 
 | `no-corpus` | the scenario is executable; the corpus is not built — a **skip**, not a result |
 | `pending,no-corpus` | both |
 
-At M2 that is 19 scenarios × 4 profiles = 76 pairs, of which 10 × 2 = 20 ran: the ten M2 scenarios against `dense` and `starter`. M2's cross-profile evidence is those two profiles, not four.
+At M4 that is 24 scenarios × 4 profiles = 96 pairs, of which 24 × 3 = 72 ran: every graduated scenario against `dense`, `starter` and `docs`. `records` is still scheduled, so this milestone's cross-profile evidence is those three profiles, not four.
 
 The harness crate depends on `serde`, `toml`, and the **`dogtag` SDK**, whose *public API only* it consumes — the same door any other consumer enters by. That makes conformance a permanent test that the public API is sufficient: a private hook the harness turned out to need would be an architecture bug, not a reason to widen anything.
 

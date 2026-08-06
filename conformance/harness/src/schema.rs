@@ -27,7 +27,9 @@ pub const REQUIRED_PROFILES: [&str; 4] = ["dense", "docs", "records", "starter"]
 /// list does: [`crate::load_profiles_from`] refuses a profile named here that
 /// declares `scheduled`, which turns "quietly unbuild the corpus" into
 /// "delete a line from this list", a named, greppable, reviewable act.
-pub const CORPORA_EVER_BUILT: &[&str] = &["dense", "starter"];
+///
+/// `docs` joined at M4, the milestone whose hypothesis its corpus stresses.
+pub const CORPORA_EVER_BUILT: &[&str] = &["dense", "docs", "starter"];
 
 /// A golden conformance scenario, one per file in `conformance/scenarios/`.
 ///
