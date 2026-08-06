@@ -20,7 +20,7 @@ A scenario is a contract first and a test second:
 ```toml
 id = "capability-cardinality-enforced"        # kebab-case, equals the filename stem
 title = "Capability enumeration and cardinality are enforced when the contract loads"
-milestone = "M2"                              # when it becomes executable (M2 | M3 so far)
+milestone = "M2"                              # when it becomes executable (M2 | M3 | M4 so far)
 status = "executable"                         # pending | executable — flips at its milestone
 contract = """
 Given/when/then prose in profile-agnostic terms.
@@ -84,7 +84,7 @@ The schema deliberately gained no third status for this. Any state between `sche
 2. waiver-shaped fields fail parsing, on scenarios and on profiles;
 3. the report is the full **scenarios × profiles cross product** — every pair present exactly once, |report| = |scenarios| × |profiles| — and each pair's outcome follows from the two facts about it: an executable scenario against a built corpus *runs*, and everything else is pending on the scenario, on the corpus, or on both;
 4. the profile roster is exactly the four above, and a corpus named in `CORPORA_EVER_BUILT` is built;
-5. every scenario tagged with the current milestone is `executable`, so a straggler fails the suite rather than sitting out a graduation;
+5. every scenario tagged with the current milestone is `executable`, so a straggler fails the suite rather than sitting out a graduation — with one recorded exception the same test pins by name: the four `docs`-only M4 scenarios stay `pending` until the change that builds their corpus graduates them;
 6. the matrix prints, one row per scenario, one column per profile, every cell filled.
 
 The matrix distinguishes a pair that **ran** from one **skipped** for want of a corpus, because a run reaching two of four profiles must not read as a complete matrix. Five cells, each named in a legend printed beneath the table and counted separately in the summary line:
