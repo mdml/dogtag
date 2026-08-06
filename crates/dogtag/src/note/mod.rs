@@ -116,13 +116,15 @@ pub fn read_corpus(root: &VaultRoot, contract: &Contract) -> Corpus {
     corpus_of(root, contract, read::note)
 }
 
-/// Reads only every note's schema'd plane, for the body-free surfaces.
+/// Reads only every note's schema'd plane, for the body-free enumeration.
 ///
 /// The walk, the validation, and the resolution are [`read_corpus`]'s exactly;
 /// what is skipped is each body's text, title, and untyped references — which
-/// is why `list` and `find` answer summaries without opening every body, and
-/// why their diagnostics can differ from a full read's only by the findings
-/// prose alone can raise.
+/// is why `list` answers summaries without opening every body, and why its
+/// diagnostics can differ from a full read's only by the findings prose alone
+/// can raise. `list` alone reads this way: M3 decided listing must not cost a
+/// full-corpus body read, and no record grants the retrieval verbs the same
+/// exemption.
 fn summary_corpus(root: &VaultRoot, contract: &Contract) -> Corpus {
     corpus_of(root, contract, read::summary)
 }

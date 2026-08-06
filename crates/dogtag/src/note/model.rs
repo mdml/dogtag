@@ -21,12 +21,14 @@ use crate::diagnostic::{Location, VaultPath};
 
 /// The declared property whose values are a note's aliases.
 ///
-/// A convention on the declaration rather than a reserved word: retrieval
-/// reads the property a type declares under this name, and a corpus whose
-/// vocabulary wants `aliases` to mean something else simply is not matched by
-/// alias. The values surface only where the bound type declares the property
-/// — the tag-property precedent — so an undeclared `aliases` key stays an
-/// ordinary undeclared key whose values never reach the model.
+/// A convention on the declaration rather than a contract seat: retrieval
+/// reads the property a type declares under this name. The values surface
+/// only where the bound type declares the property — the tag-property
+/// precedent — so an undeclared `aliases` key stays an ordinary undeclared
+/// key whose values never reach the model. The cost is stated plainly: a
+/// corpus that declares `aliases` meaning something else is still matched by
+/// it, which is what a `[tags]`-style contract declaration would avoid; the
+/// convention stands until a record seats or overturns it.
 const ALIAS_PROPERTY: &str = "aliases";
 
 /// One note, read.
