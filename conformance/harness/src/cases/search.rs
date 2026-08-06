@@ -135,35 +135,49 @@ pub fn prefix_wildcard(corpus: &Corpus) -> Checked {
 /// must be exactly the unfiltered hits intersected with what `list` answers
 /// for the same filter — under whichever ordinary-state encoding this
 /// corpus's contract declares, without either vocabulary reaching the core.
+///
+/// Two arms carry a construction guarantee against the vacuous pass: the
+/// type filter names the derived participant's own bound type, and the
+/// axis-value filter (when a committed note carries a value at all) names a
+/// value a needle-carrying note actually holds — so their expected sets are
+/// provably nonempty, and an empty-set equality cannot report green.
 pub fn composes_with_list_filters(corpus: &Corpus) -> Checked {
-    let derived = with_term_in_a_participant(corpus)?;
-    let everything = hit_paths(&searched(&derived, TERM)?);
+    let seeded = seed_needles(corpus)?;
+    let derived = &seeded.derived;
+    let everything = hit_paths(&searched(derived, TERM)?);
     require(everything.len() >= 2, || missed_needles(&everything))?;
-    let contract = derived.clean_contract()?;
-    let filters = [
-        ListFilter {
-            type_name: participant_type(&derived)?,
-            ..ListFilter::default()
+    let fixed = [
+        Arm {
+            filter: ListFilter {
+                type_name: Some(seeded.participant_type.clone()),
+                ..ListFilter::default()
+            },
+            floor: 1,
         },
-        ListFilter {
-            tag: Some("derived/topic".to_owned()),
-            ..ListFilter::default()
+        Arm {
+            filter: ListFilter {
+                tag: Some("derived/topic".to_owned()),
+                ..ListFilter::default()
+            },
+            floor: 0,
         },
-        ListFilter {
-            ordinary: true,
-            ..ListFilter::default()
+        Arm {
+            filter: ListFilter {
+                ordinary: true,
+                ..ListFilter::default()
+            },
+            floor: 0,
         },
     ];
-    for filter in filters {
-        let listed: BTreeSet<String> = list(&derived.vault_root()?, &contract, &filter)
-            .notes()
-            .iter()
-            .map(|note| note.path().as_str().to_owned())
-            .collect();
-        let narrowed = hit_paths(&searched_with(&derived, TERM, filter.clone())?);
-        let expected: BTreeSet<String> = everything.intersection(&listed).cloned().collect();
-        let composed = narrowed == expected;
-        require(composed, || uncomposed(&filter, &narrowed, &expected))?;
+    let value_arm = seeded.axis_value.iter().map(|value| Arm {
+        filter: ListFilter {
+            lifecycle: Some(value.clone()),
+            ..ListFilter::default()
+        },
+        floor: 1,
+    });
+    for arm in fixed.into_iter().chain(value_arm) {
+        compose(derived, &everything, &arm)?;
     }
     let none = derived.derived("search-no-axis", replace_lifecycle_with_none)?;
     let refused = searched_with(
@@ -179,6 +193,30 @@ pub fn composes_with_list_filters(corpus: &Corpus) -> Checked {
         "note.lifecycle-axis-absent",
         Subject::new("a lifecycle filter against a corpus declaring no axis"),
     )
+}
+
+/// One filter's composition check: hits narrowed by the filter must equal
+/// the unfiltered hits intersected with `list`'s answer for the same filter.
+struct Arm {
+    filter: ListFilter,
+    /// How many notes the seeding guarantees the expected set holds. A floor
+    /// of one makes an empty-set equality a failure rather than a vacuous
+    /// pass; a floor of zero is an arm whose evidence the corpus decides.
+    floor: usize,
+}
+
+fn compose(derived: &Corpus, everything: &BTreeSet<String>, arm: &Arm) -> Checked {
+    let contract = derived.clean_contract()?;
+    let listed: BTreeSet<String> = list(&derived.vault_root()?, &contract, &arm.filter)
+        .notes()
+        .iter()
+        .map(|note| note.path().as_str().to_owned())
+        .collect();
+    let narrowed = hit_paths(&searched_with(derived, TERM, arm.filter.clone())?);
+    let expected: BTreeSet<String> = everything.intersection(&listed).cloned().collect();
+    require(expected.len() >= arm.floor, || starved(&arm.filter))?;
+    let composed = narrowed == expected;
+    require(composed, || uncomposed(&arm.filter, &narrowed, &expected))
 }
 
 /// `search-empty-result-is-a-result`.
@@ -242,17 +280,42 @@ fn uncomposed(
     )
 }
 
+/// A construction-guaranteed arm found nothing to compose over.
+fn starved(filter: &ListFilter) -> String {
+    format!("under {filter:?} the composition ran over the empty set, which proves nothing")
+}
+
+/// A hit answered the same path twice: membership held, multiplicity did not.
+fn duplicated_hits(subject: &str, answered: usize, distinct: usize) -> String {
+    format!("{subject} answered {answered} hits over {distinct} distinct paths")
+}
+
 /// The invented word the filter-composition case plants.
 const TERM: &str = "quixarine";
 
-/// A derived corpus in which the term sits in one committed axis-participant
-/// note's body and in one planted untyped, tagged note.
+/// The derived corpus the composition arms run over, and the two facts the
+/// seeding establishes about it.
+struct Seeded {
+    derived: Corpus,
+    /// The bound type of the committed participant the term was seeded into
+    /// — the type filter names it, so the type arm provably narrows to a
+    /// nonempty set.
+    participant_type: String,
+    /// A declared-axis value some needle-carrying committed note holds, when
+    /// the corpus holds any valued note at all; `starter`-like corpora are
+    /// legitimately all-ordinary and skip the value arm.
+    axis_value: Option<String>,
+}
+
+/// Seeds the term into one committed axis-participant note, one committed
+/// value-carrying note where the corpus has one, and one planted untyped,
+/// tagged note.
 ///
-/// Deriving from a committed participant is what keeps the case honest under
-/// whichever encoding the contract declares: the participant's own state —
-/// marked or unmarked — is real corpus data, not a value this case invented.
-fn with_term_in_a_participant(corpus: &Corpus) -> Result<Corpus, String> {
-    let participant = first_participant(corpus)?;
+/// Deriving from committed notes is what keeps the case honest under
+/// whichever encoding the contract declares: the participants' own states —
+/// marked or unmarked — are real corpus data, not values this case invented.
+fn seed_needles(corpus: &Corpus) -> Result<Seeded, String> {
+    let (participant, participant_type) = first_participant(corpus)?;
     let derived = derive::derived_note(
         corpus,
         &NoteDerivation {
@@ -266,45 +329,57 @@ fn with_term_in_a_participant(corpus: &Corpus) -> Result<Corpus, String> {
         "derived-search/untyped.md",
         &format!("---\ntags: [derived/topic]\n---\n{TERM}\n"),
     )?;
-    Ok(derived)
+    let axis_value = seed_valued(corpus, &derived)?;
+    Ok(Seeded {
+        derived,
+        participant_type,
+        axis_value,
+    })
 }
 
 /// The first committed note, in corpus order, whose bound type declares the
-/// lifecycle axis property.
-fn first_participant(corpus: &Corpus) -> Result<String, String> {
+/// lifecycle axis property — and that type's name.
+fn first_participant(corpus: &Corpus) -> Result<(String, String), String> {
     let contract = corpus.clean_contract()?;
-    let axis = contract
-        .lifecycle()
-        .axis()
-        .ok_or_else(|| "a built profile declares a lifecycle axis; none was found".to_string())?
-        .to_owned();
+    let axis = declared_axis(corpus)?;
     let notes = derive::notes(corpus)?;
     notes
         .notes()
         .iter()
-        .find(|note| {
-            note.binding()
-                .type_name()
-                .and_then(|name| contract.type_named(name))
-                .is_some_and(|declared| declared.property(&axis).is_some())
+        .find_map(|note| {
+            let name = note.binding().type_name()?;
+            contract.type_named(name)?.property(&axis)?;
+            Some((note.path().as_str().to_owned(), name.to_owned()))
         })
-        .map(|note| note.path().as_str().to_owned())
         .ok_or_else(|| "no committed note participates in the declared axis".to_string())
 }
 
-/// The derived participant's bound type, for the type-filter arm.
-fn participant_type(derived: &Corpus) -> Result<Option<String>, String> {
-    let contract = derived.clean_contract()?;
-    let axis = contract
+/// Seeds the term into the first committed note carrying an axis value, and
+/// answers that value — or `None` where the corpus is legitimately all
+/// unmarked, in which case the value arm has nothing honest to filter for.
+fn seed_valued(corpus: &Corpus, derived: &Corpus) -> Result<Option<String>, String> {
+    let axis = declared_axis(corpus)?;
+    let notes = derive::notes(corpus)?;
+    let valued = notes.notes().iter().find_map(|note| {
+        let value = note.property(&axis)?.scalar()?;
+        Some((note.path().as_str().to_owned(), value.to_owned()))
+    });
+    valued
+        .map(|(path, value)| {
+            let seeded = format!("{}\n{TERM}\n", derive::note_text(corpus, &path)?);
+            derive::plant(derived, &path, &seeded).map(|()| value)
+        })
+        .transpose()
+}
+
+/// The declared lifecycle axis, which every built profile carries.
+fn declared_axis(corpus: &Corpus) -> Result<String, String> {
+    corpus
+        .clean_contract()?
         .lifecycle()
         .axis()
-        .ok_or_else(|| "the derived corpus lost its axis".to_string())?
-        .to_owned();
-    Ok(contract
-        .types()
-        .iter()
-        .find(|declared| declared.property(&axis).is_some())
-        .map(|declared| declared.name().to_owned()))
+        .map(str::to_owned)
+        .ok_or_else(|| "a built profile declares a lifecycle axis; none was found".to_string())
 }
 
 /// The corpus searched through the SDK, unfiltered and uncapped.
@@ -340,7 +415,9 @@ fn require_hits(result: &SearchResult, expected: &[&str], subject: &str) -> Chec
     let wanted: BTreeSet<String> = expected.iter().map(|path| (*path).to_owned()).collect();
     require(answered == wanted, || {
         format!("{subject} answered {answered:?} where the planted notes say {wanted:?}")
-    })
+    })?;
+    let doubled = duplicated_hits(subject, result.hits().len(), wanted.len());
+    require(result.hits().len() == wanted.len(), || doubled)
 }
 
 #[cfg(test)]
@@ -362,6 +439,26 @@ mod tests {
         let detail = composes_with_list_filters(&corpus)
             .expect_err("the case needs a declared axis to compose with");
         assert!(detail.contains("none was found"), "{detail}");
+    }
+
+    #[test]
+    fn an_all_unmarked_corpus_skips_the_value_arm_and_composes_the_rest() {
+        // Every note leaves the axis unmarked, so there is no honest value to
+        // filter for: the value arm skips, and the other arms still compose.
+        let contract = concat!(
+            "contract_version = 2\n",
+            "\n[dialect]\nlinks = \"wikilink\"\n",
+            "\n[lifecycle]\naxis = \"stage\"\nordinary = { absent = true }\n",
+            "\n[tags]\nproperty = \"tags\"\n",
+            "\n[[type]]\nname = \"work\"\ncapabilities = [\"identity-bearing\"]\n",
+            "  [[type.property]]\n  name = \"stage\"\n  kind = \"enum\"\n  values = [\"done\"]\n",
+            "  [[type.property]]\n  name = \"tags\"\n  kind = \"list\"\n  of = \"string\"\n",
+            "\n[[type]]\nname = \"capture\"\ncapabilities = [\"catch-all\"]\n",
+            "  [[type.property]]\n  name = \"tags\"\n  kind = \"list\"\n  of = \"string\"\n",
+        );
+        let corpus = Corpus::holding("search-all-unmarked", contract);
+        plant(&corpus, "a.md", "---\ntype: work\n---\n# A participant\n").expect("a note");
+        composes_with_list_filters(&corpus).expect("the case composes without a value arm");
     }
 
     #[test]
@@ -399,6 +496,13 @@ mod tests {
         let detail = uncomposed(&ListFilter::default(), &narrowed, &everything);
         assert!(detail.contains("enumeration-plus-predicate"), "{detail}");
         assert!(detail.contains("only.md"), "{detail}");
+        let starved = starved(&ListFilter::default());
+        assert!(starved.contains("proves nothing"), "{starved}");
+        let doubled = duplicated_hits("the query", 3, 2);
+        assert!(
+            doubled.contains("3 hits over 2 distinct paths"),
+            "{doubled}"
+        );
     }
 
     /// One real hit, searched out of a one-note corpus, for the detail tests.
