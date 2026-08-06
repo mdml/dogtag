@@ -40,7 +40,9 @@ use crate::contract::{
     PropertyKind, RelationshipDecl, TagNamespaceDecl, TagsDecl, TypeDecl,
 };
 use crate::diagnostic::{Diagnostic, FileRef, Location, Position, Related, SeverityCounts, Span};
-use crate::note::{Binding, ListResult, Note, NoteSummary, PropertyValue, RecordValue};
+use crate::note::{
+    Binding, ListResult, Note, NoteSummary, PropertyValue, RecordValue, SearchHit, SearchResult,
+};
 use crate::provenance::{ProvenanceEntry, Source};
 use crate::vault::VaultRoot;
 
@@ -123,6 +125,44 @@ fn listed_wire(note: &NoteSummary) -> ListedWire<'_> {
         path: note.path().as_str(),
         type_name: note.type_name(),
         lifecycle: note.lifecycle(),
+    }
+}
+
+/// Renders a search result and its diagnostic envelope as one JSON document.
+pub fn search_json(result: &SearchResult, reported: &[Diagnostic]) -> String {
+    let mut diagnostics = crate::diagnostic::DiagnosticList::new();
+    diagnostics.extend(reported.iter().cloned());
+    document(&SearchWire {
+        schema_version: SCHEMA_VERSION,
+        report: "search",
+        hits: result.hits().iter().map(hit_wire).collect(),
+        diagnostics: reported.iter().map(diagnostic_wire).collect(),
+        summary: summary_wire(diagnostics.counts()),
+    })
+}
+
+#[derive(Serialize)]
+struct SearchWire<'a> {
+    schema_version: u32,
+    report: &'static str,
+    hits: Vec<HitWire<'a>>,
+    diagnostics: Vec<DiagnosticWire<'a>>,
+    summary: SummaryWire,
+}
+
+#[derive(Serialize)]
+struct HitWire<'a> {
+    path: &'a str,
+    #[serde(rename = "type")]
+    type_name: Option<&'a str>,
+    snippet: Option<&'a str>,
+}
+
+fn hit_wire(hit: &SearchHit) -> HitWire<'_> {
+    HitWire {
+        path: hit.path().as_str(),
+        type_name: hit.type_name(),
+        snippet: hit.snippet(),
     }
 }
 
@@ -904,7 +944,7 @@ mod tests {
         let tree = Tree::new("json-order");
         let report = doctor_report(&opened(&tree, NAMED_ORDINARY, RECORD), discovery(), &[]);
         let json = doctor_json(&report);
-        assert!(json.starts_with("{\n  \"schema_version\": 2,\n  \"report\": \"doctor\",\n"));
+        assert!(json.starts_with("{\n  \"schema_version\": 3,\n  \"report\": \"doctor\",\n"));
         assert_key_order(
             &json,
             &[
@@ -1205,7 +1245,7 @@ mod tests {
         let tree = Tree::new("json-contract-order");
         let (root, contract) = rendered(&tree, NAMED_ORDINARY);
         let json = contract_json(&root, &contract);
-        assert!(json.starts_with("{\n  \"schema_version\": 2,\n  \"report\": \"contract\",\n"));
+        assert!(json.starts_with("{\n  \"schema_version\": 3,\n  \"report\": \"contract\",\n"));
         assert_key_order(
             &json,
             &[

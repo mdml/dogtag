@@ -91,8 +91,15 @@ toolchain = "nightly-2026-07-30"
 # path is tested; the kernel floor below is untouched and every kernel file
 # holds 100%. This is dilution by test infrastructure, not eroded product
 # coverage, and the ratchet resumes rising from here.
-line = 99.00
-branch = 98.62
+#
+# The M4 search core raised both numbers: the scan, the query grammar, the
+# tokenizer, and both renderings land fully covered — every line and every
+# branch of the new kernel modules is reached from a named SDK or CLI test —
+# so the workspace total rises with them. Both floors sit one hundredth
+# under the measured 99.06 / 98.71, for the run-to-run wobble the earlier
+# entry records.
+line = 99.05
+branch = 98.70
 
 [thresholds]
 line = 95.0

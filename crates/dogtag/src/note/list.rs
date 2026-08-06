@@ -65,13 +65,10 @@ impl ListResult {
 
 /// Enumerates notes under `root`, applying every supplied filter with AND semantics.
 pub fn list(root: &VaultRoot, contract: &Contract, filter: &ListFilter) -> ListResult {
-    if lifecycle_requested(filter) && matches!(contract.lifecycle(), LifecycleDecl::None) {
+    if let Some(refused) = axis_refusal(contract, filter) {
         return ListResult {
             notes: Vec::new(),
-            diagnostics: vec![Diagnostic::kernel(
-                KernelDiagnostic::NoteLifecycleAxisAbsent,
-                "this corpus declares no lifecycle axis to filter",
-            )],
+            diagnostics: vec![refused],
         };
     }
 
@@ -96,11 +93,30 @@ pub fn list(root: &VaultRoot, contract: &Contract, filter: &ListFilter) -> ListR
     }
 }
 
+/// The refusal a lifecycle filter meets against a corpus that declares no axis.
+///
+/// Shared with `search`, whose filters are this module's under this module's
+/// rules: one filter vocabulary, one refusal, whichever surface asks.
+pub(super) fn axis_refusal(contract: &Contract, filter: &ListFilter) -> Option<Diagnostic> {
+    (lifecycle_requested(filter) && matches!(contract.lifecycle(), LifecycleDecl::None)).then(
+        || {
+            Diagnostic::kernel(
+                KernelDiagnostic::NoteLifecycleAxisAbsent,
+                "this corpus declares no lifecycle axis to filter",
+            )
+        },
+    )
+}
+
 fn lifecycle_requested(filter: &ListFilter) -> bool {
     filter.lifecycle.is_some() || filter.ordinary
 }
 
-fn matches(note: &Note, contract: &Contract, filter: &ListFilter) -> bool {
+/// Whether `note` satisfies every supplied filter, ANDed.
+///
+/// `pub(super)` for `search`, which composes the same four filters with its
+/// text predicate rather than growing a second filter vocabulary.
+pub(super) fn matches(note: &Note, contract: &Contract, filter: &ListFilter) -> bool {
     filter
         .type_name
         .as_deref()
