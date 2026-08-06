@@ -37,9 +37,10 @@ impl FindResult {
 
     /// Everything the lookup reported, in diagnostic order.
     ///
-    /// The lookup walks the shared loading path, so a broken corpus's
-    /// findings are here on every run; an ambiguous name adds the refusal
-    /// carrying every candidate as related evidence.
+    /// The lookup is a full validation pass like `search`'s scan, so a broken
+    /// corpus's findings are here on every run — prose-only findings
+    /// included; an ambiguous name adds the refusal carrying every candidate
+    /// as related evidence.
     pub fn diagnostics(&self) -> &[Diagnostic] {
         &self.diagnostics
     }
@@ -48,15 +49,18 @@ impl FindResult {
 /// Finds the one note `name` resolves to, narrowed by `type_name` when given.
 ///
 /// A bare name matches note names and aliases case-insensitively; a
-/// path-qualified reference resolves exactly. The lookup is body-free, like
-/// `list`'s: everything a name can match lives on the schema'd plane.
+/// path-qualified reference resolves exactly. The lookup reads the corpus
+/// through the same full loading, traversal, and validation path `search`
+/// scans by, so the two retrieval verbs agree about the same corpus's health:
+/// a finding only prose can raise surfaces at this door too, even though the
+/// *answer* is the body-free summary.
 pub fn find(
     root: &VaultRoot,
     contract: &Contract,
     name: &str,
     type_name: Option<&str>,
 ) -> FindResult {
-    let Corpus { notes, diagnostics } = super::summary_corpus(root, contract);
+    let Corpus { notes, diagnostics } = super::read_corpus(root, contract);
     let mut collected = DiagnosticList::new();
     collected.extend(diagnostics);
     let candidates = candidates(&notes, name, type_name);
@@ -309,6 +313,22 @@ mod tests {
         let result = found("find-broken", notes, "ada", None);
         assert!(result.note().is_some());
         assert_eq!(ids(&result), ["note.unknown-type"]);
+    }
+
+    #[test]
+    fn a_finding_only_prose_can_raise_surfaces_at_this_door_too() {
+        // The lookup is a full validation pass like search's scan: the two
+        // retrieval verbs must not disagree about the same corpus's health,
+        // so an ambiguous prose reference — a finding the body-free summary
+        // walk cannot see — is reported here as everywhere else.
+        let notes: &[(&str, &str)] = &[
+            ("ada.md", "# Ada\n\nSee [[daily]].\n"),
+            ("2025/daily.md", "# Daily\n"),
+            ("2026/daily.md", "# Daily\n"),
+        ];
+        let result = found("find-prose-ambiguity", notes, "ada", None);
+        assert!(result.note().is_some());
+        assert_eq!(ids(&result), ["link.ambiguous-reference"]);
     }
 
     #[test]
