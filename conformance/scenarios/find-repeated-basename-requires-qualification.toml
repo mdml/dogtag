@@ -1,0 +1,15 @@
+id = "find-repeated-basename-requires-qualification"
+title = "A recurring bare name is ambiguous; the path-qualified form resolves"
+milestone = "M4"
+status = "pending"
+contract = """
+Given a corpus in which one basename recurs across directories.
+
+When the bare name is looked up, and then a path-qualified form naming one
+bearer is looked up.
+
+Then the bare name refuses with the standing ambiguity diagnostic carrying
+every bearer's path as related evidence — ambiguity as the normal case, not a
+corpus defect — and the path-qualified form resolves to exactly the note its
+path names, because the path is what picks one bearer of a shared name.
+"""

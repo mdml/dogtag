@@ -22,7 +22,7 @@ fn all_scenario_files_parse_with_unique_kebab_case_ids() {
     let scenarios = load_scenarios().expect("every scenario file parses and validates");
     assert_eq!(
         scenarios.len(),
-        24,
+        36,
         "every scenario file on disk is loaded; this count moves with the set"
     );
 
@@ -39,25 +39,46 @@ fn all_scenario_files_parse_with_unique_kebab_case_ids() {
             scenario.id
         );
         assert!(
-            matches!(scenario.milestone, Milestone::M2 | Milestone::M3),
-            "the scenario set covers M2-M3 (`{}` does not)",
+            matches!(
+                scenario.milestone,
+                Milestone::M2 | Milestone::M3 | Milestone::M4
+            ),
+            "the scenario set covers M2-M4 (`{}` does not)",
             scenario.id
         );
     }
 }
 
-/// Graduation is all-or-nothing, so at M2 **every** scenario tagged `M2` is
-/// executable and a straggler fails the suite. The M3 scenarios have not
-/// graduated ahead of their milestone, and every executable scenario has a
-/// case behind it — an executable scenario without one would refuse the whole
-/// report, but saying so here names the fault instead.
+/// The four `docs`-only M4 scenarios, pending until their corpus lands.
+///
+/// The M4 fixtures record splits the milestone's set into a universal half,
+/// graduated here, and a `docs`-only half exercising the axes no other
+/// corpus can express. The one-act rule means those four graduate in the
+/// same change that builds the `docs` corpus — flipping one early would
+/// commit it to run against corpora that cannot express its Given.
+const PENDING_M4_DOCS_SCENARIOS: [&str; 4] = [
+    "find-repeated-basename-requires-qualification",
+    "frontmatter-sparse-notes-bind-by-default",
+    "markdown-link-resolution",
+    "search-repeated-basenames-stay-distinct",
+];
+
+/// Graduation is all-or-nothing, so every scenario tagged with a closed
+/// milestone is executable and a straggler fails the suite. The four
+/// `docs`-only M4 scenarios are the deliberate exception the fixtures record
+/// makes: still prose, pending on the corpus their axes need. Every
+/// executable scenario has a case behind it — an executable scenario without
+/// one would refuse the whole report, but saying so here names the fault
+/// instead.
 #[test]
 fn every_m2_scenario_has_graduated_and_nothing_has_graduated_early() {
     let scenarios = load_scenarios().expect("scenarios load");
     for scenario in &scenarios {
+        let docs_only = PENDING_M4_DOCS_SCENARIOS.contains(&scenario.id.as_str());
         let expected = match scenario.milestone {
-            Milestone::M2 => ScenarioStatus::Executable,
-            Milestone::M3 => ScenarioStatus::Executable,
+            Milestone::M2 | Milestone::M3 => ScenarioStatus::Executable,
+            Milestone::M4 if docs_only => ScenarioStatus::Pending,
+            Milestone::M4 => ScenarioStatus::Executable,
         };
         assert_eq!(
             scenario.status, expected,
@@ -71,8 +92,9 @@ fn every_m2_scenario_has_graduated_and_nothing_has_graduated_early() {
         .filter(|s| s.status == ScenarioStatus::Executable)
         .count();
     assert_eq!(
-        executable, 24,
-        "the ten M2 and fourteen M3 scenarios graduated together, all at once"
+        executable, 32,
+        "the ten M2, fourteen M3, and eight universal M4 scenarios have graduated; the four \
+         docs-only M4 scenarios wait for their corpus"
     );
     assert_eq!(
         graduated_case_count(),
@@ -427,8 +449,8 @@ fn every_pair_reports_what_its_two_halves_make_it() {
     }
     assert_eq!(
         ran,
-        24 * 3,
-        "the twenty-four graduated scenarios ran against the three built corpora"
+        32 * 3,
+        "the thirty-two graduated scenarios ran against the three built corpora"
     );
 }
 

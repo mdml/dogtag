@@ -1,0 +1,17 @@
+id = "search-phrase-matches-adjacent-words"
+title = "A quoted phrase matches its words adjacent and in order"
+milestone = "M4"
+status = "executable"
+contract = """
+Given a corpus holding a note whose body writes two chosen words adjacent and
+in order, a note writing them in the reverse order, and a note writing them
+separated by other words.
+
+When the corpus is searched for the quoted phrase of those words, and again
+for the same words unquoted.
+
+Then the quoted form matches only the note carrying the words adjacent and in
+order, while the unquoted form OR-combines the words and matches all three
+notes. The quotes are what make adjacency deliberate; bare terms never
+require it.
+"""

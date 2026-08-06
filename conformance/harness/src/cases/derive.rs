@@ -21,6 +21,15 @@ pub struct NoteDerivation<'a> {
     pub note: &'a str,
 }
 
+/// One planting derivation: new notes written into a fresh copy of a corpus
+/// that was clean before them.
+pub struct Planting<'a> {
+    /// The temp-tree label the derived copy carries.
+    pub label: &'a str,
+    /// The notes to plant: vault-relative path, whole text.
+    pub notes: &'a [(&'a str, &'a str)],
+}
+
 /// One duplicate-and-reference derivation: a note duplicated under a second
 /// path, with a planted note referencing the now-ambiguous name.
 pub struct Duplication<'a> {
@@ -83,6 +92,28 @@ pub fn derived_note(
     let derived = Corpus::copy_of(corpus.root(), label)?;
     fs::write(derived.root().join(note), transformed)
         .map_err(|error| format!("writing the derived note `{note}` failed: {error}"))?;
+    Ok(derived)
+}
+
+/// A second copy holding the planted notes beside everything committed.
+///
+/// The retrieval cases derive their needles this way: an invented word
+/// planted in known notes is what makes "exactly those notes" assertable
+/// against any profile's corpus, whatever its vocabulary.
+///
+/// # Errors
+///
+/// A corpus that is not clean before derivation, or a filesystem failure.
+pub fn derived_planting(corpus: &Corpus, spec: &Planting<'_>) -> Result<Corpus, String> {
+    let Planting { label, notes: new } = spec;
+    require_clean(
+        notes(corpus)?.diagnostics(),
+        &format!("the corpus before `{label}`"),
+    )?;
+    let derived = Corpus::copy_of(corpus.root(), label)?;
+    for (note, text) in *new {
+        plant(&derived, note, text)?;
+    }
     Ok(derived)
 }
 
@@ -205,5 +236,35 @@ mod tests {
             refusal.contains("the corpus before `dirty-duplicate`"),
             "{refusal}"
         );
+        let refusal = derived_planting(
+            &corpus,
+            &Planting {
+                label: "dirty-planting",
+                notes: &[("planted.md", "# Planted\n")],
+            },
+        )
+        .expect_err("the planting derivation owes the same cleanliness");
+        assert!(
+            refusal.contains("the corpus before `dirty-planting`"),
+            "{refusal}"
+        );
+    }
+
+    #[test]
+    fn a_planting_lands_every_note_it_was_given() {
+        let corpus = tiny("derive-planting");
+        let derived = derived_planting(
+            &corpus,
+            &Planting {
+                label: "planting",
+                notes: &[
+                    ("derived-planting/one.md", "# One\n"),
+                    ("derived-planting/two.md", "# Two\n"),
+                ],
+            },
+        )
+        .expect("a clean corpus accepts a planting");
+        let read = notes(&derived).expect("the derived corpus reads");
+        assert_eq!(read.notes().len(), 3, "the committed note and both planted");
     }
 }

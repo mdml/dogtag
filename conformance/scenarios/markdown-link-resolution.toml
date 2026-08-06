@@ -1,0 +1,16 @@
+id = "markdown-link-resolution"
+title = "Path-qualified relative links resolve under the declared dialect"
+milestone = "M4"
+status = "pending"
+contract = """
+Given a corpus whose notes reference each other with path-qualified relative
+links written in the contract's declared link dialect.
+
+When the corpus is read and its references resolved.
+
+Then each such link resolves to the note its path names — including a
+root-level target that a trailing `.md` alone makes path-qualified — and a
+reference spelled in a link dialect the contract does not declare is bytes
+rather than a link. The dialect is the contract's, declared once for the
+corpus, never sniffed per link.
+"""

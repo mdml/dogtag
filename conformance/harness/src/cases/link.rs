@@ -181,7 +181,10 @@ fn first_relationship(corpus: &Corpus) -> Result<(String, String), String> {
 }
 
 /// The first note, by corpus order, whose bare name no other note shares.
-fn first_unique_name(corpus: &Corpus) -> Result<(String, String), String> {
+///
+/// `pub(super)` because `find`'s ambiguity case derives its duplicate from
+/// the same starting point: a name that is unique until the case doubles it.
+pub(super) fn first_unique_name(corpus: &Corpus) -> Result<(String, String), String> {
     unique_name(corpus, |_| true)?
         .ok_or_else(|| "every committed name is shared — nothing is unambiguous".to_string())
 }

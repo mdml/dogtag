@@ -1,0 +1,15 @@
+id = "search-prefix-wildcard"
+title = "A trailing star matches the stem as a prefix"
+milestone = "M4"
+status = "executable"
+contract = """
+Given a corpus holding notes whose bodies carry different words sharing a
+chosen stem, and a note carrying a word outside it.
+
+When the corpus is searched for the stem with a trailing `*`, and again for
+one of the full words without it.
+
+Then the wildcard form matches exactly the notes whose words begin with the
+stem, and the exact form matches exactly the notes carrying that word — a
+term without the wildcard is never widened into a prefix.
+"""

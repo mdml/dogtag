@@ -1,0 +1,14 @@
+id = "search-empty-result-is-a-result"
+title = "A search matching nothing is a result, not a diagnostic"
+milestone = "M4"
+status = "executable"
+contract = """
+Given a conforming corpus and a well-formed query naming a word no note
+carries.
+
+When the corpus is searched for it.
+
+Then the answer is empty membership and nothing else: zero hits and zero
+diagnostics at any severity. An empty result is a result; only a query the
+grammar cannot read is a fault.
+"""

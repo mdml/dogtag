@@ -1,0 +1,17 @@
+id = "search-membership-by-body-term"
+title = "A body term returns exactly the notes whose bodies carry it"
+milestone = "M4"
+status = "executable"
+contract = """
+Given a corpus in which a chosen word appears in the bodies of a known set of
+notes and in no other note.
+
+When the corpus is searched for that word.
+
+Then the hits are exactly that set — membership and count, never ordering,
+which stays free to improve — and each hit carries the note's identity (its
+vault-relative path), the type it bound to, and a snippet quoting the matched
+context. Retrieval is a scan through the same shared loading, traversal, and
+validation path every other reading surface uses; no index is built and no
+state persists between searches.
+"""
