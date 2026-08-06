@@ -92,14 +92,14 @@ toolchain = "nightly-2026-07-30"
 # holds 100%. This is dilution by test infrastructure, not eroded product
 # coverage, and the ratchet resumes rising from here.
 #
-# The M4 search core raised both numbers: the scan, the query grammar, the
-# tokenizer, and both renderings land fully covered — every line and every
-# branch of the new kernel modules is reached from a named SDK or CLI test —
-# so the workspace total rises with them. Both floors sit one hundredth
-# under the measured 99.06 / 98.71, for the run-to-run wobble the earlier
-# entry records.
-line = 99.05
-branch = 98.70
+# The M4 retrieval surfaces raised both numbers: the search scan, the query
+# grammar, the tokenizer, the find lookup, and every rendering land fully
+# covered — every line and every branch of the new kernel modules is reached
+# from a named SDK or CLI test — so the workspace total rises with them.
+# Both floors sit one hundredth under the measured 99.07 / 98.72, for the
+# run-to-run wobble the earlier entry records.
+line = 99.06
+branch = 98.71
 
 [thresholds]
 line = 95.0

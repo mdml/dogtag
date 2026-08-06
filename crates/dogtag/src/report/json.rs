@@ -41,7 +41,8 @@ use crate::contract::{
 };
 use crate::diagnostic::{Diagnostic, FileRef, Location, Position, Related, SeverityCounts, Span};
 use crate::note::{
-    Binding, ListResult, Note, NoteSummary, PropertyValue, RecordValue, SearchHit, SearchResult,
+    Binding, FindResult, ListResult, Note, NoteSummary, PropertyValue, RecordValue, SearchHit,
+    SearchResult,
 };
 use crate::provenance::{ProvenanceEntry, Source};
 use crate::vault::VaultRoot;
@@ -126,6 +127,30 @@ fn listed_wire(note: &NoteSummary) -> ListedWire<'_> {
         type_name: note.type_name(),
         lifecycle: note.lifecycle(),
     }
+}
+
+/// Renders a find result and its diagnostic envelope as one JSON document.
+pub fn find_json(result: &FindResult, reported: &[Diagnostic]) -> String {
+    let mut diagnostics = crate::diagnostic::DiagnosticList::new();
+    diagnostics.extend(reported.iter().cloned());
+    document(&FindWire {
+        schema_version: SCHEMA_VERSION,
+        report: "find",
+        note: result.note().map(listed_wire),
+        diagnostics: reported.iter().map(diagnostic_wire).collect(),
+        summary: summary_wire(diagnostics.counts()),
+    })
+}
+
+#[derive(Serialize)]
+struct FindWire<'a> {
+    schema_version: u32,
+    report: &'static str,
+    /// `null` when resolution refused: one shape either way, the missing-note
+    /// precedent `show` set.
+    note: Option<ListedWire<'a>>,
+    diagnostics: Vec<DiagnosticWire<'a>>,
+    summary: SummaryWire,
 }
 
 /// Renders a search result and its diagnostic envelope as one JSON document.

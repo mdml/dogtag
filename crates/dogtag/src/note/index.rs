@@ -76,7 +76,7 @@ impl Index {
 
     /// The note `reference` names, under the standing resolution rule.
     pub(crate) fn resolve(&self, reference: &str) -> Resolution {
-        if reference.contains('/') || reference.ends_with(NOTE_EXTENSION) {
+        if path_qualified(reference) {
             self.at_path(reference)
         } else {
             self.named(reference)
@@ -98,6 +98,12 @@ impl Index {
             None => Resolution::Absent,
         }
     }
+}
+
+/// Whether `reference` is path-qualified: it contains a `/`, or ends in the
+/// note extension — the one routing rule at every door, `find`'s included.
+pub(crate) fn path_qualified(reference: &str) -> bool {
+    reference.contains('/') || reference.ends_with(NOTE_EXTENSION)
 }
 
 /// A path-qualified reference as a vault-relative path spells it.
