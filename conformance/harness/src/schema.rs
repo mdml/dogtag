@@ -67,6 +67,8 @@ pub enum Milestone {
     M2,
     /// Read and validate: document model, `check`, `list`, `show`.
     M3,
+    /// Lexical retrieval: `search`, `find`, and the `docs` corpus.
+    M4,
 }
 
 impl fmt::Display for Milestone {
@@ -74,6 +76,7 @@ impl fmt::Display for Milestone {
         match self {
             Milestone::M2 => f.write_str("M2"),
             Milestone::M3 => f.write_str("M3"),
+            Milestone::M4 => f.write_str("M4"),
         }
     }
 }

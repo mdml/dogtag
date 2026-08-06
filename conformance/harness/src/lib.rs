@@ -10,12 +10,12 @@
 //! keeping the prose contracts profile-agnostic still rests on review
 //! discipline.
 //!
-//! At M4 all twenty-four scenarios are `executable` and the `dense`,
-//! `starter` and `docs` corpora are `built`, so those pairs run; the `records`
-//! corpus is still scheduled, so the rest of the cross product reports why. The
-//! matrix distinguishes the two: a pair that ran and a pair skipped for want of
-//! a corpus render differently, so a run covering three of four profiles cannot
-//! read as a complete matrix.
+//! A pair runs when its scenario is `executable` and its profile's corpus is
+//! `built`; every other pair reports why it did not — the scenario still
+//! prose, the corpus not built, or both. The matrix distinguishes the
+//! outcomes: a pair that ran and a pair skipped for want of a corpus render
+//! differently, so a run covering a subset of profiles cannot read as a
+//! complete matrix.
 //!
 //! The harness consumes the SDK's **public API only**, which makes it a
 //! permanent test that the public API is sufficient: any private hook it

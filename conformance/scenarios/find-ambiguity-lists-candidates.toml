@@ -1,0 +1,16 @@
+id = "find-ambiguity-lists-candidates"
+title = "An ambiguous name refuses with every candidate as evidence"
+milestone = "M4"
+status = "executable"
+contract = """
+Given a corpus in which several notes bear one name.
+
+When the name is looked up.
+
+Then the lookup answers no note and raises the same stable ambiguity
+diagnostic every other door raises for a bare name several notes bear — the
+same identifier, shape, and severity — carrying every candidate's path as
+related evidence. A caller who wants the candidate list is served by the
+diagnostic: the enumeration is the evidence, verbatim, not a second result
+shape.
+"""

@@ -1,0 +1,15 @@
+id = "search-repeat-is-deterministic"
+title = "Two identical searches produce identical bytes"
+milestone = "M4"
+status = "executable"
+contract = """
+Given any conforming corpus and any well-formed query.
+
+When the same search runs twice.
+
+Then the two runs answer identical results, and each rendering — the plain
+text and the structured report — produces byte-identical output. Ordering
+within one build is deterministic, relevance with a tie-break on the
+vault-relative path; the ordering itself is not contract, so membership and
+count are what these scenarios assert.
+"""

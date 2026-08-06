@@ -17,11 +17,13 @@ mod derive;
 mod discovery;
 mod expect;
 mod explain;
+mod find;
 mod installation;
 mod link;
 mod note;
 mod provenance;
 mod scan;
+mod search;
 mod surface;
 mod version;
 
@@ -75,6 +77,14 @@ const CASES: &[(&str, Case)] = &[
         discovery::explicit_root_used_exactly,
     ),
     (
+        "find-ambiguity-lists-candidates",
+        find::ambiguity_lists_candidates,
+    ),
+    (
+        "find-resolves-unambiguous-name",
+        find::resolves_unambiguous_name,
+    ),
+    (
         "incomplete-vault-root-halts-discovery",
         discovery::incomplete_root_halts,
     ),
@@ -101,6 +111,27 @@ const CASES: &[(&str, Case)] = &[
     (
         "required-tag-namespace-missing",
         note::required_namespace_missing,
+    ),
+    (
+        "search-composes-with-list-filters",
+        search::composes_with_list_filters,
+    ),
+    (
+        "search-empty-result-is-a-result",
+        search::empty_result_is_a_result,
+    ),
+    (
+        "search-membership-by-body-term",
+        search::membership_by_body_term,
+    ),
+    (
+        "search-phrase-matches-adjacent-words",
+        search::phrase_matches_adjacent_words,
+    ),
+    ("search-prefix-wildcard", search::prefix_wildcard),
+    (
+        "search-repeat-is-deterministic",
+        search::repeat_is_deterministic,
     ),
     (
         "show-returns-document-model",

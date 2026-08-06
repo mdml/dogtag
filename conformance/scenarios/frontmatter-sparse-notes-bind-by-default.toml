@@ -1,0 +1,16 @@
+id = "frontmatter-sparse-notes-bind-by-default"
+title = "A frontmatter-less note binds by declared default and participates"
+milestone = "M4"
+status = "pending"
+contract = """
+Given a corpus in which most notes carry no frontmatter at all, and a
+contract whose declared catch-all supplies the discriminator by default.
+
+When such a note is read, searched for, and filtered by its type.
+
+Then the note binds through the declared default and the model says so; it
+participates in search exactly as an explicitly typed note does, and it
+answers the type filter under its default-bound type. The discriminator comes
+from the contract rather than the note, which is the seam this profile exists
+to test.
+"""

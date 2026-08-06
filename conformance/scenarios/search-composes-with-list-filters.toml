@@ -1,0 +1,22 @@
+id = "search-composes-with-list-filters"
+title = "Filters compose with the query as enumeration plus a text predicate"
+milestone = "M4"
+status = "executable"
+contract = """
+Given a contract that declares whether the corpus has a lifecycle axis and
+how the ordinary state is encoded, and a query that matches notes of more
+than one type.
+
+When the search is narrowed by the enumeration surface's filters — the bound
+type, a literal tag, the declared axis's value, the ordinary state.
+
+Then every filter composes with the query with AND semantics under the
+enumeration surface's own rules: for each filter, the hits are exactly the
+unfiltered hits that the same filter would enumerate, so search is
+enumeration plus a text predicate and grows no second filter vocabulary. The
+ordinary-state filter works identically whether the declared encoding is a
+named value or the absence of one, neither vocabulary reaching the core; and
+against a contract declaring no axis the lifecycle filter is refused with the
+same stable diagnostic the enumeration surface raises — never an empty result
+and never a full one.
+"""

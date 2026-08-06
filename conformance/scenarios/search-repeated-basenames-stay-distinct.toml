@@ -1,0 +1,14 @@
+id = "search-repeated-basenames-stay-distinct"
+title = "Hits on recurring basenames stay distinct under their paths"
+milestone = "M4"
+status = "pending"
+contract = """
+Given a corpus in which many notes share one basename — the recurring name as
+the normal case, not an edge case.
+
+When a query matches several of the sharers.
+
+Then each is a distinct hit under its own vault-relative path. Identity is
+the path, so recurring names never merge two notes into one hit, drop one for
+another, or attribute one note's context to another's identity.
+"""

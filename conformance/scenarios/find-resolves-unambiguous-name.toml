@@ -1,0 +1,16 @@
+id = "find-resolves-unambiguous-name"
+title = "Find answers the one note an unambiguous name resolves to"
+milestone = "M4"
+status = "executable"
+contract = """
+Given a corpus in which exactly one note bears a chosen name.
+
+When the name is looked up, in any letter case.
+
+Then the answer is that note's document-model summary — its vault-relative
+path, the type it bound to, and its axis value where an axis is declared —
+and the lookup matches case-insensitively, because entity lookup is a
+resolution habit rather than a spelling test. The corpus is read through the
+same shared loading path as every other surface, and a clean corpus reports
+nothing.
+"""

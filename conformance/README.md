@@ -29,7 +29,7 @@ Given/when/then prose in profile-agnostic terms.
 
 Contract prose binds behavior to **declared capabilities and declared axes** — "the declared catch-all type", "the declared lifecycle axis" — never to any corpus's vocabulary. No scenario may mention a type name, a lifecycle word, or a dialect assumption; vocabulary lives in profiles, and only declarations reach the core.
 
-Which milestone a scenario carries follows what it operates on: a scenario that opens and diagnoses a vault and its committed contract is M2, and one that validates the corpus's notes is M3. Four scenarios written at M0 moved from M2 to M3 on that test when the M2 packet closed, and eight M2 scenarios were added alongside them — a metadata correction, not a waiver, since every scenario still runs against every profile.
+Which milestone a scenario carries follows what it operates on: a scenario that opens and diagnoses a vault and its committed contract is M2, one that validates the corpus's notes is M3, and one that retrieves over the corpus — search, or entity lookup — is M4. Four scenarios written at M0 moved from M2 to M3 on that test when the M2 packet closed, and eight M2 scenarios were added alongside them — a metadata correction, not a waiver, since every scenario still runs against every profile.
 
 ### Non-conforming inputs are derived, never authored
 
@@ -97,7 +97,7 @@ The matrix distinguishes a pair that **ran** from one **skipped** for want of a 
 | `no-corpus` | the scenario is executable; the corpus is not built — a **skip**, not a result |
 | `pending,no-corpus` | both |
 
-At M4 that is 24 scenarios × 4 profiles = 96 pairs, of which 24 × 3 = 72 ran: every graduated scenario against `dense`, `starter` and `docs`. `records` is still scheduled, so this milestone's cross-profile evidence is those three profiles, not four.
+At M4's surfaces-and-corpus state that is 36 scenarios × 4 profiles = 144 pairs, of which 32 × 3 = 96 ran: the executable scenarios against `dense`, `starter` and `docs`. `records` is still scheduled, so cross-profile evidence is three profiles, not four — and the four `docs`-only M4 scenarios are still prose, `pending` on every built corpus until they graduate.
 
 The harness crate depends on `serde`, `toml`, and the **`dogtag` SDK**, whose *public API only* it consumes — the same door any other consumer enters by. That makes conformance a permanent test that the public API is sufficient: a private hook the harness turned out to need would be an architecture bug, not a reason to widen anything.
 
