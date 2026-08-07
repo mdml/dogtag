@@ -1,0 +1,18 @@
+id = "capture-repeat-is-deterministic"
+title = "One input plans identically twice, and two acts make two notes"
+milestone = "M5"
+status = "executable"
+contract = """
+Given one thought, one actor, and one instant.
+
+When the capture is planned twice.
+
+Then the two plans are identical — the same actor, the same intended file
+scope, and the same account of what the corpus already had to say — and the
+two previews report the same thing. A caller diffing two runs is looking at
+what changed rather than at when it looked.
+
+And when the capture is then applied twice, two notes exist rather than one:
+the timestamped identity is what a repeat differs by, and the collision rule
+is what keeps both.
+"""

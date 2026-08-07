@@ -23,6 +23,31 @@ const VAULT: &str = "vault";
 /// so `load_installation` answers *absent* — which is a state, not a fault.
 const NO_RECORD: &str = "no-installation-record.toml";
 
+/// Where the planted validation error lands.
+const BROKEN_NOTE: &str = "derived-broken.md";
+
+/// Every file under `directory`, by path relative to `root` and by bytes.
+fn walk(root: &Path, directory: &Path, found: &mut Vec<(String, Vec<u8>)>) -> Checked {
+    let entries = fs::read_dir(directory)
+        .map_err(|error| format!("reading `{}` failed: {error}", directory.display()))?;
+    for entry in entries {
+        let path = entry
+            .map_err(|error| format!("reading `{}` failed: {error}", directory.display()))?
+            .path();
+        if path.is_dir() {
+            walk(root, &path, found)?;
+            continue;
+        }
+        let bytes = fs::read(&path)
+            .map_err(|error| format!("reading `{}` failed: {error}", path.display()))?;
+        let relative = path
+            .strip_prefix(root)
+            .map_err(|error| format!("`{}` is not under the copy: {error}", path.display()))?;
+        found.push((relative.display().to_string(), bytes));
+    }
+    Ok(())
+}
+
 /// A temporary copy of one profile's corpus: a vault root and its committed
 /// contract, and nothing else at M2.
 ///
@@ -165,6 +190,59 @@ impl Corpus {
         fs::write(&path, text)
             .map_err(|error| format!("writing {} failed: {error}", path.display()))?;
         Ok(path)
+    }
+
+    /// A second copy of this copy, unchanged.
+    ///
+    /// What a write case needs when the situation it derives is not a
+    /// transformation of any file: a repository constructed around the corpus,
+    /// for instance, which changes nothing the corpus says and everything about
+    /// who owns its commit path.
+    ///
+    /// # Errors
+    ///
+    /// Any filesystem failure.
+    pub fn copy(&self, label: &str) -> Result<Self, String> {
+        Corpus::copy_of(&self.root, label)
+    }
+
+    /// Every file under the copy's root, by path and by bytes.
+    ///
+    /// What a write case compares before against after in order to say *this
+    /// wrote nothing*. Bytes rather than paths, so a rewrite in place is as
+    /// visible as a creation.
+    ///
+    /// # Errors
+    ///
+    /// Any filesystem failure walking the copy.
+    pub fn fingerprint(&self) -> Result<Vec<(String, Vec<u8>)>, String> {
+        let mut found = Vec::new();
+        walk(&self.root, &self.root, &mut found)?;
+        found.sort();
+        Ok(found)
+    }
+
+    /// A second copy carrying a note whose declared type nothing declares.
+    ///
+    /// The smallest validation error every profile refuses identically, planted
+    /// rather than authored into any corpus: the type name is a word no
+    /// taxonomy uses, so the finding is the corpus's own rule applied to the
+    /// harness's own note.
+    ///
+    /// # Errors
+    ///
+    /// A corpus that is not clean before the derivation, or a filesystem
+    /// failure.
+    pub fn derived_broken_note(&self) -> Result<Self, String> {
+        self.clean_contract()?;
+        let derived = self.copy("capture-broken-corpus")?;
+        let planted = derived.root.join(BROKEN_NOTE);
+        fs::write(
+            &planted,
+            "---\ntype: derived_no_such_type\n---\na planted fault\n",
+        )
+        .map_err(|error| format!("planting `{BROKEN_NOTE}` failed: {error}"))?;
+        Ok(derived)
     }
 
     /// A second copy whose committed contract has been transformed.

@@ -1,0 +1,23 @@
+id = "capture-commits-at-birth"
+title = "Where the substrate owns the commit path, a capture commits at birth"
+milestone = "M5"
+status = "executable"
+contract = """
+Given a corpus copy constructed as a repository — a derivation like any other,
+performed inside the copy — so that the substrate owns its commit path.
+
+When a thought is captured.
+
+Then the act creates the note **and one commit containing exactly that file**.
+Pathspec-scoped, so a concurrent writer's work is neither committed nor
+disturbed: a commit that took the whole index would make every capture a
+hostage to whatever else was in flight.
+
+The commit carries the actor and the provenance kind as a machine-parseable
+trailer pair, and the result names the commit as the recovery it is: reverting
+it is what undoes the act.
+
+git assertions appear only here, because only here is the copy a repository.
+Everywhere else the copies are not repositories and the capture exercises
+guest mode, which is a first-class product stance rather than a degraded case.
+"""

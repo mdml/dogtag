@@ -22,7 +22,7 @@ fn all_scenario_files_parse_with_unique_kebab_case_ids() {
     let scenarios = load_scenarios().expect("every scenario file parses and validates");
     assert_eq!(
         scenarios.len(),
-        36,
+        46,
         "every scenario file on disk is loaded; this count moves with the set"
     );
 
@@ -41,9 +41,9 @@ fn all_scenario_files_parse_with_unique_kebab_case_ids() {
         assert!(
             matches!(
                 scenario.milestone,
-                Milestone::M2 | Milestone::M3 | Milestone::M4
+                Milestone::M2 | Milestone::M3 | Milestone::M4 | Milestone::M5
             ),
-            "the scenario set covers M2-M4 (`{}` does not)",
+            "the scenario set covers M2-M5 (`{}` does not)",
             scenario.id
         );
     }
@@ -75,8 +75,8 @@ fn every_m2_scenario_has_graduated_and_nothing_has_graduated_early() {
         .filter(|s| s.status == ScenarioStatus::Executable)
         .count();
     assert_eq!(
-        executable, 36,
-        "the ten M2, fourteen M3 and twelve M4 scenarios have all graduated"
+        executable, 46,
+        "the ten M2, fourteen M3, twelve M4 and ten M5 scenarios have all graduated"
     );
     assert_eq!(
         graduated_case_count(),
@@ -457,7 +457,7 @@ fn every_pair_reports_what_its_two_halves_make_it() {
     }
     assert_eq!(
         ran,
-        36 * 3,
+        46 * 3,
         "every scenario ran against the three built corpora"
     );
 }
@@ -569,8 +569,8 @@ fn print_matrix() {
     // either sense any more, and `records` is the only skipped column.
     assert!(
         rendered.starts_with(
-            "conformance cross product: 36 scenarios x 4 profiles = 144 pairs \
-             (108 pass, 0 FAIL, 0 pending, 36 no-corpus, 0 pending,no-corpus)"
+            "conformance cross product: 46 scenarios x 4 profiles = 184 pairs \
+             (138 pass, 0 FAIL, 0 pending, 46 no-corpus, 0 pending,no-corpus)"
         ),
         "the summary line is the expected matrix: {rendered}"
     );
