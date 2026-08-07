@@ -1,7 +1,7 @@
 id = "markdown-link-resolution"
 title = "Path-qualified relative links resolve under the declared dialect"
 milestone = "M4"
-status = "pending"
+status = "executable"
 contract = """
 Given a corpus whose notes reference each other with path-qualified relative
 links written in the contract's declared link dialect.

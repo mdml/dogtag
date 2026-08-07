@@ -32,7 +32,7 @@ pub fn resolves_unambiguous_name(corpus: &Corpus) -> Checked {
 /// The details only a misbehaving SDK can produce, built as functions so the
 /// text a failing run would print is itself tested — the closures that raise
 /// them can never run under a passing suite.
-fn wrong_bearer(spelling: &str, answered: &str) -> String {
+pub(super) fn wrong_bearer(spelling: &str, answered: &str) -> String {
     format!("`{spelling}` resolved to `{answered}` rather than the planted bearer")
 }
 
@@ -41,7 +41,7 @@ fn untyped_summary(spelling: &str) -> String {
 }
 
 /// An ambiguous name answered a note instead of refusing.
-fn resolved_ambiguity(name: &str) -> String {
+pub(super) fn resolved_ambiguity(name: &str) -> String {
     format!("the now-ambiguous `{name}` must refuse rather than pick a bearer")
 }
 
@@ -68,9 +68,24 @@ pub fn ambiguity_lists_candidates(corpus: &Corpus) -> Checked {
     )?;
     let result = found(&derived, &name)?;
     require(result.note().is_none(), || resolved_ambiguity(&name))?;
-    // The caller's refusal carries no location — the name came from the
-    // caller, not a file — which is what tells it apart from any located
-    // ambiguity the duplicate may have caused inside the corpus itself.
+    require_same_names(
+        &[path, second],
+        &caller_refusal_candidates(&result)?,
+        "the refusal's related evidence",
+    )
+}
+
+/// The bearers the caller's own ambiguity refusal names as related evidence.
+///
+/// The caller's refusal carries no location — the name came from the caller,
+/// not a file — which is what tells it apart from any located ambiguity the
+/// derivation may have caused inside the corpus itself. There must be exactly
+/// one of them, whatever else the lookup reported.
+///
+/// `pub(super)` because the recurring-basename case in
+/// [`super::docs_native`] reads the same refusal the same way, and two
+/// readings of one diagnostic are two chances to read it differently.
+pub(super) fn caller_refusal_candidates(result: &FindResult) -> Result<Vec<String>, String> {
     let refusals: Vec<_> = result
         .diagnostics()
         .iter()
@@ -78,21 +93,16 @@ pub fn ambiguity_lists_candidates(corpus: &Corpus) -> Checked {
         .filter(|diagnostic| diagnostic.location.is_none())
         .collect();
     require(refusals.len() == 1, || wrong_refusals(refusals.len()))?;
-    let candidates: Vec<String> = refusals[0]
+    Ok(refusals[0]
         .related
         .iter()
         .filter_map(|related| related.location.as_ref())
         .map(|location| location.file.display_path().to_owned())
-        .collect();
-    require_same_names(
-        &[path, second],
-        &candidates,
-        "the refusal's related evidence",
-    )
+        .collect())
 }
 
 /// The corpus asked to find `name`, through the SDK.
-fn found(corpus: &Corpus, name: &str) -> Result<FindResult, String> {
+pub(super) fn found(corpus: &Corpus, name: &str) -> Result<FindResult, String> {
     let contract = corpus.clean_contract()?;
     Ok(find(&corpus.vault_root()?, &contract, name, None))
 }

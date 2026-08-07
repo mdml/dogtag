@@ -49,41 +49,24 @@ fn all_scenario_files_parse_with_unique_kebab_case_ids() {
     }
 }
 
-/// The four `docs`-only M4 scenarios, pending until their corpus lands.
-///
-/// The M4 fixtures record splits the milestone's set into a universal half,
-/// graduated here, and a `docs`-only half exercising the axes no other
-/// corpus can express. The one-act rule means those four graduate in the
-/// same change that builds the `docs` corpus — flipping one early would
-/// commit it to run against corpora that cannot express its Given.
-const PENDING_M4_DOCS_SCENARIOS: [&str; 4] = [
-    "find-repeated-basename-requires-qualification",
-    "frontmatter-sparse-notes-bind-by-default",
-    "markdown-link-resolution",
-    "search-repeated-basenames-stay-distinct",
-];
-
 /// Graduation is all-or-nothing, so every scenario tagged with a closed
-/// milestone is executable and a straggler fails the suite. The four
-/// `docs`-only M4 scenarios are the deliberate exception the fixtures record
-/// makes: still prose, pending on the corpus their axes need. Every
-/// executable scenario has a case behind it — an executable scenario without
-/// one would refuse the whole report, but saying so here names the fault
-/// instead.
+/// milestone is executable and a straggler fails the suite. **Nothing is
+/// pending anywhere**: the four `docs`-native M4 scenarios were the last
+/// exception, and the fixtures record's amendment closed it — each of them
+/// derives its situation into whichever corpus it runs against, so none needs
+/// a profile the schema could not name for it anyway. Every executable
+/// scenario has a case behind it — an executable scenario without one would
+/// refuse the whole report, but saying so here names the fault instead.
 #[test]
 fn every_m2_scenario_has_graduated_and_nothing_has_graduated_early() {
     let scenarios = load_scenarios().expect("scenarios load");
     for scenario in &scenarios {
-        let docs_only = PENDING_M4_DOCS_SCENARIOS.contains(&scenario.id.as_str());
-        let expected = match scenario.milestone {
-            Milestone::M2 | Milestone::M3 => ScenarioStatus::Executable,
-            Milestone::M4 if docs_only => ScenarioStatus::Pending,
-            Milestone::M4 => ScenarioStatus::Executable,
-        };
         assert_eq!(
-            scenario.status, expected,
-            "`{}` is tagged {} and must be {expected:?}: graduation is all-or-nothing",
-            scenario.id, scenario.milestone
+            scenario.status,
+            ScenarioStatus::Executable,
+            "`{}` is tagged {} and must be executable: graduation is all-or-nothing",
+            scenario.id,
+            scenario.milestone
         );
     }
 
@@ -92,9 +75,8 @@ fn every_m2_scenario_has_graduated_and_nothing_has_graduated_early() {
         .filter(|s| s.status == ScenarioStatus::Executable)
         .count();
     assert_eq!(
-        executable, 32,
-        "the ten M2, fourteen M3, and eight universal M4 scenarios have graduated; the four \
-         docs-only M4 scenarios wait for their corpus"
+        executable, 36,
+        "the ten M2, fourteen M3 and twelve M4 scenarios have all graduated"
     );
     assert_eq!(
         graduated_case_count(),
@@ -449,8 +431,8 @@ fn every_pair_reports_what_its_two_halves_make_it() {
     }
     assert_eq!(
         ran,
-        32 * 3,
-        "the thirty-two graduated scenarios ran against the three built corpora"
+        36 * 3,
+        "every scenario ran against the three built corpora"
     );
 }
 
@@ -555,6 +537,17 @@ fn print_matrix() {
     // Printed before anything is asserted, so a run that goes red still shows
     // the matrix and the failure details it carries.
     println!("{rendered}");
+
+    // The headline arithmetic, stated once so a change to the set or the
+    // roster has to come here and say what it did. Nothing is pending in
+    // either sense any more, and `records` is the only skipped column.
+    assert!(
+        rendered.starts_with(
+            "conformance cross product: 36 scenarios x 4 profiles = 144 pairs \
+             (108 pass, 0 FAIL, 0 pending, 36 no-corpus, 0 pending,no-corpus)"
+        ),
+        "the summary line is the expected matrix: {rendered}"
+    );
 
     // Sanity: every scenario and profile appears in the rendering.
     for scenario in &scenarios {

@@ -112,8 +112,33 @@ toolchain = "nightly-2026-07-30"
 # rising from here. The measurement is the integrated one — the graduated
 # cases running on all three built corpora, docs included — and both floors
 # sit one hundredth under it: 98.99 / 98.94.
-line = 98.98
-branch = 98.93
+#
+# PROPOSED FOR ADJUDICATION with the graduation of the four docs-native M4
+# scenarios, on the same 2026-08-04 precedent and for the same reason a third
+# time: the four new harness cases add ~380 lines whose remaining uncovered
+# arms are the `?` that propagates a failed assertion and the closures that
+# build a failure detail — both of which execute only when the product under
+# test misbehaves, which a passing conformance suite cannot make happen. The
+# detail text itself is tested, function by function, in the module's own
+# `the_details_a_misbehaving_sdk_would_earn_say_what_went_wrong`; what stays
+# uncovered is the plumbing around it. Every honestly reachable refusal
+# branch is tested — a corpus that is not clean, a committed bearer of the
+# planted name, a committed needle, a contract carrying no catch-all, and
+# both link dialects — the kernel floor below is untouched, and every kernel
+# file still holds 100%.
+#
+# This entry lowers the BRANCH floor as well as the line floor, which the
+# 2026-08-04 precedent does not itself cover: that adjudication moved the
+# global floors down together, but the M4 surfaces wave above moved branch
+# up, and this wave moves it down again by the same dilution. Flagged rather
+# than folded in silently.
+#
+# Measured on the pinned toolchain, integrated (the thirty-six scenarios
+# against all three built corpora): 98.84 lines and 98.83 branches, against
+# 98.99 / 98.94 measured on the commit this branched from. Both floors sit
+# one hundredth under the measurement: 98.83 / 98.82.
+line = 98.83
+branch = 98.82
 
 [thresholds]
 line = 95.0

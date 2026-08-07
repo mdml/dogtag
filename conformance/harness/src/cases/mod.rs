@@ -15,6 +15,7 @@ mod contract;
 mod corpus;
 mod derive;
 mod discovery;
+mod docs_native;
 mod expect;
 mod explain;
 mod find;
@@ -37,10 +38,10 @@ type Case = fn(&Corpus) -> Checked;
 
 /// Every graduated scenario, by id.
 ///
-/// The ten M2 scenarios graduated together — graduation is all-or-nothing —
-/// and the harness's own tests assert that every scenario tagged `M2` is
-/// `executable`, so a straggler fails the suite rather than sitting here
-/// missing.
+/// Each milestone's scenarios graduated together — graduation is
+/// all-or-nothing — and the harness's own tests assert that every scenario
+/// tagged with a closed milestone is `executable`, so a straggler fails the
+/// suite rather than sitting here missing.
 const CASES: &[(&str, Case)] = &[
     (
         "ambiguous-bare-name-yields-link-diagnostic",
@@ -81,8 +82,16 @@ const CASES: &[(&str, Case)] = &[
         find::ambiguity_lists_candidates,
     ),
     (
+        "find-repeated-basename-requires-qualification",
+        docs_native::repeated_basename_requires_qualification,
+    ),
+    (
         "find-resolves-unambiguous-name",
         find::resolves_unambiguous_name,
+    ),
+    (
+        "frontmatter-sparse-notes-bind-by-default",
+        docs_native::sparse_notes_bind_by_default,
     ),
     (
         "incomplete-vault-root-halts-discovery",
@@ -99,6 +108,10 @@ const CASES: &[(&str, Case)] = &[
     (
         "list-filters-by-declared-lifecycle-axis",
         surface::list_filters_by_axis,
+    ),
+    (
+        "markdown-link-resolution",
+        docs_native::dialect_links_resolve,
     ),
     (
         "missing-required-property-diagnostic",
@@ -132,6 +145,10 @@ const CASES: &[(&str, Case)] = &[
     (
         "search-repeat-is-deterministic",
         search::repeat_is_deterministic,
+    ),
+    (
+        "search-repeated-basenames-stay-distinct",
+        docs_native::repeated_basenames_stay_distinct,
     ),
     (
         "show-returns-document-model",
