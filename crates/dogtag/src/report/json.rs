@@ -567,8 +567,19 @@ struct ContractBodyWire<'a> {
     /// contract does not make is absent rather than `null`.
     #[serde(skip_serializing_if = "Option::is_none")]
     tags: Option<TagsBodyWire<'a>>,
+    /// Omitted by every contract at a version with no capture seat — the same
+    /// rule `tags` follows, and for once the omission means something narrower:
+    /// not *this corpus declines to say*, but *this format has nowhere to say
+    /// it*. A capture still lands, in the SDK's default directory.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    capture: Option<CaptureBodyWire<'a>>,
     flags: Vec<FlagWire<'a>>,
     types: Vec<TypeWire<'a>>,
+}
+
+#[derive(Serialize)]
+struct CaptureBodyWire<'a> {
+    directory: &'a str,
 }
 
 #[derive(Serialize)]
@@ -599,6 +610,9 @@ struct FlagWire<'a> {
 struct TypeWire<'a> {
     name: &'a str,
     capabilities: Vec<&'static str>,
+    /// Empty rather than omitted, on the same rule as the three collections
+    /// below: a type born carrying nothing still has the collection.
+    born_flagged: &'a [String],
     properties: Vec<PropertyWire<'a>>,
     relationships: Vec<RelationshipWire<'a>>,
     /// Empty rather than omitted, like the two collections above it: a type
@@ -802,6 +816,9 @@ fn contract_body_wire(contract: &Contract) -> ContractBodyWire<'_> {
         },
         lifecycle: lifecycle_body_wire(contract.lifecycle()),
         tags: contract.tags().map(tags_body_wire),
+        capture: contract.capture().map(|capture| CaptureBodyWire {
+            directory: capture.directory(),
+        }),
         flags: contract
             .flags()
             .iter()
@@ -836,6 +853,7 @@ fn type_wire(declared: &TypeDecl) -> TypeWire<'_> {
             .copied()
             .map(Capability::as_str)
             .collect(),
+        born_flagged: declared.born_flagged(),
         properties: declared.properties().iter().map(property_wire).collect(),
         relationships: declared
             .relationships()
@@ -969,7 +987,7 @@ mod tests {
         let tree = Tree::new("json-order");
         let report = doctor_report(&opened(&tree, NAMED_ORDINARY, RECORD), discovery(), &[]);
         let json = doctor_json(&report);
-        assert!(json.starts_with("{\n  \"schema_version\": 3,\n  \"report\": \"doctor\",\n"));
+        assert!(json.starts_with("{\n  \"schema_version\": 4,\n  \"report\": \"doctor\",\n"));
         assert_key_order(
             &json,
             &[
@@ -1031,7 +1049,7 @@ mod tests {
                 &version["classification"],
                 &version["supported"]["max"]
             ),
-            (&Value::from(2), &Value::from("current"), &Value::from(2))
+            (&Value::from(3), &Value::from("current"), &Value::from(3))
         );
         let installation = &json["installation"];
         assert_eq!(
@@ -1161,16 +1179,16 @@ mod tests {
                 )))
             }
             UnresolvedReason::Encoding => {
-                doctor_of(tree, Body::new("contract_version = 2\r\n"), RECORD)
+                doctor_of(tree, Body::new("contract_version = 3\r\n"), RECORD)
             }
             UnresolvedReason::Malformed => {
                 doctor_of(tree, Body::new("contract_version = = 1\n"), RECORD)
             }
             UnresolvedReason::VersionUnusable(_) => {
-                doctor_of(tree, Body::new("contract_version = 3\n"), RECORD)
+                doctor_of(tree, Body::new("contract_version = 4\n"), RECORD)
             }
             UnresolvedReason::Invalid => {
-                doctor_of(tree, Body::new("contract_version = 2\n"), RECORD)
+                doctor_of(tree, Body::new("contract_version = 3\n"), RECORD)
             }
         }
     }
@@ -1270,7 +1288,7 @@ mod tests {
         let tree = Tree::new("json-contract-order");
         let (root, contract) = rendered(&tree, NAMED_ORDINARY);
         let json = contract_json(&root, &contract);
-        assert!(json.starts_with("{\n  \"schema_version\": 3,\n  \"report\": \"contract\",\n"));
+        assert!(json.starts_with("{\n  \"schema_version\": 4,\n  \"report\": \"contract\",\n"));
         assert_key_order(
             &json,
             &[
@@ -1289,7 +1307,7 @@ mod tests {
         let (root, declared) = rendered(&tree, NAMED_ORDINARY);
         let json = parsed(&contract_json(&root, &declared));
         assert_eq!(json["vault"]["root"], Value::from(shown(root.path())));
-        assert_eq!(json["contract"]["contract_version"], Value::from(2));
+        assert_eq!(json["contract"]["contract_version"], Value::from(3));
         assert_eq!(
             json["contract"]["dialect"]["links"],
             Value::from("wikilink")
@@ -1347,7 +1365,7 @@ mod tests {
         let json = parsed(&contract_json(&root, &declared));
         assert_eq!(json["contract"]["tags"]["property"], Value::from("labels"));
         // `log`, the second type: the catch-all declares no namespace, because
-        // a required one is what contract version 2 forbids it.
+        // a required one is what contract version 3 forbids it.
         let namespaces = json["contract"]["types"][1]["tag_namespaces"]
             .as_array()
             .expect("an array");
@@ -1394,7 +1412,7 @@ mod tests {
         let (root, declared) = rendered(&tree, RECORDS);
         let json = parsed(&contract_json(&root, &declared));
         // `person`, the second type: the catch-all declares no record, because
-        // a required one is what contract version 2 forbids it.
+        // a required one is what contract version 3 forbids it.
         let properties = json["contract"]["types"][1]["properties"]
             .as_array()
             .expect("an array");
@@ -1470,7 +1488,7 @@ mod tests {
             document.contains(concat!(
                 "      \"key\": \"type.project.capabilities\",\n",
                 "      \"source\": \"default\",\n",
-                "      \"contract_version\": 2,\n",
+                "      \"contract_version\": 3,\n",
                 "      \"location\": null\n",
             )),
             "a defaulted leaf names the version that defines it, and no file: {document}"

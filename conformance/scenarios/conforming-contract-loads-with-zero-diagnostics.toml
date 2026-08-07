@@ -11,10 +11,18 @@ has a lifecycle axis.
 
 When the vault is opened and diagnosed.
 
-Then the report carries zero diagnostics at any severity — not merely no
-errors — in every profile, whatever the corpus's taxonomy, dialect, folder
-organization, or lifecycle encoding. A contract that loads while emitting
-advice is not a conforming contract, and a fixture that a corpus can be
-initialized from must reach this bar or the product ships defaults its own
-rules complain about.
+Then the report carries zero diagnostics about the corpus at any severity —
+not merely no errors — in every profile, whatever the corpus's taxonomy,
+dialect, folder organization, or lifecycle encoding. A contract that loads
+while emitting advice is not a conforming contract, and a fixture that a
+corpus can be initialized from must reach this bar or the product ships
+defaults its own rules complain about.
+
+The one thing a conforming contract may carry is the compatibility
+classification a corpus below the current format version earns, which is a
+fact about the release reading it rather than a finding about it — and it must
+carry exactly that, at `info`, exactly when its declared version is below the
+ceiling, and nothing else. So the allowance cannot absorb a second finding, a
+different identifier, or a promoted severity, and a corpus at the current
+version is still held to silence.
 """

@@ -141,7 +141,7 @@ step "starter: an unreadable query refuses as a query fault"
 broken="$HOME/vaults/broken"
 mkdir -p "$broken/.dogtag"
 chmod 700 "$broken"
-printf 'contract_version = 3\n' >"$broken/.dogtag/contract.toml"
+printf 'contract_version = 4\n' >"$broken/.dogtag/contract.toml"
 if (cd "$broken" && "$dogtag" check >/dev/null 2>&1); then
   fail "an unresolved contract must refuse"
 fi

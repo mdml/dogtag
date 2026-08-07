@@ -133,36 +133,62 @@ fn each_built_corpus_meets_the_coverage_floor_its_record_states() {
     );
 }
 
-/// Every built corpus's committed contract declares the **current** supported
-/// contract version, and never a version below it.
+/// The committed corpora sit where the M5 fixtures record puts them: `starter`
+/// at the current contract version, `dense` and `docs` deliberately below it.
 ///
-/// This is a mechanical coupling rather than a preference, and it is the reason
-/// a fixture's version stamp cannot be migrated on its own schedule. A
+/// This replaces the coupling that held from M3 to M4, which required *every*
+/// built corpus to declare the current version. That rule existed because a
 /// committed contract below the ceiling earns `compat.newer-format-available`,
-/// and `conforming-contract-loads-with-zero-diagnostics` requires zero
-/// diagnostics *at any severity* from every built profile — so the moment
-/// [`SUPPORTED_CONTRACT_VERSIONS`] widens, a fixture left on the old stamp
-/// turns seven M2 scenarios red across both built profiles at once. Widening
-/// the range and restamping the committed contracts is therefore one change,
-/// whichever slice the widening belongs to. That is also why the fixture record
-/// makes the `supported`-but-not-current classification derived evidence rather
-/// than committed evidence: a committed fixture cannot demonstrate it and stay
-/// clean.
+/// and `conforming-contract-loads-with-zero-diagnostics` forbade any
+/// diagnostic at any severity — so a fixture left on an old stamp turned the
+/// M2 scenarios red across every profile at once. The M5 fixtures record
+/// overturns it on purpose: holding `dense` and `docs` at version 2 is what
+/// makes them the standing witnesses that the floor is real and that version
+/// 3's write seats configure `capture` rather than enable it, and the scenario
+/// now admits exactly that one classification and nothing else (see
+/// `require_version_only`).
 ///
-/// Stated here so the next widening fails on one assertion that explains itself
-/// rather than on fourteen scenario-by-profile failures that do not.
+/// So the coupling is not gone, it moved: the split is now itself the
+/// invariant, and a fixture restamped on its own schedule fails here rather
+/// than scattering failures across the matrix. Moving a corpus between the two
+/// lists is a decision the fixtures record makes, not an edit.
 #[test]
-fn each_built_corpus_declares_the_current_contract_version() {
+fn the_committed_corpora_sit_on_both_sides_of_the_current_contract_version() {
     let current = *SUPPORTED_CONTRACT_VERSIONS.end();
+    let expected: &[(&str, u32)] = &[("dense", 2), ("docs", 2), ("starter", current)];
+    let mut checked: Vec<&str> = Vec::new();
     for profile in built_profiles() {
+        let (_, version) = expected
+            .iter()
+            .find(|(name, _)| *name == profile)
+            .unwrap_or_else(|| {
+                panic!(
+                    "the `{profile}` corpus is built but this test does not say which contract \
+                     version it declares; the M5 fixtures record is where that is decided"
+                )
+            });
         assert_eq!(
             contract_of(&profile).contract_version(),
-            current,
-            "the `{profile}` corpus must declare contract version {current}: a committed \
-             contract below the current version earns `compat.newer-format-available`, which \
-             `conforming-contract-loads-with-zero-diagnostics` forbids"
+            *version,
+            "the `{profile}` corpus must declare contract version {version}"
+        );
+        checked.push(
+            expected
+                .iter()
+                .find(|(name, _)| *name == profile)
+                .expect("found above")
+                .0,
         );
     }
+    assert!(
+        checked.contains(&"starter"),
+        "one built corpus declares the current version, or nothing witnesses it"
+    );
+    assert!(
+        checked.iter().any(|name| *name != "starter"),
+        "one built corpus declares a version below the current one, or nothing witnesses that a \
+         below-ceiling vault keeps loading"
+    );
 }
 
 /// Every built corpus leaves its catch-all type requiring nothing.

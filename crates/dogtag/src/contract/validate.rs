@@ -35,6 +35,7 @@ pub(crate) fn run(sink: &mut Sink<'_>, parts: &Parts) {
         return;
     }
     flags(sink, &parts.flags, &parts.types);
+    birth_states(sink, &parts.flags, &parts.types);
     tags(sink, parts);
     if let Some(declared) = &parts.lifecycle {
         lifecycle(sink, declared, &parts.types);
@@ -243,6 +244,74 @@ fn flag_property(sink: &mut Sink<'_>, flag: &FlagDecl, types: &[TypeDecl]) {
     ))
     .with_help("a flag is a boolean property, so that it cannot be a point on an axis".to_owned());
     sink.report(KernelDiagnostic::ContractFlagPropertyNotBoolean, report, at);
+}
+
+/// Each flag a type is born carrying is a property that type declares, and one
+/// the contract declares as a flag.
+///
+/// Both halves are needed and neither implies the other. Without the first, a
+/// birth stamp writes an undeclared key onto every note of the type; without
+/// the second, it writes an ordinary boolean the corpus never said was a flag,
+/// and the flag roster stops being the answer to *which properties are flags*.
+///
+/// Nothing here knows what any of them mean. The kernel checks that a birth
+/// state names something the corpus has declared twice over, never that it
+/// names triage.
+fn birth_states(sink: &mut Sink<'_>, flags: &[FlagDecl], types: &[TypeDecl]) {
+    for declared in types {
+        for name in declared.born_flagged() {
+            birth_flag(sink, &BirthFlag { declared, name }, flags);
+        }
+    }
+}
+
+/// One flag a type is born carrying: the type whose birth state names it, and
+/// the name it names.
+///
+/// A named type rather than the pair of arguments, for the reason
+/// [`Requirement`] and [`Carrier`] are: a type name beside a property name is
+/// two strings the compiler cannot tell apart, and both rules below need both.
+struct BirthFlag<'a> {
+    declared: &'a TypeDecl,
+    name: &'a str,
+}
+
+impl BirthFlag<'_> {
+    /// Where the birth state naming this flag is written.
+    fn site(&self, sink: &Sink<'_>) -> Location {
+        located(sink, &format!("type.{}.born-flagged", self.declared.name()))
+    }
+
+    /// The lead every refusal about this flag shares.
+    fn lead(&self) -> String {
+        format!(
+            "the type `{}` is born carrying `{}`",
+            self.declared.name(),
+            self.name
+        )
+    }
+}
+
+fn birth_flag(sink: &mut Sink<'_>, flag: &BirthFlag<'_>, flags: &[FlagDecl]) {
+    let at = flag.site(sink);
+    if flag.declared.property(flag.name).is_none() {
+        let report = Report::new(format!("{}, which it does not declare", flag.lead()))
+            .with_help("a birth state names a property the type itself declares".to_owned());
+        sink.report(KernelDiagnostic::ContractBirthFlagUndeclared, report, at);
+        return;
+    }
+    if flags
+        .iter()
+        .any(|declared| declared.property() == flag.name)
+    {
+        return;
+    }
+    let report = Report::new(format!(
+        "{}, which the contract does not declare as a flag",
+        flag.lead()
+    ))
+    .with_help("a birth state stamps flags, and `[[flag]]` is where a flag is declared".to_owned());
+    sink.report(KernelDiagnostic::ContractBirthFlagNotAFlag, report, at);
 }
 
 /// A type that declares at least one tag namespace, and where its first one is
@@ -933,6 +1002,72 @@ mod tests {
         assert!(diagnostics.as_slice()[0].message.contains("`string`"));
     }
 
+    /// The contract declaring the triage property a flag.
+    const TRIAGE_FLAG: &str = "[[flag]]\nproperty = \"needs_triage\"\n\n";
+
+    /// The catch-all born carrying it, over the boolean property it declares.
+    const BORN_TRIAGE: &str = concat!(
+        "born-flagged = [\"needs_triage\"]\n",
+        "\n  [[type.property]]\n  name = \"needs_triage\"\n  kind = \"boolean\"\n",
+    );
+
+    /// The same birth state over a type declaring a *different* boolean
+    /// property, so the flag it is born carrying is not its own.
+    const BORN_ELSEWHERE: &str = concat!(
+        "born-flagged = [\"needs_triage\"]\n",
+        "\n  [[type.property]]\n  name = \"other\"\n  kind = \"boolean\"\n",
+    );
+
+    #[test]
+    fn a_birth_flag_naming_a_declared_flag_the_type_declares_is_accepted() {
+        let source = format!("{TRIAGE_FLAG}{}", contract(BORN_TRIAGE));
+        assert!(read_at(&schema::VERSION_3, &source).is_empty());
+    }
+
+    /// The type does not declare the property, so stamping it at birth would
+    /// write an undeclared key onto every note of the type.
+    ///
+    /// A second type declares it, and the roster names both properties, so the
+    /// flag rules themselves are satisfied and the only fault left is the one
+    /// under test — the birth state naming a property its *own* type does not
+    /// carry.
+    #[test]
+    fn a_birth_flag_the_type_does_not_declare_is_refused() {
+        let source = format!(
+            "{TRIAGE_FLAG}[[flag]]\nproperty = \"other\"\n\n{}{}",
+            contract(BORN_ELSEWHERE),
+            concat!(
+                "\n[[type]]\nname = \"filed\"\n",
+                "\n  [[type.property]]\n  name = \"needs_triage\"\n  kind = \"boolean\"\n",
+            )
+        );
+        let diagnostics = read_at(&schema::VERSION_3, &source);
+        assert_eq!(ids(&diagnostics), ["contract.birth-flag-undeclared"]);
+        assert!(diagnostics.as_slice()[0].message.contains("`capture`"));
+        assert!(diagnostics.as_slice()[0].location.is_some());
+    }
+
+    /// The type declares the property and the contract never called it a flag,
+    /// which is the other repair and so the other identifier.
+    #[test]
+    fn a_birth_flag_the_contract_does_not_declare_as_a_flag_is_refused() {
+        let diagnostics = read_at(&schema::VERSION_3, &contract(BORN_TRIAGE));
+        assert_eq!(ids(&diagnostics), ["contract.birth-flag-not-a-flag"]);
+        assert!(
+            diagnostics.as_slice()[0]
+                .message
+                .contains("does not declare as a flag")
+        );
+    }
+
+    /// A version with no birth-state seat has no birth state to judge: the key
+    /// is refused as unknown, and no rule about it runs.
+    #[test]
+    fn a_version_without_the_seat_judges_no_birth_state() {
+        let diagnostics = read_at(&schema::VERSION_2, &contract(BORN_TRIAGE));
+        assert_eq!(ids(&diagnostics), ["contract.unknown-key"]);
+    }
+
     /// A contract whose lifecycle declares an axis with `ordinary`, over a type
     /// declaring the axis property with `required`.
     fn axis(ordinary: &str, kind: &str, required: bool) -> String {
@@ -1049,7 +1184,7 @@ mod tests {
     /// `[tags]` table when it declares one. A root table may follow an array of
     /// tables, so both halves compose into one source.
     const TAGGED: &str = concat!(
-        "contract_version = 2\n",
+        "contract_version = 3\n",
         "\n[dialect]\nlinks = \"wikilink\"\n",
         "\n[lifecycle]\nnone = true\n",
         "\n[[type]]\nname = \"log\"\ncapabilities = [\"catch-all\"]\n",

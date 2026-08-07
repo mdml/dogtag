@@ -502,7 +502,7 @@ mod tests {
     fn contract_of(dialect: LinkDialect) -> String {
         format!(
             concat!(
-                "contract_version = 2\n",
+                "contract_version = 3\n",
                 "\n[dialect]\nlinks = \"{}\"\n",
                 "\n[lifecycle]\nnone = true\n",
                 "\n[[type]]\nname = \"person\"\ncapabilities = [\"identity-bearing\"]\n",
@@ -622,7 +622,7 @@ mod tests {
     #[test]
     fn a_corpus_with_no_catch_all_is_refused_before_the_sparse_case_looks() {
         let contract = concat!(
-            "contract_version = 2\n",
+            "contract_version = 3\n",
             "\n[dialect]\nlinks = \"wikilink\"\n",
             "\n[lifecycle]\nnone = true\n",
             "\n[[type]]\nname = \"person\"\ncapabilities = [\"identity-bearing\"]\n",

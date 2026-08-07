@@ -8,7 +8,7 @@ use dogtag::provenance::{Provenance, Source};
 use dogtag::vault::open;
 
 use super::corpus::{Corpus, require_record_loaded, valid_record};
-use super::expect::{Checked, did_not_resolve, require, require_clean, require_same_names};
+use super::expect::{Checked, did_not_resolve, require, require_same_names, require_version_only};
 
 /// The three sources a resolved vault can attribute a value to.
 ///
@@ -26,8 +26,13 @@ pub fn contract_loads_with_provenance(corpus: &Corpus) -> Checked {
     let installation = load_installation(&record);
     require_record_loaded(&installation)?;
 
+    let declared = corpus.declared_version()?;
     let opened = open(root, installation);
-    require_clean(opened.diagnostics(), "opening the vault with a record")?;
+    require_version_only(
+        opened.diagnostics(),
+        declared,
+        "opening the vault with a record",
+    )?;
     let contract = opened
         .contract()
         .map_err(|why| did_not_resolve(why, "the contract"))?;
@@ -167,17 +172,31 @@ fn a_default_names_the_contract_version(contract: &Contract, merged: &Provenance
     Ok(())
 }
 
-/// Every leaf key the contract declares, per the version-1 key space.
+/// Every leaf key the contract declares, across the key space of whichever
+/// version it declares.
 ///
 /// Derived from the **resolved model**, never from the provenance map, which is
 /// what lets an assertion prove the map covers the contract rather than merely
 /// that a renderer copied it. Shared with the explain case for that reason.
+///
+/// A construct the declared version does not define contributes no key at all,
+/// which is how this stays one function across three versions: the model of a
+/// version-2 corpus carries no capture seat, so no `capture.directory` is
+/// expected of it, and a version-3 model always carries one — declared or
+/// defaulted — so one always is.
 pub(super) fn contract_keys(contract: &Contract) -> Vec<String> {
     let mut keys = vec!["contract_version".to_owned(), "dialect.links".to_owned()];
     keys.extend(lifecycle_keys(contract.lifecycle()));
     if let Some(tags) = contract.tags() {
         let _ = tags;
         keys.push("tags.property".to_owned());
+    }
+    // One question answers for both seats: they are version-scoped as one
+    // construct, so a model carrying a capture declaration is exactly a model
+    // whose version defines a birth state too.
+    let write_seats = contract.capture().is_some();
+    if write_seats {
+        keys.push("capture.directory".to_owned());
     }
     keys.extend(
         contract
@@ -186,7 +205,7 @@ pub(super) fn contract_keys(contract: &Contract) -> Vec<String> {
             .map(|flag| format!("flag.{}.property", flag.property())),
     );
     for declared in contract.types() {
-        keys.extend(type_keys(declared));
+        keys.extend(type_keys(declared, write_seats));
     }
     keys
 }
@@ -207,12 +226,19 @@ fn lifecycle_keys(lifecycle: &LifecycleDecl) -> Vec<String> {
 }
 
 /// One type's leaves: its own, then its properties' and relationships'.
-fn type_keys(declared: &TypeDecl) -> Vec<String> {
+///
+/// `write_seats` says whether the declared version defines a birth state, which
+/// is recorded for every type at such a version — declared or defaulted — and
+/// for no type at a version without one.
+fn type_keys(declared: &TypeDecl, write_seats: bool) -> Vec<String> {
     let name = declared.name();
     let mut keys = vec![
         format!("type.{name}.name"),
         format!("type.{name}.capabilities"),
     ];
+    if write_seats {
+        keys.push(format!("type.{name}.born-flagged"));
+    }
     for property in declared.properties() {
         let at = format!("type.{name}.property.{}", property.name());
         keys.extend([
@@ -387,7 +413,7 @@ mod tests {
             "the failure names the version recorded: {detail}"
         );
         assert!(
-            detail.contains("declares version 2"),
+            detail.contains("declares version 3"),
             "the failure names the version declared: {detail}"
         );
     }
@@ -405,7 +431,7 @@ mod tests {
         provenance.insert(ProvenanceEntry::written(
             LEAF,
             Source::Default {
-                contract_version: 2,
+                contract_version: 3,
             },
             Location::whole_file(FileRef::InstallationRecord),
         ));

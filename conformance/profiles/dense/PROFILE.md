@@ -19,6 +19,8 @@ A committed vault contract at M2, and roughly forty hand-authored fictional note
 
 At least two identity-bearing types, exactly one catch-all, at least one closed-write; at least two relationship predicates, at least one of them required; a lifecycle axis whose ordinary state is absence; the wikilink dialect. The contract loads with zero diagnostics at any severity.
 
+**Held at contract version 2, deliberately.** From M5 the supported range reaches version 3, and this corpus stays where it is: together with the other below-ceiling profile it is the standing witness that the floor is real — a version-2 vault keeps loading, keeps validating, and gains `capture` through version 3's default table — and that version 3's write seats configure the verb rather than enable it. The cost is one `info` per run, `compat.newer-format-available`, which the conforming-contract scenario admits by name and by severity and nothing else. See [the M5 fixtures record](../../../docs/decisions/engineering/2026-08-07-m5-fixtures-and-conformance.md); moving this corpus to the current version is that record's decision to revisit, not an edit.
+
 The floor deliberately does not require every property value kind to be used: a kind nobody reaches for should be visible as unused, and mandating coverage would make this fixture, rather than a real corpus, the reason a kind stays in the lattice.
 
 ## What the corpus holds now

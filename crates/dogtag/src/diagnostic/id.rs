@@ -146,6 +146,26 @@ pub enum KernelDiagnostic {
     ContractFlagPropertyNotBoolean,
     /// Two flags name the same property.
     ContractDuplicateFlag,
+    /// `[capture] directory` does not name a directory inside the visible corpus.
+    ///
+    /// A `/`-separated sequence of non-empty names, none beginning with `.`. One rule
+    /// refuses an absolute path, a trailing slash, `.` and `..`, and a dotted directory
+    /// the corpus traversal skips — a capture that landed in one would be written and
+    /// then invisible, which is a loss wearing a success.
+    ContractCaptureDirectoryInvalid,
+    /// One type is born carrying the same flag twice.
+    ContractDuplicateBirthFlag,
+    /// A type is born carrying a property that type does not declare.
+    ///
+    /// Stamped at birth, it would be an undeclared key on every note of the type from
+    /// the moment it is written.
+    ContractBirthFlagUndeclared,
+    /// A type is born carrying a property the contract does not declare as a flag.
+    ///
+    /// Separate from the undeclared refusal because the repair is: the two faults are a
+    /// missing `[[type.property]]` and a missing `[[flag]]`, and a contract may be
+    /// missing either without the other.
+    ContractBirthFlagNotAFlag,
     /// The contract declares no `[dialect]` table.
     ContractMissingDialect,
     /// `dialect.links` names a link dialect the format does not define.
@@ -542,6 +562,26 @@ const REGISTRY: &[(KernelDiagnostic, &str, Severity)] = &[
     (
         KernelDiagnostic::ContractDuplicateFlag,
         "contract.duplicate-flag",
+        Severity::Error,
+    ),
+    (
+        KernelDiagnostic::ContractCaptureDirectoryInvalid,
+        "contract.capture-directory-invalid",
+        Severity::Error,
+    ),
+    (
+        KernelDiagnostic::ContractDuplicateBirthFlag,
+        "contract.duplicate-birth-flag",
+        Severity::Error,
+    ),
+    (
+        KernelDiagnostic::ContractBirthFlagUndeclared,
+        "contract.birth-flag-undeclared",
+        Severity::Error,
+    ),
+    (
+        KernelDiagnostic::ContractBirthFlagNotAFlag,
+        "contract.birth-flag-not-a-flag",
         Severity::Error,
     ),
     (
@@ -991,6 +1031,10 @@ macro_rules! contract_variants {
             | KernelDiagnostic::ContractFlagPropertyUndeclared
             | KernelDiagnostic::ContractFlagPropertyNotBoolean
             | KernelDiagnostic::ContractDuplicateFlag
+            | KernelDiagnostic::ContractCaptureDirectoryInvalid
+            | KernelDiagnostic::ContractDuplicateBirthFlag
+            | KernelDiagnostic::ContractBirthFlagUndeclared
+            | KernelDiagnostic::ContractBirthFlagNotAFlag
             | KernelDiagnostic::ContractMissingDialect
             | KernelDiagnostic::ContractUnknownLinkDialect
             | KernelDiagnostic::ContractNoTypes
@@ -1155,6 +1199,10 @@ fn expected_contract_id(kind: KernelDiagnostic) -> &'static str {
         ContractFlagPropertyUndeclared => "contract.flag-property-undeclared",
         ContractFlagPropertyNotBoolean => "contract.flag-property-not-boolean",
         ContractDuplicateFlag => "contract.duplicate-flag",
+        ContractCaptureDirectoryInvalid => "contract.capture-directory-invalid",
+        ContractDuplicateBirthFlag => "contract.duplicate-birth-flag",
+        ContractBirthFlagUndeclared => "contract.birth-flag-undeclared",
+        ContractBirthFlagNotAFlag => "contract.birth-flag-not-a-flag",
         ContractMissingDialect => "contract.missing-dialect",
         ContractUnknownLinkDialect => "contract.unknown-link-dialect",
         ContractNoTypes => "contract.no-types",

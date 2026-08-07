@@ -163,7 +163,7 @@ mod tests {
 
     /// A contract exercising every shape a note can be held to.
     const CONTRACT: &str = concat!(
-        "contract_version = 2\n",
+        "contract_version = 3\n",
         "\n[dialect]\nlinks = \"wikilink\"\n",
         "\n[lifecycle]\nnone = true\n",
         "\n[tags]\nproperty = \"labels\"\n",
@@ -191,7 +191,7 @@ mod tests {
 
     /// A contract that declares no tag vocabulary at all.
     const UNTAGGED: &str = concat!(
-        "contract_version = 2\n",
+        "contract_version = 3\n",
         "\n[dialect]\nlinks = \"wikilink\"\n",
         "\n[lifecycle]\nnone = true\n",
         "\n[[type]]\nname = \"person\"\ncapabilities = [\"identity-bearing\"]\n",
@@ -201,7 +201,7 @@ mod tests {
 
     /// A contract whose one identity-bearing type describes its own tagging.
     const NAMESPACED: &str = concat!(
-        "contract_version = 2\n",
+        "contract_version = 3\n",
         "\n[dialect]\nlinks = \"wikilink\"\n",
         "\n[lifecycle]\nnone = true\n",
         "\n[tags]\nproperty = \"labels\"\n",
@@ -230,7 +230,7 @@ mod tests {
 
     /// A contract whose corpus writes its links the other way.
     const MARKDOWN: &str = concat!(
-        "contract_version = 2\n",
+        "contract_version = 3\n",
         "\n[dialect]\nlinks = \"markdown\"\n",
         "\n[lifecycle]\nnone = true\n",
         "\n[[type]]\nname = \"person\"\ncapabilities = [\"identity-bearing\"]\n",

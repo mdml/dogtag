@@ -166,6 +166,42 @@ pub fn set_contract_version(text: &str, version: u32) -> Transformed {
     Ok(doc.render())
 }
 
+/// Removes every `[[flag]]` declaration, and with them any birth state that
+/// named one.
+///
+/// The two go together rather than being two transformations: a birth state
+/// names a flag, so stripping the roster while leaving a type born carrying one
+/// of its members would derive a contract that breaks the birth-state rule
+/// instead of one that declares no flags — a different fault than the one the
+/// derived case is about.
+///
+/// # Errors
+///
+/// [`TargetNotFound`] when the contract declares no flag, since the derived
+/// contract would then be a copy of one that already declares none.
+pub fn strip_flags(text: &str) -> Transformed {
+    let mut doc = Doc::parse(text);
+    doc.find(|line| line.trim() == FLAG_HEADER)
+        .ok_or_else(|| TargetNotFound::new("strip_flags", "`[[flag]]` declaration"))?;
+    let mut kept: Vec<String> = Vec::new();
+    let mut inside = false;
+    for line in doc.lines.drain(..) {
+        let trimmed = line.trim();
+        if trimmed.starts_with('[') {
+            inside = trimmed == FLAG_HEADER;
+        }
+        if inside || trimmed.starts_with("born-flagged") {
+            continue;
+        }
+        kept.push(line);
+    }
+    doc.lines = kept;
+    Ok(doc.render())
+}
+
+/// The header every flag declaration opens with.
+const FLAG_HEADER: &str = "[[flag]]";
+
 /// Removes the `[lifecycle]` table entirely, so the contract declares neither
 /// an axis nor its absence.
 ///

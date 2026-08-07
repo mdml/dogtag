@@ -7,8 +7,9 @@
 
 use core::fmt;
 
-use dogtag::contract::ContractUnresolved;
-use dogtag::diagnostic::Diagnostic;
+use dogtag::compat::{SUPPORTED_CONTRACT_VERSIONS, VersionClass, classify};
+use dogtag::contract::{ContractLoad, ContractUnresolved};
+use dogtag::diagnostic::{Diagnostic, Severity};
 
 /// What every case answers.
 pub type Checked = Result<(), String>;
@@ -112,6 +113,60 @@ pub fn require_id<'a>(
         &format!("report `{id}`"),
         subject.into(),
     )
+}
+
+/// The subject reported nothing about the corpus — and reported the one thing a
+/// corpus below the current format version is entitled to carry, exactly when
+/// its declared version is below it.
+///
+/// This is [`require_clean`] with the single exception the M5 fixtures record
+/// creates by holding `dense` and `docs` at contract version 2 while the
+/// supported range reaches 3: those corpora earn
+/// `compat.newer-format-available`, which is a fact about the release reading
+/// them rather than a finding about them. Before that split, no committed
+/// fixture could demonstrate the `supported`-but-not-current classification and
+/// stay clean, and the M4 fixtures record made it derived evidence for exactly
+/// that reason; two committed corpora now demonstrate it.
+///
+/// The exception is deliberately narrower than a tolerance. Where the version is
+/// below the ceiling this demands *exactly one* diagnostic, under that
+/// identifier, at `info` — so the allowance cannot absorb a second finding, a
+/// different identifier, or a promoted severity — and where it is not, this is
+/// [`require_clean`] unchanged. `declared` is `None` for a contract that did not
+/// resolve, which has no version to be entitled to anything by.
+pub fn require_version_only<'a>(
+    diagnostics: &[Diagnostic],
+    declared: Option<u32>,
+    subject: impl Into<Subject<'a>>,
+) -> Checked {
+    let subject = subject.into();
+    let below = declared.is_some_and(|version| {
+        classify(version, SUPPORTED_CONTRACT_VERSIONS) == VersionClass::Supported
+    });
+    if !below {
+        return require_clean(diagnostics, subject);
+    }
+    require_only(diagnostics, NEWER_FORMAT, subject)?;
+    require_reported(
+        diagnostics,
+        diagnostics[0].severity == Severity::Info,
+        "classify a below-current version as information",
+        subject,
+    )
+}
+
+/// The classification a corpus below the current format version earns.
+pub const NEWER_FORMAT: &str = "compat.newer-format-available";
+
+/// The version a load settled on, when it settled on one.
+///
+/// A contract that did not resolve declares no version this assertion may reason
+/// from: whatever it says about itself, it is not a corpus at that version.
+pub fn declared_version(load: &ContractLoad) -> Option<u32> {
+    load.contract
+        .as_ref()
+        .ok()
+        .map(dogtag::contract::Contract::contract_version)
 }
 
 /// The subject reported `id` and nothing else — the refusal is the version's,

@@ -7,7 +7,7 @@ use dogtag::contract::{
 use dogtag::report::{contract_json, contract_markdown};
 use dogtag::vault::VaultRoot;
 
-use crate::transform::replace_lifecycle_with_none;
+use crate::transform::{replace_lifecycle_with_none, strip_flags};
 
 use super::corpus::Corpus;
 use super::expect::{Checked, require, require_contains, require_same_names};
@@ -42,6 +42,7 @@ pub fn contract_explain(corpus: &Corpus) -> Checked {
     declarations_carry_their_detail(&contract, &rendered)?;
     lifecycle_and_dialect_appear(&contract, &rendered)?;
     provenance_covers_every_leaf(&contract, &rendered)?;
+    a_contract_with_no_flags_says_so(corpus)?;
     a_corpus_with_no_axis_says_so(corpus)
 }
 
@@ -128,13 +129,36 @@ fn flags_agree(contract: &Contract, rendered: &Rendered) -> Checked {
     )?;
     let section = scan::section(&rendered.markdown, "Flags")
         .ok_or_else(|| "the Markdown omits the Flags section".to_owned())?;
-    if flags.is_empty() {
-        return require_contains(section, "no flags", "the Markdown's Flags section");
-    }
     require_same_names(
         &flags,
         &scan::unique(scan::backticked_after(section, "`")),
         "the Markdown's flags",
+    )
+}
+
+/// A contract declaring no flag at all renders **the statement it is**, derived
+/// from this profile's own contract rather than authored.
+///
+/// Derived rather than read off a profile that happens to declare none: every
+/// built corpus declares at least one, and a claim witnessed by whichever
+/// profile currently has no flags is a claim that quietly stops being tested the
+/// day that profile grows one — which is what happened when `starter` gained the
+/// triage flag it is born carrying.
+fn a_contract_with_no_flags_says_so(corpus: &Corpus) -> Checked {
+    let derived = corpus.derived("explain-no-flags", strip_flags)?;
+    let root = derived.vault_root()?;
+    let contract = derived.clean_contract()?;
+    require(contract.flags().is_empty(), || {
+        "the stripped contract must declare no flag, or this case tests the wrong thing".to_owned()
+    })?;
+    let rendered = Rendered::of(&root, &contract);
+    let section = scan::section(&rendered.markdown, "Flags")
+        .ok_or_else(|| "a flagless contract must still render a Flags section".to_owned())?;
+    require_contains(section, "no flags", "the Markdown's Flags section")?;
+    require_contains(
+        &rendered.json,
+        "\"flags\": []",
+        "the JSON for a contract with no flags",
     )
 }
 
@@ -385,6 +409,48 @@ mod tests {
             .expect("a contract that loads clean, or the spoiling proves nothing");
         let rendered = Rendered::of(&root, &contract);
         (contract, rendered)
+    }
+
+    /// A corpus whose contract declares no flag cannot be stripped of one, and
+    /// the derived case refuses to exist rather than asserting the statement of
+    /// absence against a contract that was already absent.
+    #[test]
+    fn a_corpus_with_no_flag_to_strip_refuses_the_derivation() {
+        let corpus = Corpus::holding("explain-nothing-to-strip", NO_AXIS);
+        let detail = a_contract_with_no_flags_says_so(&corpus)
+            .expect_err("a contract declaring no flag has none to strip");
+        assert!(
+            detail.contains("found no `[[flag]]` declaration"),
+            "what it looked for: {detail}"
+        );
+        assert!(
+            detail.contains("would test nothing"),
+            "why it matters: {detail}"
+        );
+    }
+
+    /// Stripping the flag off a contract that declares one leaves a contract
+    /// that loads clean and renders the statement of absence — the derivation
+    /// this case runs against every profile, held here against a contract whose
+    /// bytes this module can name.
+    #[test]
+    fn stripping_the_only_flag_leaves_a_contract_that_says_it_has_none() {
+        let corpus = Corpus::holding("explain-flagless-derivation", WITH_AXIS);
+        a_contract_with_no_flags_says_so(&corpus)
+            .expect("a contract declaring a flag strips to one declaring none");
+        let derived = corpus
+            .derived("explain-flagless-inspect", strip_flags)
+            .expect("the same derivation");
+        let contract = derived.clean_contract().expect("it still loads clean");
+        assert!(contract.flags().is_empty(), "the roster is gone");
+        assert!(
+            contract
+                .types()
+                .iter()
+                .all(|declared| declared.born_flagged().is_empty()),
+            "and so is every birth state that named one, or the derived contract \
+             would break the birth-state rule instead of declaring no flags"
+        );
     }
 
     /// The same renderings with one substring of the Markdown rewritten.

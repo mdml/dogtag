@@ -11,7 +11,18 @@ When the contract is loaded.
 Then the load is complete — nothing degraded, nothing skipped — the version
 is classified as supported, and the one diagnostic is informational:
 `compat.newer-format-available`, naming the newer version without demanding
-it. Against a contract that does use newer constructs, the same rewrite must
-fail loudly rather than load as a pretend-version-1 — the guard that keeps
-the derivation honest.
+it.
+
+Where a corpus's own committed contract already declares a below-current
+version, that corpus is the evidence and no derivation is needed: the
+committed bytes every other scenario reads are the ones that must load this
+way, and they must carry that one diagnostic and no other.
+
+Where a corpus's committed contract declares the current version, the same
+claim is held from its other side: rewriting the version down to the floor
+must fail loudly rather than load as a pretend-older-version. A contract
+stamped at the current version uses something that version added, so a build
+that quietly resolved it against an older table would change a vault's
+semantics while recording provenance saying it had not — which is the guard
+that keeps the derivation honest, asserted rather than assumed.
 """

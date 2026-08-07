@@ -211,7 +211,7 @@ mod tests {
 
     /// The smallest contract a note can be read against.
     const CONTRACT: &str = concat!(
-        "contract_version = 2\n",
+        "contract_version = 3\n",
         "\n[dialect]\nlinks = \"wikilink\"\n",
         "\n[lifecycle]\nnone = true\n",
         "\n[[type]]\nname = \"capture\"\ncapabilities = [\"catch-all\"]\n",

@@ -100,7 +100,10 @@ pub use show::{ShowReport, show_report, show_text};
 /// and a `tag_namespaces` collection on every type. Version 3 is M4's
 /// retrieval surface, taken when its first report shape — the `search`
 /// document — landed; the milestone's later shapes ride the same version.
-pub const SCHEMA_VERSION: u32 = 3;
+/// Version 4 is M5's, taken here: the `contract` document gains `capture` and
+/// each type's `born_flagged`, and a field set that changed is what the tick is
+/// for. The milestone's later shapes ride the same version.
+pub const SCHEMA_VERSION: u32 = 4;
 
 /// How a caller arrived at the vault it is reporting on.
 ///
@@ -713,9 +716,9 @@ mod tests {
                 state: "loaded",
                 reason: None,
                 version: VersionFacts {
-                    found: Some(2),
+                    found: Some(3),
                     min: 1,
-                    max: 2,
+                    max: 3,
                     classification: Some(VersionClass::Current),
                 },
             }
@@ -736,7 +739,7 @@ mod tests {
     #[test]
     fn an_unresolved_contract_keeps_every_fact_that_does_not_depend_on_it() {
         let tree = Tree::new("model-unresolved");
-        let report = report_of(&tree, Body::new("contract_version = 3\n"));
+        let report = report_of(&tree, Body::new("contract_version = 4\n"));
         let refused = (
             report.contract.state,
             report.contract.present,
@@ -770,7 +773,7 @@ mod tests {
             VersionFacts {
                 found: None,
                 min: 1,
-                max: 2,
+                max: 3,
                 classification: None,
             },
             "the range this build reads is a fact whatever the file says"
@@ -847,7 +850,7 @@ mod tests {
     fn consumer_diagnostics_join_the_vaults_own_in_one_sorted_list() {
         let tree = Tree::new("model-extra");
         let planted = Diagnostic::kernel(KernelDiagnostic::DiscoveryNestedVault, "an ancestor");
-        let vault = opened(&tree, Body::new("contract_version = 3\n"), RECORD);
+        let vault = opened(&tree, Body::new("contract_version = 4\n"), RECORD);
         let report = doctor_report(&vault, discovery(), std::slice::from_ref(&planted));
         let reported: Vec<&str> = report
             .diagnostics()
@@ -882,7 +885,7 @@ mod tests {
         let tree = Tree::new("model-derives");
         let report = report_of(&tree, CLEAN);
         assert_eq!(report.clone(), report);
-        let refused = report_of(&tree, Body::new("contract_version = 3\n"));
+        let refused = report_of(&tree, Body::new("contract_version = 4\n"));
         assert_ne!(report, refused);
         let rendered = format!("{report:?} {:?}", Severity::Error);
         assert!(rendered.contains("capture") && rendered.contains("Error"));
@@ -890,8 +893,9 @@ mod tests {
 
     #[test]
     fn the_schema_version_is_its_own_clock() {
-        // One tick per milestone: 2 was M3's, 3 is M4's, taken when the
-        // `search` document — the milestone's first report shape — landed.
-        assert_eq!(SCHEMA_VERSION, 3);
+        // One tick per milestone: 2 was M3's, 3 was M4's, and 4 is M5's, taken
+        // at the milestone's first report shape — the `contract` document
+        // gaining the two write seats.
+        assert_eq!(SCHEMA_VERSION, 4);
     }
 }

@@ -11,7 +11,10 @@ use dogtag::vault::{Opened, Resolved, VaultRoot, open, root_at};
 use crate::temptree::{TempTree, copy_tree};
 use crate::transform::Transformed;
 
-use super::expect::{Checked, did_not_resolve, require, require_clean};
+use super::expect::{
+    Checked, Subject, declared_version, did_not_resolve, require, require_clean,
+    require_version_only,
+};
 
 /// The directory name a corpus copy is placed under inside its temp tree.
 const VAULT: &str = "vault";
@@ -109,17 +112,33 @@ impl Corpus {
         Ok(load_contract(&self.vault_root()?.contract_path()))
     }
 
-    /// Reads the committed contract and requires it to load with zero
-    /// diagnostics at any severity.
+    /// Reads the committed contract and requires it to load reporting nothing
+    /// but the compatibility classification its declared version earns.
+    ///
+    /// See [`require_version_only`]: for a corpus at the current version this is
+    /// zero diagnostics at any severity, and for one below it — `dense` and
+    /// `docs`, held at version 2 on purpose — it is exactly the one `info` that
+    /// says so, which is a fact about the release rather than a finding about
+    /// the corpus.
     ///
     /// # Errors
     ///
-    /// A diagnostic at any severity, or a contract that did not resolve.
+    /// Any diagnostic beyond that one, or a contract that did not resolve.
     pub fn clean_contract(&self) -> Result<Contract, String> {
         let load = self.load()?;
-        require_clean(&load.diagnostics, "the committed contract")?;
-        load.contract
-            .map_err(|why| did_not_resolve(&why, "the committed contract"))
+        let subject = Subject::new("the committed contract");
+        require_version_only(&load.diagnostics, declared_version(&load), subject)?;
+        load.contract.map_err(|why| did_not_resolve(&why, subject))
+    }
+
+    /// The version the committed contract declares, for a case that must reason
+    /// about what its own corpus is entitled to report.
+    ///
+    /// # Errors
+    ///
+    /// Only a root that will not verify.
+    pub fn declared_version(&self) -> Result<Option<u32>, String> {
+        Ok(declared_version(&self.load()?))
     }
 
     /// Opens the vault against no installation record.
@@ -219,7 +238,7 @@ pub fn require_record_loaded(installation: &Installation) -> Checked {
 /// these is one.
 #[cfg(test)]
 pub const NO_AXIS: &str = concat!(
-    "contract_version = 2\n",
+    "contract_version = 3\n",
     "\n[dialect]\nlinks = \"wikilink\"\n",
     "\n[lifecycle]\nnone = true\n",
     "\n[[type]]\nname = \"capture\"\ncapabilities = [\"catch-all\"]\n",
@@ -233,7 +252,7 @@ pub const NO_AXIS: &str = concat!(
 /// because contract version 2 lets the catch-all require nothing.
 #[cfg(test)]
 pub const WITH_AXIS: &str = concat!(
-    "contract_version = 2\n",
+    "contract_version = 3\n",
     "\n[dialect]\nlinks = \"wikilink\"\n",
     "\n[lifecycle]\naxis = \"status\"\nordinary = { absent = true }\n",
     "\n[[flag]]\nproperty = \"leaned_on\"\n",

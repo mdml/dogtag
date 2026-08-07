@@ -37,7 +37,7 @@ fn a_clean_vault_reports_every_section_and_exits_0() {
     for line in [
         "upward discovery from the current directory",
         ".dogtag/contract.toml",
-        "2 (current; supported 1..=2)",
+        "3 (current; supported 1..=3)",
         "3 declared",
         "catch-all          note",
         "lifecycle       axis \"status\", ordinary state is \"active\"",
@@ -77,9 +77,9 @@ fn an_unusable_contract_still_reports_the_root_and_the_registry() {
     let tree = vault("too-new", TOO_NEW);
     let finished = doctor(&tree, &[]);
     assert_eq!(finished.code, 1, "an error is a failure: {finished:?}");
-    let reason = "not evaluated (the contract declares a version above the supported range 1..=2)";
+    let reason = "not evaluated (the contract declares a version above the supported range 1..=3)";
     for line in [
-        "3 (too new; supported 1..=2)",
+        "4 (too new; supported 1..=3)",
         "state         loaded",
         "types           not evaluated",
         "lifecycle       not evaluated",
@@ -107,7 +107,7 @@ fn the_json_report_is_one_document_carrying_the_settled_shape() {
         "not one JSON document: {finished:?}"
     );
     for fragment in [
-        "\"schema_version\": 3",
+        "\"schema_version\": 4",
         "\"report\": \"doctor\"",
         "\"how\": \"discovery\"",
         "\"requested\": null",

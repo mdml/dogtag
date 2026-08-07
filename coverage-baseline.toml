@@ -137,8 +137,32 @@ toolchain = "nightly-2026-07-30"
 # against all three built corpora): 98.84 lines and 98.83 branches, against
 # 98.99 / 98.94 measured on the commit this branched from. Both floors sit
 # one hundredth under the measurement: 98.83 / 98.82.
+#
+# Contract version 3 raised the branch number and held the line number. This is
+# an ordinary ratchet raise, not an adjudication: no floor moves down. The new
+# kernel module is a walk, a model and two renderings, every arm of which — a
+# version with no write seat and a version with one, a declared directory and a
+# defaulted one, each way a directory leaves the visible corpus, a declared
+# birth state and an undeclared one, a repeated birth flag, and both halves of
+# the cross-contract rule — is reached from a named test, so the new lines are
+# covered lines and the new branches are covered branches.
+#
+# Two claims that had quietly stopped being tested were restored rather than
+# left as dilution, which is where most of the branch rise comes from. Holding
+# `dense` and `docs` at version 2 put every built corpus on one side or the
+# other of the `supported`-but-not-current classification, so
+# `supported-contract-version-loads-with-info` gained a committed-evidence arm
+# and a guard arm and lost the arm nothing witnessed; and `starter` gaining the
+# triage flag it is born carrying left the *no flags* rendering witnessed by no
+# profile, so that claim is now derived — every profile is stripped of its
+# flags and asserted against — rather than read off whichever profile happens
+# to declare none.
+#
+# Measured on the pinned toolchain, integrated: 98.8449 lines and 98.8753
+# branches, against 98.8404 / 98.8323 on the commit this branched from. Floors
+# one hundredth under, as above: 98.83 (unmoved) / 98.86.
 line = 98.83
-branch = 98.82
+branch = 98.86
 
 [thresholds]
 line = 95.0

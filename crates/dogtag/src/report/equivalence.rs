@@ -23,8 +23,8 @@ use std::collections::BTreeSet;
 use serde_json::Value;
 
 use super::fixture::{
-    ABSENT_ORDINARY, AWKWARD, Body, CLEAN, KINDS, MARKDOWN_LINKS, NAMED_ORDINARY, RECORDS, TAGGED,
-    Tree, rendered,
+    ABSENT_ORDINARY, AWKWARD, BELOW_CURRENT, Body, CLEAN, KINDS, MARKDOWN_LINKS, NAMED_ORDINARY,
+    RECORDS, TAGGED, Tree, rendered,
 };
 use super::{contract_json, contract_markdown};
 use crate::contract::{
@@ -86,6 +86,11 @@ fn from_contract(contract: &Contract) -> BTreeSet<String> {
             .tags()
             .map(|tags| format!("tags.property{FIELD}{}", tags.property())),
     );
+    atoms.extend(
+        contract
+            .capture()
+            .map(|capture| format!("capture.directory{FIELD}{}", capture.directory())),
+    );
     for flag in contract.flags() {
         atoms.insert(format!("flag{FIELD}{}", flag.property()));
     }
@@ -114,6 +119,9 @@ fn model_type(declared: &TypeDecl) -> Vec<String> {
     let mut atoms = vec![format!("type{FIELD}{owner}")];
     for capability in declared.capabilities() {
         atoms.push(format!("type.{owner}.capability{FIELD}{capability}"));
+    }
+    for flag in declared.born_flagged() {
+        atoms.push(format!("type.{owner}.born-flagged{FIELD}{flag}"));
     }
     for property in declared.properties() {
         let declaration = Declaration {
@@ -204,6 +212,9 @@ fn from_json(document: &str) -> BTreeSet<String> {
     if let Some(property) = contract["tags"]["property"].as_str() {
         atoms.insert(format!("tags.property{FIELD}{property}"));
     }
+    if let Some(directory) = contract["capture"]["directory"].as_str() {
+        atoms.insert(format!("capture.directory{FIELD}{directory}"));
+    }
     for flag in array(&contract["flags"]) {
         atoms.insert(format!("flag{FIELD}{}", as_str(&flag["property"])));
     }
@@ -232,6 +243,9 @@ fn json_lifecycle(lifecycle: &Value) -> Vec<String> {
 fn json_type(declared: &Value) -> Vec<String> {
     let owner = as_str(&declared["name"]);
     let mut atoms = vec![format!("type{FIELD}{owner}")];
+    for flag in array(&declared["born_flagged"]) {
+        atoms.push(format!("type.{owner}.born-flagged{FIELD}{}", as_str(flag)));
+    }
     for capability in array(&declared["capabilities"]) {
         atoms.push(format!(
             "type.{owner}.capability{FIELD}{}",
@@ -407,6 +421,8 @@ const LINES: &[(&str, Handler)] = &[
     ("### ", Scan::heading),
     ("| ", Scan::row),
     ("This vault is at ", Scan::preamble),
+    ("A note of this type is born carrying ", Scan::born),
+    ("Captures land in the directory ", Scan::capture),
     ("This corpus declares no lifecycle axis.", Scan::no_axis),
     ("The life axis is the property ", Scan::axis),
     ("The property ", Scan::record),
@@ -502,6 +518,31 @@ impl Scan {
             name,
             required: required.as_str() == "yes",
         }
+    }
+
+    /// The birth-state sentence, which names its flags in code spans.
+    ///
+    /// It arrives inside a type block, so the type being read is what it hangs
+    /// under — the same way a field row hangs under the record that introduced
+    /// it.
+    fn born(&mut self, line: Line<'_>) {
+        for flag in line.code() {
+            self.atoms
+                .insert(format!("type.{}.born-flagged{FIELD}{flag}", self.kind));
+        }
+    }
+
+    /// The capture sentence. The statement of *this version has no seat* opens
+    /// differently and is skipped, because an absent declaration must not
+    /// become an atom in one document only.
+    fn capture(&mut self, line: Line<'_>) {
+        let directory = line
+            .code()
+            .first()
+            .copied()
+            .expect("the capture directory is named in code");
+        self.atoms
+            .insert(format!("capture.directory{FIELD}{directory}"));
     }
 
     fn no_axis(&mut self, _line: Line<'_>) {
@@ -643,7 +684,7 @@ mod tests {
 
     /// Every contract these renderings are held up against, named so a failure
     /// says which one disagreed.
-    const SUBJECTS: [(&str, Body<'static>); 8] = [
+    const SUBJECTS: [(&str, Body<'static>); 9] = [
         ("starter", NAMED_ORDINARY),
         ("dense", ABSENT_ORDINARY),
         ("clean", CLEAN),
@@ -655,6 +696,10 @@ mod tests {
         // one fixture this list omitted, and it was omitted because it fails:
         // the check was arranged around its own counterexample.
         ("awkward", AWKWARD),
+        // A version with no write seats, which is the shape two of the three
+        // committed corpora are in: the renderings must agree about a
+        // declaration neither of them may make.
+        ("below-current", BELOW_CURRENT),
     ];
 
     #[test]

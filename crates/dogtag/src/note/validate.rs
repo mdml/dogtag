@@ -455,6 +455,7 @@ mod tests {
             },
             lifecycle: LifecycleDecl::None,
             tags: None,
+            capture: None,
             flags: Vec::new(),
             types: Vec::new(),
             provenance: Provenance::new(),
