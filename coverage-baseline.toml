@@ -182,8 +182,18 @@ toolchain = "nightly-2026-07-30"
 #
 # Measured on the pinned toolchain, integrated: 98.92 lines and 98.93
 # branches. Floors one hundredth under: 98.91 / 98.92.
+#
+# The `capture` surface held both numbers. A thin consumer adds few lines of
+# its own, and every arm of the ones it adds is reached from a test against the
+# built binary: each of the three inputs, a thought that is not text at all, a
+# preview against a byte-identical tree, the record's actor and the
+# invocation's, all three capacities, a selector naming no vault, an unresolved
+# contract, and a corpus error that reports and does not change the verdict.
+#
+# Measured on the pinned toolchain, integrated: 98.92 lines and 98.94
+# branches. Floors one hundredth under: 98.91 (unmoved) / 98.93.
 line = 98.91
-branch = 98.92
+branch = 98.93
 
 [thresholds]
 line = 95.0
