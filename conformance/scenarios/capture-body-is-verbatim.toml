@@ -1,0 +1,20 @@
+id = "capture-body-is-verbatim"
+title = "A capture's body is the captured bytes, and its frontmatter is only what the type declares"
+milestone = "M5"
+status = "executable"
+contract = """
+Given a thought of more than one line, ending in a line terminator.
+
+When it is captured.
+
+Then the note's body is those bytes exactly: nothing trimmed, nothing
+re-wrapped, no line ending decided, and no terminator added or removed. A
+writing surface preserves every byte it did not semantically touch, and none
+of the body is a byte the surface touched.
+
+And the note's frontmatter carries **nothing beyond the flags the contract
+says a note of that type is born carrying** — no type discriminator, no
+timestamp, no author, no property the corpus never declared. A corpus that
+declares no birth state produces a capture whose frontmatter is empty of
+everything.
+"""

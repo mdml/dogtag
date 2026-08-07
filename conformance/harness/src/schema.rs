@@ -58,8 +58,8 @@ pub struct Scenario {
 }
 
 /// The milestone at which a scenario graduates from contract to executing
-/// test. The M0 golden set covers M2–M3; search and mutation scenarios
-/// accrue with their own milestones later.
+/// test. The M0 golden set covers M2–M3; retrieval and mutation scenarios
+/// accrue with their own milestones after it.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Deserialize)]
 pub enum Milestone {
     /// Open and diagnose: contract loading, capability validation,
@@ -69,6 +69,8 @@ pub enum Milestone {
     M3,
     /// Lexical retrieval: `search`, `find`, and the `docs` corpus.
     M4,
+    /// Safe mutation: the write transaction, and `capture`.
+    M5,
 }
 
 impl fmt::Display for Milestone {
@@ -77,6 +79,7 @@ impl fmt::Display for Milestone {
             Milestone::M2 => f.write_str("M2"),
             Milestone::M3 => f.write_str("M3"),
             Milestone::M4 => f.write_str("M4"),
+            Milestone::M5 => f.write_str("M5"),
         }
     }
 }

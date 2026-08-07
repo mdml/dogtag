@@ -1,0 +1,19 @@
+id = "capture-exit-is-the-transaction-verdict"
+title = "A capture into an already-broken corpus succeeds, and reports the corpus"
+milestone = "M5"
+status = "executable"
+contract = """
+Given a corpus transformed to carry a pre-existing validation error — a note
+claiming a type the contract does not declare.
+
+When a thought is captured into it.
+
+Then **the act succeeds**: the transaction's verdict answers *did my act
+land*, not *is this corpus healthy*. The corpus's findings ride the structured
+result for triage, under the same identifiers every read door reports them
+under, and the note the act created is readable back.
+
+This is a deliberate, recorded split from the rule the read surfaces follow. A
+write verb that reported failure because its vault was untidy would train
+callers to ignore the one signal a verdict exists to carry.
+"""

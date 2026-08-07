@@ -1,0 +1,19 @@
+id = "capture-birth-state-stamps-the-flag"
+title = "A capture is born carrying exactly the flags its type declares"
+milestone = "M5"
+status = "executable"
+contract = """
+Given a corpus whose contract declares a birth state on its catch-all, and one
+whose contract declares none — the second derived from the first, or the first
+from the second, so that every profile exercises both.
+
+When a thought is captured into each.
+
+Then the note's frontmatter carries exactly the flags that corpus's contract
+says a note of that type is born carrying, each stamped true, and nothing
+else. Where nothing is declared, nothing is stamped.
+
+The kernel binds to the corpus's **declaration** of which properties are flags
+and which types are born carrying them, never to a vocabulary it knows: no
+scenario here names a triage word, and none needs to.
+"""

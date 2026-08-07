@@ -20,7 +20,7 @@ A scenario is a contract first and a test second:
 ```toml
 id = "capability-cardinality-enforced"        # kebab-case, equals the filename stem
 title = "Capability enumeration and cardinality are enforced when the contract loads"
-milestone = "M2"                              # when it becomes executable (M2 | M3 | M4 so far)
+milestone = "M2"                              # when it becomes executable (M2 | M3 | M4 | M5 so far)
 status = "executable"                         # pending | executable — flips at its milestone
 contract = """
 Given/when/then prose in profile-agnostic terms.
@@ -29,7 +29,9 @@ Given/when/then prose in profile-agnostic terms.
 
 Contract prose binds behavior to **declared capabilities and declared axes** — "the declared catch-all type", "the declared lifecycle axis" — never to any corpus's vocabulary. No scenario may mention a type name, a lifecycle word, or a dialect assumption; vocabulary lives in profiles, and only declarations reach the core.
 
-Which milestone a scenario carries follows what it operates on: a scenario that opens and diagnoses a vault and its committed contract is M2, one that validates the corpus's notes is M3, and one that retrieves over the corpus — search, or entity lookup — is M4. Four scenarios written at M0 moved from M2 to M3 on that test when the M2 packet closed, and eight M2 scenarios were added alongside them — a metadata correction, not a waiver, since every scenario still runs against every profile.
+Which milestone a scenario carries follows what it operates on: a scenario that opens and diagnoses a vault and its committed contract is M2, one that validates the corpus's notes is M3, one that retrieves over the corpus — search, or entity lookup — is M4, and one whose assertions follow an **act** that changed the corpus is M5. Four scenarios written at M0 moved from M2 to M3 on that test when the M2 packet closed, and eight M2 scenarios were added alongside them — a metadata correction, not a waiver, since every scenario still runs against every profile.
+
+A write scenario is not a different kind of scenario. It derives whatever situation it needs into the per-pair copy, applies its mutation to that copy, and asserts the post-state through the ordinary read surfaces — the same doors any consumer would use. There is no restore machinery, no fixture mutation, no schema field, and no third status: the copy *is* the isolation, and machinery on top would imply the copies were ever shared.
 
 ### Non-conforming inputs are derived, never authored
 
@@ -47,7 +49,9 @@ The same rule answers what a scenario written for one fixture's distinguishing a
 
 The discovery tree is also **hermetic**, which is not a nicety. The upward walk has no boundary — not `.git`, not `$HOME`, not a mount point — so "no vault above here" would otherwise be a property of the machine, and one developer's directory layout would be reaching a conformance result. Before asserting, the harness walks from its temporary start directory to the filesystem root and proves no ancestor holds the sentinel, failing loudly with an explanatory message if one does.
 
-Every corpus-backed case runs against a **temporary copy** of the profile's corpus, created fresh per pair, with normalized permissions. The run writes into that copy — installation records, nested directories, symbolic links, transformed contracts — so nothing it does touches the checkout, and a developer's umask cannot change a result.
+Every corpus-backed case runs against a **temporary copy** of the profile's corpus, created fresh per pair, with normalized permissions. The run writes into that copy — installation records, nested directories, symbolic links, transformed contracts, captured notes, and for one case a git repository constructed around the corpus — so nothing it does touches the checkout, and a developer's umask cannot change a result.
+
+That copy stopped being a hygiene measure at M5 and became a **correctness dependency**: the write scenarios mutate it, so a future optimization that shared copies between pairs would break them silently. This sentence is the tripwire.
 
 ### The no-waiver rule is structural
 
@@ -101,7 +105,7 @@ The matrix distinguishes a pair that **ran** from one **skipped** for want of a 
 | `no-corpus` | the scenario is executable; the corpus is not built — a **skip**, not a result |
 | `pending,no-corpus` | both |
 
-At M4's surfaces-and-corpus state that is 36 scenarios × 4 profiles = 144 pairs, of which 36 × 3 = 108 ran: every scenario against `dense`, `starter` and `docs`. `records` is still scheduled, so cross-profile evidence is three profiles, not four, and its column is the only skip — nothing is `pending` in either sense.
+At M5's surfaces-and-corpus state that is 46 scenarios × 4 profiles = 184 pairs, of which 46 × 3 = 138 ran: every scenario against `dense`, `starter` and `docs`. `records` is still scheduled, so cross-profile evidence is three profiles, not four, and its column is the only skip — nothing is `pending` in either sense.
 
 The harness crate depends on `serde`, `toml`, and the **`dogtag` SDK**, whose *public API only* it consumes — the same door any other consumer enters by. That makes conformance a permanent test that the public API is sufficient: a private hook the harness turned out to need would be an architecture bug, not a reason to widen anything.
 
