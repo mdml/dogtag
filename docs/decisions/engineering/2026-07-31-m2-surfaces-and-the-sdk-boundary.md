@@ -1,6 +1,6 @@
 # The M2 surfaces: `doctor`, `contract explain`, and where rendering lives
 
-- Status: accepted (amended 2026-08-01 — see [Amendments](#amendments))
+- Status: accepted (amended 2026-08-01, 2026-08-07 — see [Amendments](#amendments))
 - Date: 2026-07-31
 
 ## Context
@@ -90,3 +90,5 @@ The Decision above stands as written; these later records change parts of it, an
 - **2026-08-01 — `root_at` and `resolve_registered` answer with a root *and* its diagnostics.** The Decision fixes `root_at(path) -> Result<VaultRoot, Diagnostic>`. [The discovery record](2026-07-31-vault-discovery-and-selection.md) requires an info diagnostic whenever the resolved root differs from what was requested, and that diagnostic arises on *success*, so the fixed shape had nowhere to put it and both explicit routes discarded it. Widening the return is the smaller loss: the alternative leaves the `info` severity with one justification instead of the two [the compatibility record](2026-07-31-diagnostics-and-compatibility.md) gives it, and leaves the surprise this record wanted surfaced invisible on exactly the routes where a user types a symlinked path.
 
 - **2026-08-01 — the Markdown folds and escapes what a table cell cannot carry, and the equivalence claim is about declarations, not bytes.** Neither this record nor any other sanctions the renderer rewriting a declared value. It does: a `|` in a type name or enum member is escaped, and a control character is folded to a space, because a Markdown table is line-oriented and because an unfolded control character lets planted text repaint a reader's terminal. The JSON emits the bytes exactly. So the two renderings carry the same *declarations* and can differ in the *spelling* of a value containing a character a table cannot hold. That trade is now decided rather than merely implemented; the equivalence acceptance criterion is about the declaration set, and the fold is the anti-forgery control it looks like.
+
+- **2026-08-07 — `AGENTS.md` generation is scheduled at M6, not at the first write milestone.** The Decision parked on-disk generation at "the milestone that performs writes," which M5 now is. Adjudicated with the M5 packet: the write *machinery* arrives at M5, but the generated file's consumer — an agent reaching the vault without a human relaying `contract explain` output — arrives with the M6 MCP server, and a generated contract nothing consumes would be capability producing no evidence, the same test the cutover rule applies to workflows. Scheduled at M6 by [the M5 release record](2026-08-07-m5-release-and-cutover.md); the non-drift obligation stands unchanged.
