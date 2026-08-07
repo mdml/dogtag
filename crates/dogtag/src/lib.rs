@@ -43,17 +43,22 @@
 //!
 //! ## Current surface
 //!
-//! This release opens a vault, diagnoses it, reads its corpus, and searches
-//! it: which files are notes, what their frontmatter says, how each one
-//! measures up against the type the contract declares for it, which note each
-//! of its references names, and which notes a lexical query matches. A typed
-//! link must resolve, and one that does not is reported against the reference
-//! itself; a bare name several notes bear names none of them wherever it is
-//! written, prose included, because ambiguity is a defect of the reference
-//! rather than of the corpus. Nothing is persisted: the name index is built
-//! while a corpus is read and answered from memory, and retrieval is a corpus
-//! scan through the same shared loading, traversal, and validation path
-//! `check`, `list`, and `show` read by.
+//! This release opens a vault, diagnoses it, reads its corpus, searches it, and
+//! performs exactly one mutation: which files are notes, what their frontmatter
+//! says, how each one measures up against the type the contract declares for
+//! it, which note each of its references names, which notes a lexical query
+//! matches, and — through the write transaction — one new note captured into
+//! the catch-all. A typed link must resolve, and one that does not is reported
+//! against the reference itself; a bare name several notes bear names none of
+//! them wherever it is written, prose included, because ambiguity is a defect
+//! of the reference rather than of the corpus.
+//!
+//! **No index is persisted**: the name index is built while a corpus is read
+//! and answered from memory, and retrieval is a corpus scan through the same
+//! shared loading, traversal, and validation path `check`, `list`, `show` and
+//! the write transaction's post-write reading all read by. What *is* persisted
+//! is what a capture creates, which is one note and — where this substrate owns
+//! the vault's commit path — one commit containing exactly it.
 //!
 //! - `diagnostic` — the envelope every failure is reported as: the exhaustive
 //!   kernel identifier set, the `ext.` namespace consumers mint their own
@@ -75,6 +80,9 @@
 //! - `provenance` — where each resolved leaf value came from.
 //! - `report` — the report shapes and their SDK-owned renderings, the
 //!   structured schema, and the generated agent contract.
+//! - `write` — the write transaction: the plan as a value, the one operation
+//!   that applies it, who performed it and in what capacity, and how to undo
+//!   what landed.
 //!
 //! [`VERSION`] and [`version`] report the SDK's own version, and every
 //! official surface reports that value rather than carrying one of its own.
@@ -95,6 +103,7 @@ pub mod note;
 pub mod provenance;
 pub mod report;
 pub mod vault;
+pub mod write;
 
 /// Corpus text on its way into a line-oriented rendering. Private: every
 /// rendering this crate owns folds through it, and no consumer chooses.

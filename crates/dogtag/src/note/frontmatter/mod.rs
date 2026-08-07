@@ -301,6 +301,20 @@ impl Line<'_> {
     }
 }
 
+/// Whether `text`'s first line would open a frontmatter block.
+///
+/// The reader's own rule, answered by the reader's own grammar, exposed so that
+/// a **writing** surface can ask it rather than re-derive it. A writer that
+/// re-derived it would be a second definition of what a fence is, and the two
+/// would drift: this rule is wider than it looks — trailing whitespace is
+/// trimmed, so `---` followed by a space or a tab is a fence, and the line
+/// terminator may be a lone carriage return — and a narrower copy of it in a
+/// writer means a captured body that opens with one of those shapes is read
+/// back as its own frontmatter.
+pub(crate) fn opens_a_block(text: &str) -> bool {
+    lines(text).first().is_some_and(Line::is_fence)
+}
+
 /// Every line of `text`, indentation measured and terminators removed.
 ///
 /// A leading byte order mark is stepped over rather than removed: the offsets
