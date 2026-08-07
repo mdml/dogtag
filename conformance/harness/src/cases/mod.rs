@@ -11,6 +11,7 @@
 //! notes to read, and the two files a case opens are the committed contract
 //! and an installation record it wrote itself.
 
+mod capture;
 mod contract;
 mod corpus;
 mod derive;
@@ -23,6 +24,7 @@ mod installation;
 mod link;
 mod note;
 mod provenance;
+mod repository;
 mod scan;
 mod search;
 mod surface;
@@ -47,6 +49,34 @@ const CASES: &[(&str, Case)] = &[
         "ambiguous-bare-name-yields-link-diagnostic",
         link::ambiguous_bare_name,
     ),
+    (
+        "capture-birth-state-stamps-the-flag",
+        capture::birth_state_stamps_the_flag,
+    ),
+    ("capture-body-is-verbatim", capture::body_is_verbatim),
+    (
+        "capture-collision-appends-suffix",
+        capture::collision_appends_suffix,
+    ),
+    ("capture-commits-at-birth", capture::commits_at_birth),
+    (
+        "capture-exit-is-the-transaction-verdict",
+        capture::exit_is_the_transaction_verdict,
+    ),
+    ("capture-lands-unfiled", capture::lands_unfiled),
+    (
+        "capture-preview-writes-nothing",
+        capture::preview_writes_nothing,
+    ),
+    (
+        "capture-repeat-is-deterministic",
+        capture::repeat_is_deterministic,
+    ),
+    (
+        "capture-result-names-recovery",
+        capture::result_names_recovery,
+    ),
+    ("capture-without-actor-warns", capture::without_actor_warns),
     (
         "bare-name-link-resolves-when-unambiguous",
         link::bare_name_resolves,

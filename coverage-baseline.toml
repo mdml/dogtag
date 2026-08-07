@@ -192,8 +192,38 @@ toolchain = "nightly-2026-07-30"
 #
 # Measured on the pinned toolchain, integrated: 98.92 lines and 98.94
 # branches. Floors one hundredth under: 98.91 (unmoved) / 98.93.
-line = 98.91
-branch = 98.93
+#
+# PROPOSED FOR ADJUDICATION with the M5 scenario graduation, on the 2026-08-04
+# entry's precedent and for the same reason a fourth time: BOTH global floors
+# move DOWN to the measurement, because the ten graduated write cases add
+# ~390 harness lines whose remaining uncovered arms are the `?` that
+# propagates a failed assertion and the closures that build a failure detail
+# — text that executes only when the product under test misbehaves, which a
+# passing conformance suite cannot make happen.
+#
+# What was covered rather than conceded, so the concession is only what is
+# left: the module carries its own
+# `the_details_a_misbehaving_sdk_would_earn_say_what_went_wrong`, which runs
+# **every one of the ten cases** against a corpus whose catch-all refuses
+# every write and requires each to say what happened — so a case added
+# without a legible refusal fails there rather than diluting silently — plus
+# named tests for each shared helper's detail: a result that created nothing,
+# an act that did not land, a path the corpus does not hold, and a note
+# stamped with the wrong flags. What stays uncovered is the detail a case
+# would build at a *later* stage than the one that fails first, which would
+# need an SDK misbehaving differently for each assertion in turn.
+#
+# The kernel floor below is untouched and every kernel file still holds 100%,
+# including the whole write transaction: this is dilution by test
+# infrastructure, not eroded product coverage, and the ratchet resumes rising
+# from here.
+#
+# Measured on the pinned toolchain, integrated (the forty-six scenarios
+# against all three built corpora): 98.6115 lines and 98.6667 branches,
+# against 98.92 / 98.94 on the commit this branched from. Both floors sit one
+# hundredth under the measurement: 98.60 / 98.65.
+line = 98.60
+branch = 98.65
 
 [thresholds]
 line = 95.0

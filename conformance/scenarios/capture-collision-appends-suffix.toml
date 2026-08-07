@@ -1,0 +1,15 @@
+id = "capture-collision-appends-suffix"
+title = "Two captures colliding on a name both land"
+milestone = "M5"
+status = "executable"
+contract = """
+Given two captures of the same thought, made at the same instant, so that both
+derive the same name.
+
+When both are applied.
+
+Then both notes exist under distinct paths and both hold the thought: neither
+is lost and neither is overwritten. A name coincidence is not a reason to lose
+a thought, so the second appends a suffix rather than refusing — and the first
+bearer keeps the bare name, so a corpus that never collides never sees one.
+"""

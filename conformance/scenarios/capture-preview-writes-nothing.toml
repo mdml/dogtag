@@ -1,0 +1,18 @@
+id = "capture-preview-writes-nothing"
+title = "A preview emits the plan and leaves the corpus byte-identical"
+milestone = "M5"
+status = "executable"
+contract = """
+Given any conforming corpus and a thought to capture.
+
+When the capture is previewed rather than applied.
+
+Then the plan is emitted — naming the one file the act intends to create — and
+**every byte of the corpus is unchanged**: no note, no directory, and no
+change to any file that was already there. The comparison is over bytes rather
+than over paths, so a rewrite in place would be as visible as a creation.
+
+The plan is a value and never an artifact: nothing is persisted for a later
+invocation to read, because a persisted plan is state that can go stale
+between invocations.
+"""
