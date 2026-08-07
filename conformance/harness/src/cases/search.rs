@@ -383,11 +383,19 @@ fn declared_axis(corpus: &Corpus) -> Result<String, String> {
 }
 
 /// The corpus searched through the SDK, unfiltered and uncapped.
-fn searched(corpus: &Corpus, query: &str) -> Result<SearchResult, String> {
+///
+/// `pub(super)` because the derived situations in [`super::docs_native`] query
+/// the same way; one spelling of *search this corpus* is what keeps the two
+/// modules asking the SDK the same question.
+pub(super) fn searched(corpus: &Corpus, query: &str) -> Result<SearchResult, String> {
     searched_with(corpus, query, ListFilter::default())
 }
 
-fn searched_with(corpus: &Corpus, query: &str, filter: ListFilter) -> Result<SearchResult, String> {
+pub(super) fn searched_with(
+    corpus: &Corpus,
+    query: &str,
+    filter: ListFilter,
+) -> Result<SearchResult, String> {
     let contract = corpus.clean_contract()?;
     Ok(search(
         &corpus.vault_root()?,
@@ -401,7 +409,7 @@ fn searched_with(corpus: &Corpus, query: &str, filter: ListFilter) -> Result<Sea
 }
 
 /// Every hit's path, as the set membership assertions compare.
-fn hit_paths(result: &SearchResult) -> BTreeSet<String> {
+pub(super) fn hit_paths(result: &SearchResult) -> BTreeSet<String> {
     result
         .hits()
         .iter()
@@ -410,7 +418,7 @@ fn hit_paths(result: &SearchResult) -> BTreeSet<String> {
 }
 
 /// The hits are exactly `expected` — membership and count, not ordering.
-fn require_hits(result: &SearchResult, expected: &[&str], subject: &str) -> Checked {
+pub(super) fn require_hits(result: &SearchResult, expected: &[&str], subject: &str) -> Checked {
     let answered = hit_paths(result);
     let wanted: BTreeSet<String> = expected.iter().map(|path| (*path).to_owned()).collect();
     require(answered == wanted, || {

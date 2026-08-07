@@ -1,7 +1,7 @@
 id = "find-repeated-basename-requires-qualification"
 title = "A recurring bare name is ambiguous; the path-qualified form resolves"
 milestone = "M4"
-status = "pending"
+status = "executable"
 contract = """
 Given a corpus in which one basename recurs across directories.
 
