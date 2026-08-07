@@ -1,0 +1,15 @@
+id = "capture-result-names-recovery"
+title = "The result names how to undo what it did"
+milestone = "M5"
+status = "executable"
+contract = """
+Given any conforming corpus that is not a repository, so the substrate does
+not own its commit path.
+
+When a thought is captured.
+
+Then the structured result names the created path as the recovery it is:
+deleting the file is what undoes a create, so recovery is concrete without a
+backup copy and without an undo verb. The path the result names is the path
+the plan intended, and a note is readable back at it.
+"""

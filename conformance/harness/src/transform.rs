@@ -419,6 +419,87 @@ fn frontmatter_key(doc: &Doc, key: &str) -> Option<usize> {
         .map(|offset| open + offset)
 }
 
+/// The flag the birth-state derivation declares, and the property it names.
+///
+/// Deliberately not a word any corpus would use, for the reason
+/// [`DERIVED_CATCH_ALL_TYPE`] is not: the derived declaration must collide with
+/// nothing in any profile, and a reader meeting it in a note's frontmatter
+/// should know at once that the harness put it there.
+pub const DERIVED_BIRTH_FLAG: &str = "derived_born_flagged";
+
+/// Declares a birth state on the catch-all, at the version that defines one.
+///
+/// Three edits in one transformation, because they are one declaration: the
+/// version rises to the one with the seats, the catch-all is born carrying
+/// [`DERIVED_BIRTH_FLAG`] and declares it as a boolean property, and the
+/// contract declares that property a flag. Split into three, each would derive
+/// a contract that breaks a rule rather than one that declares a birth state.
+///
+/// It changes bytes on every profile, including one whose catch-all is already
+/// born carrying something: the derived flag is a name no corpus uses, so the
+/// existing list is extended rather than replaced.
+///
+/// # Errors
+///
+/// [`TargetNotFound`] when the contract declares no `contract_version`, or no
+/// type carrying the catch-all capability.
+pub fn declare_derived_birth_state(text: &str) -> Transformed {
+    let missing = |what: &'static str| TargetNotFound::new("declare_derived_birth_state", what);
+    let mut doc = Doc::parse(text);
+    let version = doc
+        .find(|line| line.trim_start().starts_with("contract_version"))
+        .ok_or_else(|| missing("`contract_version` key"))?;
+    doc.lines[version] = "contract_version = 3\n".to_owned();
+    let capabilities = doc
+        .find(declares_catch_all)
+        .ok_or_else(|| missing("catch-all capability declaration"))?;
+    let end = type_block_end(&doc, capabilities);
+    doc.lines.splice(
+        end..end,
+        [format!(
+            "\n  [[type.property]]\n  name = \"{DERIVED_BIRTH_FLAG}\"\n  kind = \"boolean\"\n"
+        )],
+    );
+    born_flagged(&mut doc, capabilities, end);
+    let mut rendered = doc.render();
+    if !rendered.ends_with('\n') {
+        rendered.push('\n');
+    }
+    rendered.push_str(&format!(
+        "\n[[flag]]\nproperty = \"{DERIVED_BIRTH_FLAG}\"\n"
+    ));
+    Ok(rendered)
+}
+
+/// Where a `[[type]]` block ends: the next header that is not one of its own
+/// sub-tables, or the end of the document.
+fn type_block_end(doc: &Doc, from: usize) -> usize {
+    doc.lines[from + 1..]
+        .iter()
+        .position(|line| {
+            let trimmed = line.trim_start();
+            trimmed.starts_with('[') && !trimmed.starts_with("[[type.")
+        })
+        .map_or(doc.lines.len(), |offset| from + 1 + offset)
+}
+
+/// Adds the derived flag to the catch-all's birth state, extending the list it
+/// already declares rather than writing a second key beside it.
+fn born_flagged(doc: &mut Doc, from: usize, end: usize) {
+    let declared = doc.lines[from..end]
+        .iter()
+        .position(|line| line.trim_start().starts_with("born-flagged"));
+    if let Some(offset) = declared {
+        let at = from + offset;
+        doc.lines[at] = doc.lines[at].replacen('[', &format!("[\"{DERIVED_BIRTH_FLAG}\", "), 1);
+        return;
+    }
+    doc.lines.splice(
+        from + 1..from + 1,
+        [format!("born-flagged = [\"{DERIVED_BIRTH_FLAG}\"]\n")],
+    );
+}
+
 /// The name of the type the tag-namespace derivations append.
 ///
 /// Like [`DERIVED_CATCH_ALL_TYPE`], deliberately not a word any corpus would

@@ -1,0 +1,17 @@
+id = "capture-lands-unfiled"
+title = "A capture creates one unfiled note bound to the catch-all"
+milestone = "M5"
+status = "executable"
+contract = """
+Given any conforming corpus and a thought to capture.
+
+When the thought is captured.
+
+Then one new note exists in the directory the contract declares captures land
+in, or in the default directory where the declared version has no seat to
+declare one. The note is bound to the catch-all **by the absence of a type
+discriminator** rather than by carrying the catch-all's name, so renaming that
+type would orphan nothing, and it is visible to the ordinary listing — the
+door any consumer would find it by. Unclassified capture is a first-class
+member of the corpus, not an error and not an absence.
+"""

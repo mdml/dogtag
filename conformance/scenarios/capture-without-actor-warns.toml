@@ -1,0 +1,15 @@
+id = "capture-without-actor-warns"
+title = "A capture with no actor lands, unattributed, with a warning"
+milestone = "M5"
+status = "executable"
+contract = """
+Given no actor in scope: an installation that names nobody.
+
+When a thought is captured.
+
+Then the write lands, provenance records as unattributed, and the result
+carries a warning saying so. **A missing actor never gates a capture**: the
+advance warning an unconfigured installation earns resolves at the write, as a
+warning at the moment it starts to cost something, and what it costs is
+attribution rather than the thought.
+"""
