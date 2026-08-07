@@ -24,10 +24,12 @@ use crate::document;
 use crate::encoding::Text;
 use crate::provenance::Provenance;
 
-use super::model::{Contract, Dialect, FlagDecl, LifecycleDecl, LinkDialect, TypeDecl};
+use super::model::{
+    CaptureDecl, Contract, Dialect, FlagDecl, LifecycleDecl, LinkDialect, TypeDecl,
+};
 use super::sink::{Claim, KeyPath, Report, Section, Seen, Sink, contract_file};
 use super::vocabulary::TagsDecl;
-use super::{declarations, lifecycle, tags, validate};
+use super::{capture, declarations, lifecycle, tags, validate};
 
 /// The version a contract declares, and where it declares it.
 #[derive(Debug)]
@@ -131,6 +133,7 @@ pub(crate) struct Parts {
     pub(crate) dialect: Option<Dialect>,
     pub(crate) lifecycle: Option<LifecycleDecl>,
     pub(crate) tags: Option<TagsDecl>,
+    pub(crate) capture: Option<CaptureDecl>,
     pub(crate) flags: Vec<FlagDecl>,
     pub(crate) types: Vec<TypeDecl>,
 }
@@ -138,8 +141,11 @@ pub(crate) struct Parts {
 impl Parts {
     /// The resolved contract, when every mandatory construct was declared.
     ///
-    /// `tags` is not among them: the tag vocabulary is optional at the one
-    /// version that defines it, and absent at the one that does not.
+    /// Neither `tags` nor `capture` is among them, for the same reason and with
+    /// a difference worth naming: the tag vocabulary is optional at the version
+    /// that defines it and absent at the versions that do not, while the capture
+    /// seat resolves — declared or defaulted — at every version that defines it
+    /// and is absent only where the format has no seat.
     pub(crate) fn assemble(
         self,
         contract_version: u32,
@@ -150,6 +156,7 @@ impl Parts {
             dialect: self.dialect?,
             lifecycle: self.lifecycle?,
             tags: self.tags,
+            capture: self.capture,
             flags: self.flags,
             types: self.types,
             provenance,
@@ -172,6 +179,7 @@ pub(crate) fn body(sink: &mut Sink<'_>, root: &DeTable<'_>) -> Parts {
         dialect: dialect(sink, root),
         lifecycle: lifecycle::declaration(sink, root),
         tags: tags::table(sink, root),
+        capture: capture::table(sink, root),
         flags: flags(sink, root),
         types: declarations::types(sink, root),
     };

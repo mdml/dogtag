@@ -136,6 +136,32 @@ pub(crate) struct Defaults {
     pub(crate) relationship_required: bool,
 }
 
+/// What the write seats define at a version that defines them: the key set of
+/// `[capture]`, the directory an undeclared `[capture]` resolves to, and the
+/// birth state a type declaring none resolves to.
+///
+/// Keys and defaults travel together for the reason [`TagVocabulary`]'s do: the
+/// two seats are version-scoped as one construct. There is no version defining
+/// `[capture]` without the birth state, and none defining a default for a leaf
+/// it never reads, so a version that does not define the write seats has *no
+/// row* rather than an inert one in two separate tables.
+pub(crate) struct WriteSeats {
+    /// `[capture]`.
+    pub(crate) capture: &'static [&'static str],
+    /// The vault-relative directory a contract declaring no `[capture]`
+    /// captures into.
+    ///
+    /// A value rather than an absence, because the seat's whole purpose is that
+    /// two agents on one vault agree about the landing spot: a contract that
+    /// declares nothing still has an answer, and it is this one.
+    pub(crate) directory: &'static str,
+    /// Which flags a `[[type]]` declaring no birth state stamps at birth.
+    ///
+    /// Empty: an undeclared birth state stamps nothing, which is the polarity
+    /// the lifecycle model's absence-is-ordinary rule requires of a flag.
+    pub(crate) born_flagged: &'static [&'static str],
+}
+
 /// What the tag vocabulary defines at a version that defines it: the key sets
 /// of its two tables, and the value its one optional leaf takes when a contract
 /// omits it.
@@ -201,6 +227,18 @@ pub(crate) struct Schema {
     /// simply not a kind — which is what stops a version-1 contract acquiring a
     /// construct only version 2 defines the moment the lattice widens.
     pub(crate) records: Option<RecordKind>,
+    /// The write seats, at a version that defines them.
+    ///
+    /// `None` the same way [`Schema::tags`] is, and with the same consequence:
+    /// a version-1 or version-2 model carries no capture declaration and no
+    /// birth state at all, rather than one resolved from a table its format
+    /// never had. What that does *not* do is disable the verb — `capture` reads
+    /// [`WriteSeats::directory`] and [`WriteSeats::born_flagged`] from
+    /// [`CURRENT_WRITE_SEATS`] where a model carries no seat, so a version-2
+    /// vault captures into the default directory with no birth flag, exactly as
+    /// a version-3 vault declaring neither does. The seats configure the verb;
+    /// they do not enable it.
+    pub(crate) write: Option<WriteSeats>,
 }
 
 impl Schema {
@@ -338,6 +376,61 @@ const VERSION_2_TAGS: TagVocabulary = TagVocabulary {
     namespace_required: false,
 };
 
+/// The key sets contract version 3 defines.
+///
+/// Stated in full for the reason [`VERSION_2_KEYS`] is: the rows are read side
+/// by side when a reader asks what a version changed, and version 2's row is
+/// pinned as whole equalities by test, so a key added to both at once fails
+/// there.
+///
+/// Two keys join, and they are the whole of version 3's motion: `capture` at
+/// the root, and `born-flagged` on a `[[type]]`. `[capture]`'s own key set is
+/// not here but in [`VERSION_3_WRITE`], for the reason that row exists — a
+/// version defining no write seats has no set for it at all.
+const VERSION_3_KEYS: Keys = Keys {
+    root: &[
+        "capture",
+        "contract_version",
+        "dialect",
+        "flag",
+        "lifecycle",
+        "tags",
+        "type",
+    ],
+    dialect: &["links"],
+    flag: &["property"],
+    lifecycle: &["axis", "none", "ordinary"],
+    ordinary: &["absent", "value"],
+    declared_type: &[
+        "born-flagged",
+        "capabilities",
+        "name",
+        "property",
+        "relationship",
+        "tag-namespace",
+    ],
+    relationship: &["predicate", "required"],
+    property: PropertyKeys {
+        enumeration: &["kind", "name", "required", "values"],
+        list: &["kind", "name", "of", "required"],
+        scalar: &["kind", "name", "required"],
+        unresolved: &["field", "kind", "name", "of", "required", "values"],
+    },
+};
+
+/// The write seats contract version 3 defines.
+///
+/// `[capture]` carries one key, and the birth state carries none of its own: it
+/// is a leaf on `[[type]]`, declared in [`VERSION_3_KEYS`] beside the other
+/// keys a type may spell. What is here is the pair of defaults, which is the
+/// half a key set cannot state — where a contract declaring no `[capture]`
+/// captures, and what a type declaring no birth state stamps.
+const VERSION_3_WRITE: WriteSeats = WriteSeats {
+    capture: &["directory"],
+    directory: super::capture::DEFAULT_CAPTURE_DIRECTORY,
+    born_flagged: &[],
+};
+
 /// The values contract version 1 supplies for an omitted leaf.
 const VERSION_1_DEFAULTS: Defaults = Defaults {
     type_capabilities: &[],
@@ -353,6 +446,13 @@ const VERSION_1_DEFAULTS: Defaults = Defaults {
 /// rather than here, because version 1 has no row for a leaf it never reads.
 const VERSION_2_DEFAULTS: Defaults = VERSION_1_DEFAULTS;
 
+/// The values contract version 3 supplies for an omitted leaf.
+///
+/// Version 2's table unchanged: version 3's own two defaults are the write
+/// seats', and they live in [`VERSION_3_WRITE`] beside the keys they belong to
+/// for the same reason the tag vocabulary's and the record kind's do.
+const VERSION_3_DEFAULTS: Defaults = VERSION_2_DEFAULTS;
+
 /// What contract version 1 lets a contract say.
 ///
 /// Version 1's validity is frozen: a contract that loaded clean at
@@ -366,6 +466,15 @@ const VERSION_2_RULES: Rules = Rules {
     catch_all_may_require: false,
 };
 
+/// What contract version 3 lets a contract say.
+///
+/// Version 2's validity unchanged, and the catch-all rule is load-bearing here
+/// rather than inherited by habit: a capture binds to the catch-all, and a
+/// catch-all that may require nothing is exactly why a capture cannot fail
+/// contract rules by construction. Version 3 is the version that writes, so it
+/// is the version that most needs the rule.
+const VERSION_3_RULES: Rules = VERSION_2_RULES;
+
 /// Contract version 1.
 pub(crate) static VERSION_1: Schema = Schema {
     version: 1,
@@ -374,6 +483,7 @@ pub(crate) static VERSION_1: Schema = Schema {
     rules: VERSION_1_RULES,
     tags: None,
     records: None,
+    write: None,
 };
 
 /// Contract version 2.
@@ -384,6 +494,22 @@ pub(crate) static VERSION_2: Schema = Schema {
     rules: VERSION_2_RULES,
     tags: Some(VERSION_2_TAGS),
     records: Some(VERSION_2_RECORDS),
+    write: None,
+};
+
+/// Contract version 3.
+///
+/// The tag vocabulary and the record kind carry over unchanged: version 3 adds
+/// the write seats and subtracts nothing, so a version-2 contract renamed to
+/// version 3 means what it meant.
+pub(crate) static VERSION_3: Schema = Schema {
+    version: 3,
+    keys: VERSION_3_KEYS,
+    defaults: VERSION_3_DEFAULTS,
+    rules: VERSION_3_RULES,
+    tags: Some(VERSION_2_TAGS),
+    records: Some(VERSION_2_RECORDS),
+    write: Some(VERSION_3_WRITE),
 };
 
 /// Every contract version this release reads, in ascending order.
@@ -391,7 +517,7 @@ pub(crate) static VERSION_2: Schema = Schema {
 /// The floor does not rise during the beta, so this list only ever grows: the
 /// SDK carries every historical version's parse rules and default tables, and
 /// that cost is the price of a newer tool loading an older vault.
-static SCHEMAS: &[&Schema] = &[&VERSION_1, &VERSION_2];
+static SCHEMAS: &[&Schema] = &[&VERSION_1, &VERSION_2, &VERSION_3];
 
 /// The schema of `version`, when this release carries one.
 ///
@@ -429,6 +555,85 @@ mod tests {
     fn each_schema_answers_for_the_version_it_was_asked_about() {
         assert_eq!(of(1).map(|schema| schema.version), Some(1));
         assert_eq!(of(2).map(|schema| schema.version), Some(2));
+        assert_eq!(of(3).map(|schema| schema.version), Some(3));
+    }
+
+    #[test]
+    fn version_3_adds_the_two_write_seats_to_version_2s_sets() {
+        // Pinned as whole equalities, the way version 2's row is: a key added
+        // to version 3 and to an older version in one edit fails on the older
+        // version's own pinning test, and one added here alone fails on this.
+        let joined: [&[&str]; 2] = [VERSION_3.keys.root, VERSION_3.keys.declared_type];
+        assert_eq!(
+            joined,
+            [
+                &[
+                    "capture",
+                    "contract_version",
+                    "dialect",
+                    "flag",
+                    "lifecycle",
+                    "tags",
+                    "type"
+                ][..],
+                &[
+                    "born-flagged",
+                    "capabilities",
+                    "name",
+                    "property",
+                    "relationship",
+                    "tag-namespace"
+                ][..],
+            ]
+        );
+    }
+
+    #[test]
+    fn version_3_carries_version_2s_constructs_unchanged() {
+        // Version 3 adds and subtracts nothing else, so a version-2 contract
+        // renamed to version 3 means what it meant. Held as equalities over the
+        // rows that could silently drift.
+        let unchanged: [&[&str]; 4] = [
+            VERSION_3.keys.dialect,
+            VERSION_3.keys.lifecycle,
+            VERSION_3.property_keys(&of_kind("enum")),
+            VERSION_3.property_keys(&of_kind("record")),
+        ];
+        assert_eq!(
+            unchanged,
+            [
+                VERSION_2.keys.dialect,
+                VERSION_2.keys.lifecycle,
+                VERSION_2.property_keys(&of_kind("enum")),
+                VERSION_2.property_keys(&of_kind("record")),
+            ]
+        );
+        let vocabulary = VERSION_3.tags.as_ref().expect("version 3 defines it");
+        assert_eq!(vocabulary.namespace, VERSION_2_TAGS.namespace);
+        let records = VERSION_3.records.as_ref().expect("version 3 defines it");
+        assert_eq!(records.property, VERSION_2_RECORDS.property);
+        assert!(!VERSION_3.rules.catch_all_may_require);
+        assert_eq!(
+            VERSION_3.defaults.type_capabilities,
+            VERSION_2.defaults.type_capabilities
+        );
+    }
+
+    #[test]
+    fn only_version_3_defines_the_write_seats() {
+        // Existence rather than legality, the way the tag vocabulary is: a
+        // version with no row has no capture declaration and no birth state in
+        // its model at all, which is what stops an older vault acquiring a
+        // construct only version 3 defines.
+        let seats = VERSION_3.write.as_ref().expect("version 3 defines them");
+        assert_eq!(seats.capture, ["directory"]);
+        assert_eq!(
+            seats.directory,
+            super::super::capture::DEFAULT_CAPTURE_DIRECTORY
+        );
+        assert_eq!(seats.born_flagged, [""; 0]);
+        let absent = (VERSION_1.write.is_some(), VERSION_2.write.is_some());
+        assert_eq!(absent, (false, false));
     }
 
     #[test]

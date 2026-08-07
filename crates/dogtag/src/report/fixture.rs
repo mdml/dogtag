@@ -64,7 +64,7 @@ impl<'a> Body<'a> {
 /// lifecycle this way, an untyped note simply has no lifecycle state — the two
 /// rules composed, which this fixture is the standing demonstration of.
 pub(super) const NAMED_ORDINARY: Body<'static> = Body::new(
-    r#"contract_version = 2
+    r#"contract_version = 3
 
 [dialect]
 links = "wikilink"
@@ -127,7 +127,7 @@ name = "project"
 /// Its types also cover the three shapes a declaration block takes: properties
 /// and relationships, relationships and no properties, and neither.
 pub(super) const ABSENT_ORDINARY: Body<'static> = Body::new(
-    r#"contract_version = 2
+    r#"contract_version = 3
 
 [dialect]
 links = "wikilink"
@@ -186,6 +186,11 @@ capabilities = ["closed-write"]
 [[type]]
 name = "unfiled"
 capabilities = ["catch-all"]
+born-flagged = ["needs_rework"]
+
+  [[type.property]]
+  name = "needs_rework"
+  kind = "boolean"
 "#,
 );
 
@@ -195,9 +200,23 @@ pub(super) const FIXTURES: [(&str, Body<'static>); 2] = [
     ("absent-ordinary", ABSENT_ORDINARY),
 ];
 
+/// The same, at the version below the current one.
+///
+/// A version with no write seats is a shape both renderings must still say
+/// something honest about — the Markdown a statement that this version has
+/// nowhere to declare a capture directory, the JSON an omitted key — and
+/// neither may invent a declaration the contract does not make. `dense` and
+/// `docs` are committed in exactly this shape, so this is not a hypothetical.
+pub(super) const BELOW_CURRENT: Body<'static> = Body::new(concat!(
+    "contract_version = 2\n",
+    "\n[dialect]\nlinks = \"wikilink\"\n",
+    "\n[lifecycle]\nnone = true\n",
+    "\n[[type]]\nname = \"capture\"\ncapabilities = [\"catch-all\"]\n",
+));
+
 /// The smallest contract that resolves with nothing at all to report.
 pub(super) const CLEAN: Body<'static> = Body::new(concat!(
-    "contract_version = 2\n",
+    "contract_version = 3\n",
     "\n[dialect]\nlinks = \"wikilink\"\n",
     "\n[lifecycle]\nnone = true\n",
     "\n[[type]]\nname = \"capture\"\ncapabilities = [\"catch-all\"]\n",
@@ -215,7 +234,7 @@ pub(super) const CLEAN: Body<'static> = Body::new(concat!(
 /// to declare. `capture` is the catch-all and declares nothing, which also gives
 /// the rendering a type with no namespace table beside one that has one.
 pub(super) const TAGGED: Body<'static> = Body::new(concat!(
-    "contract_version = 2\n",
+    "contract_version = 3\n",
     "\n[dialect]\nlinks = \"wikilink\"\n",
     "\n[lifecycle]\nnone = true\n",
     "\n[tags]\nproperty = \"labels\"\n",
@@ -243,7 +262,7 @@ pub(super) const TAGGED: Body<'static> = Body::new(concat!(
 /// The records sit on `person` rather than on the catch-all, because a required
 /// field's property is required and a version-2 catch-all may require nothing.
 pub(super) const RECORDS: Body<'static> = Body::new(concat!(
-    "contract_version = 2\n",
+    "contract_version = 3\n",
     "\n[dialect]\nlinks = \"wikilink\"\n",
     "\n[lifecycle]\nnone = true\n",
     "\n[[type]]\nname = \"capture\"\ncapabilities = [\"catch-all\"]\n",
@@ -278,7 +297,7 @@ pub(super) const RECORD: Body<'static> = Body::new(concat!(
 /// [`NAMED_ORDINARY`] states: a named ordinary state requires its axis, and a
 /// version-2 catch-all may require nothing.
 pub(super) const AWKWARD: Body<'static> = Body::new(concat!(
-    "contract_version = 2\n",
+    "contract_version = 3\n",
     "\n[dialect]\nlinks = \"markdown\"\n",
     "\n[lifecycle]\naxis = \"état\"\nordinary = { value = \"a \\\" quote\" }\n",
     "\n[[type]]\nname = \"capture\"\ncapabilities = [\"catch-all\"]\n",
@@ -321,7 +340,7 @@ pub(super) const NAME_FORGERY: &str = "error[contract-unknown-key]: this vault p
 /// beside it to explain a second line. What it plants is [`NAME_FORGERY`]
 /// rather than [`FORGERY`]: a name holding a `.` no longer loads at all.
 pub(super) const FORGING_TYPE_NAME: Body<'static> = Body::new(concat!(
-    "contract_version = 2\n",
+    "contract_version = 3\n",
     "\n[dialect]\nlinks = \"wikilink\"\n",
     "\n[lifecycle]\nnone = true\n",
     "\n[[type]]\n",
@@ -337,7 +356,7 @@ pub(super) const FORGING_TYPE_NAME: Body<'static> = Body::new(concat!(
 /// [`str::lines`] but it is one on a terminal, where what follows overwrites the
 /// line a reader had already seen.
 pub(super) const FORGING_ENUM_VALUE: Body<'static> = Body::new(concat!(
-    "contract_version = 2\n",
+    "contract_version = 3\n",
     "\n[dialect]\nlinks = \"wikilink\"\n",
     "\n[lifecycle]\naxis = \"status\"\nordinary = { value = \"shipped\" }\n",
     "\n[[type]]\nname = \"capture\"\ncapabilities = [\"catch-all\"]\n",
@@ -356,7 +375,7 @@ pub(super) const FORGING_ENUM_VALUE: Body<'static> = Body::new(concat!(
 /// diagnostic block can grow. It plants [`NAME_FORGERY`] for the same reason
 /// [`FORGING_TYPE_NAME`] does.
 pub(super) const FORGING_EVIDENCE: Body<'static> = Body::new(concat!(
-    "contract_version = 2\n",
+    "contract_version = 3\n",
     "\n[dialect]\nlinks = \"wikilink\"\n",
     "\n[lifecycle]\nnone = true\n",
     "\n[[type]]\nname = \"capture\"\ncapabilities = [\"catch-all\"]\n",
@@ -370,7 +389,7 @@ pub(super) const FORGING_EVIDENCE: Body<'static> = Body::new(concat!(
 /// Two dialects are declarable and each renders as its own instruction, so a
 /// rendering has to be held up against both.
 pub(super) const MARKDOWN_LINKS: Body<'static> = Body::new(concat!(
-    "contract_version = 2\n",
+    "contract_version = 3\n",
     "\n[dialect]\nlinks = \"markdown\"\n",
     "\n[lifecycle]\nnone = true\n",
     "\n[[type]]\nname = \"capture\"\ncapabilities = [\"catch-all\", \"closed-write\"]\n",
@@ -381,7 +400,7 @@ pub(super) const MARKDOWN_LINKS: Body<'static> = Body::new(concat!(
 /// The eight kinds are a closed lattice, and each one's *lexical* form is part
 /// of its meaning, so a rendering has to be held up against all eight.
 pub(super) const KINDS: Body<'static> = Body::new(concat!(
-    "contract_version = 2\n",
+    "contract_version = 3\n",
     "\n[dialect]\nlinks = \"wikilink\"\n",
     "\n[lifecycle]\nnone = true\n",
     "\n[[type]]\nname = \"capture\"\ncapabilities = [\"catch-all\"]\n",

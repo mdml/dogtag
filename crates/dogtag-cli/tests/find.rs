@@ -5,7 +5,7 @@ mod support;
 use support::{Finished, TOO_NEW, Tree, dogtag, run, well_formed_json};
 
 const CONTRACT: &str = concat!(
-    "contract_version = 2\n\n[dialect]\nlinks = \"wikilink\"\n",
+    "contract_version = 3\n\n[dialect]\nlinks = \"wikilink\"\n",
     "\n[lifecycle]\naxis = \"stage\"\nordinary = { absent = true }\n",
     "\n[[type]]\nname = \"work\"\ncapabilities = [\"identity-bearing\"]\n",
     "  [[type.property]]\n  name = \"stage\"\n  kind = \"enum\"\n  values = [\"active\", \"done\"]\n",

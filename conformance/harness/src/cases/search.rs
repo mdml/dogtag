@@ -434,7 +434,7 @@ mod tests {
     use super::*;
 
     const NONE_CONTRACT: &str = concat!(
-        "contract_version = 2\n",
+        "contract_version = 3\n",
         "\n[dialect]\nlinks = \"wikilink\"\n",
         "\n[lifecycle]\nnone = true\n",
         "\n[[type]]\nname = \"capture\"\ncapabilities = [\"catch-all\"]\n",
@@ -454,7 +454,7 @@ mod tests {
         // Every note leaves the axis unmarked, so there is no honest value to
         // filter for: the value arm skips, and the other arms still compose.
         let contract = concat!(
-            "contract_version = 2\n",
+            "contract_version = 3\n",
             "\n[dialect]\nlinks = \"wikilink\"\n",
             "\n[lifecycle]\naxis = \"stage\"\nordinary = { absent = true }\n",
             "\n[tags]\nproperty = \"tags\"\n",
@@ -472,7 +472,7 @@ mod tests {
     #[test]
     fn a_corpus_whose_axis_no_note_participates_in_refuses_the_filter_case() {
         let contract = concat!(
-            "contract_version = 2\n",
+            "contract_version = 3\n",
             "\n[dialect]\nlinks = \"wikilink\"\n",
             "\n[lifecycle]\naxis = \"stage\"\nordinary = { absent = true }\n",
             "\n[[type]]\nname = \"work\"\ncapabilities = [\"identity-bearing\"]\n",

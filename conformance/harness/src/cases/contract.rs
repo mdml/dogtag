@@ -9,7 +9,7 @@ use crate::transform::{
 };
 
 use super::corpus::Corpus;
-use super::expect::{Checked, did_not_resolve, require_clean, require_id};
+use super::expect::{Checked, declared_version, did_not_resolve, require_id, require_version_only};
 
 /// `conforming-contract-loads-with-zero-diagnostics`.
 ///
@@ -17,13 +17,21 @@ use super::expect::{Checked, did_not_resolve, require_clean, require_id};
 /// contract that loads while emitting advice is not a conforming contract, and
 /// `starter` is the definition of what a fresh install stamps.
 ///
+/// The one thing a conforming contract may carry is the compatibility
+/// classification a corpus below the current format version earns — a fact
+/// about the release reading it, not advice about it — and it must carry
+/// exactly that, exactly when its declared version is below the ceiling. See
+/// [`require_version_only`], which is what makes the allowance narrower than a
+/// tolerance rather than a hole in the bar.
+///
 /// [`dogtag::vault::inspect_root_trust`] is deliberately not called. Trust is a
 /// property of where the vault sits relative to the *user's* home directory,
 /// which is not a property of the contract, and this copy lives outside any
 /// home directory by construction.
 pub fn conforming_contract(corpus: &Corpus) -> Checked {
     let opened = corpus.opened_without_a_record()?;
-    require_clean(opened.diagnostics(), "opening the vault")?;
+    let declared = corpus.declared_version()?;
+    require_version_only(opened.diagnostics(), declared, "opening the vault")?;
     opened
         .contract()
         .map(|_| ())
@@ -65,8 +73,10 @@ pub fn lifecycle_declaration(corpus: &Corpus) -> Checked {
         "contract.missing-lifecycle",
     )?;
     let none = corpus.derived("lifecycle-none", replace_lifecycle_with_none)?;
-    require_clean(
-        &none.load()?.diagnostics,
+    let load = none.load()?;
+    require_version_only(
+        &load.diagnostics,
+        declared_version(&load),
         "a contract declaring no life axis",
     )?;
     axis_consistency(corpus, &contract)
@@ -124,7 +134,7 @@ mod tests {
     /// A contract whose catch-all is declared across several lines: valid
     /// TOML, and a spelling the textual transformation cannot see.
     const CATCH_ALL_ACROSS_LINES: &str = concat!(
-        "contract_version = 2\n",
+        "contract_version = 3\n",
         "\n[dialect]\nlinks = \"wikilink\"\n",
         "\n[lifecycle]\nnone = true\n",
         "\n[[type]]\nname = \"capture\"\ncapabilities = [\n  \"catch-all\",\n]\n",
@@ -134,7 +144,7 @@ mod tests {
     /// valid TOML, and also invisible to a transformation matching the header
     /// literally.
     const SPACED_LIFECYCLE_HEADER: &str = concat!(
-        "contract_version = 2\n",
+        "contract_version = 3\n",
         "\n[dialect]\nlinks = \"wikilink\"\n",
         "\n[ lifecycle ]\nnone = true\n",
         "\n[[type]]\nname = \"capture\"\ncapabilities = [\"catch-all\"]\n",

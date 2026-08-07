@@ -1,12 +1,19 @@
 # .dogtag/contract.toml — the committed vault contract of the `starter` conformance fixture.
 # `starter` is the normative initialization profile: this file is the definition of what a fresh install must stamp.
 #
-# The catch-all type `note` declares no `status`, and at contract version 2 it cannot: a named
-# ordinary state requires its axis on every type that declares it, and a version-2 catch-all may
+# The catch-all type `note` declares no `status`, and from contract version 2 onward it cannot: a
+# named ordinary state requires its axis on every type that declares it, and a catch-all may
 # declare nothing a note must carry. So an untyped note in this corpus simply has no lifecycle
 # state, and every note that carries one is typed.
+#
+# Version 3 (M5): the two write seats. `[capture]` names where captures land — written out rather
+# than left to the default table, because the normative output of a fresh install should show a
+# reader the seat exists. The catch-all is born carrying `needs_triage`, which is what makes this
+# the one committed corpus that exercises the flag-at-birth path; `dense` and `docs` stay at
+# version 2 and capture through the defaults, which is what keeps the floor's "a version-2 vault
+# keeps working" claim witnessed.
 
-contract_version = 2
+contract_version = 3
 
 [dialect]
 links = "wikilink"
@@ -15,9 +22,27 @@ links = "wikilink"
 axis = "status"
 ordinary = { value = "active" }
 
+# Structure-completeness is independent of content-completeness, so the triage marker is a flag
+# beside the axis rather than a point on it. Absence is the ordinary state: a note carrying nothing
+# is organized, and the flag marks the exception.
+
+[[flag]]
+property = "needs_triage"
+
+# Where the unfiled pile accumulates. The location carries no meaning; the seat exists so that two
+# agents working this vault agree about it.
+
+[capture]
+directory = "captures"
+
 [[type]]
 name = "note"
 capabilities = ["catch-all"]
+born-flagged = ["needs_triage"]
+
+  [[type.property]]
+  name = "needs_triage"
+  kind = "boolean"
 
   [[type.property]]
   name = "tags"

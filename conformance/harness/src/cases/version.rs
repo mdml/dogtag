@@ -1,17 +1,19 @@
 //! `unsupported-contract-version-refuses-with-diagnosis`: an out-of-range
 //! contract is refused by its version, and diagnosis still runs.
 
-use dogtag::compat::{SUPPORTED_CONTRACT_VERSIONS, classify};
+use dogtag::compat::{SUPPORTED_CONTRACT_VERSIONS, VersionClass, classify};
+use dogtag::contract::{Contract, ContractLoad};
+use dogtag::diagnostic::Severity;
 use dogtag::report::{Selection, SelectionRoute, doctor_json, doctor_report, doctor_text};
 use dogtag::vault::Opened;
 
 use crate::transform::set_contract_version;
 
 use super::corpus::Corpus;
-use dogtag::diagnostic::Severity;
 
 use super::expect::{
-    Checked, Subject, rendered, require, require_contains, require_id, require_only,
+    Checked, NEWER_FORMAT, Subject, did_not_resolve, rendered, require, require_contains,
+    require_only,
 };
 
 /// The two out-of-range versions and the identifier each must yield.
@@ -20,18 +22,29 @@ use super::expect::{
 /// different actions, and one identifier for both would make the report
 /// unactionable exactly when it matters.
 ///
-/// The too-new derivation moved from `2` to `3` when the supported range
-/// widened: a version the range now reads is not a version to refuse, and a
-/// literal one above the ceiling is what this case is about. The floor does not
-/// rise during the beta, so `0` stays where it is.
+/// The too-new derivation moved from `2` to `3`, and then to `4`, each time the
+/// supported range widened: a version the range now reads is not a version to
+/// refuse, and a literal one above the ceiling is what this case is about. The
+/// floor does not rise during the beta, so `0` stays where it is.
 const OUT_OF_RANGE: &[(u32, &str)] = &[
-    (3, "compat.contract-too-new"),
+    (4, "compat.contract-too-new"),
     (0, "compat.contract-below-supported-floor"),
 ];
 
 /// The three contract-dependent sections, each of which must say it was not
 /// evaluated rather than being blank or omitted.
 const SECTIONS: &[&str] = &["types", "lifecycle", "dialect"];
+
+/// Textual markers of a construct no version-1 contract may carry.
+///
+/// The rewrite-to-version-1 derivation is honest only when the contract uses
+/// nothing a later version added: where it does, the derived contract must fail
+/// loudly rather than load as a pretend-version-1, and this list is how the case
+/// knows which of the two it is looking at. It grows with every version — the
+/// tag vocabulary and the record kind at 2, the two write seats at 3 — and a
+/// version that added a construct without adding its marker here would let a
+/// derivation quietly stop testing anything.
+const BEYOND_VERSION_ONE: &[&str] = &["[tags]", "\"record\"", "[capture]", "born-flagged"];
 
 /// The supported range as a reader sees it written, from the constant rather
 /// than from a literal: a release that widens the range must widen what this
@@ -158,41 +171,98 @@ fn sections_are_not_evaluated(json: &str, text: &str, subject: Subject<'_>) -> C
 
 /// `supported-contract-version-loads-with-info`.
 ///
-/// The derived case the fixtures record specifies: rewrite `contract_version`
-/// to `1` and load. Against a contract free of version-2-only constructs the
-/// load is full and `supported`, with the one compat info diagnostic; against
-/// a contract using them, the load fails loudly — the guard that keeps the
-/// derivation honest, asserted rather than assumed.
+/// Two arms, and which one a profile takes is decided by its own committed
+/// bytes rather than by naming it.
+///
+/// **A corpus already below the ceiling is its own evidence.** From M5 the
+/// fixture contracts sit on both sides of the current version on purpose, so
+/// `dense` and `docs` demonstrate the classification from committed bytes: the
+/// load is full — nothing degraded, nothing skipped — and the one diagnostic is
+/// the compatibility `info`. That is stronger than a derivation, because the
+/// bytes are the ones every other scenario reads.
+///
+/// **A corpus at the ceiling demonstrates the guard instead.** Rewriting it down
+/// to version 1 must fail loudly rather than load as a pretend-version-1: a
+/// contract stamped at the current version uses something that version added,
+/// and a build that quietly resolved it against version 1's table would be
+/// changing a vault's semantics while recording provenance that says it had not.
+///
+/// The third shape — a contract at the ceiling that uses nothing the ceiling
+/// added, rewritten down and still loading — has no witness among the built
+/// corpora and is deliberately not asserted. Asserting it would mean authoring a
+/// contract to assert it against, which is the derived-not-authored rule's whole
+/// subject.
 pub fn supported_version_loads_with_info(corpus: &Corpus) -> Checked {
+    let load = corpus.load()?;
+    let declared = load
+        .contract
+        .as_ref()
+        .map(Contract::contract_version)
+        .map_err(|why| did_not_resolve(why, "the committed contract"))?;
+    if classify(declared, SUPPORTED_CONTRACT_VERSIONS) == VersionClass::Supported {
+        return committed_below_the_ceiling(&load, declared);
+    }
+    at_the_ceiling(corpus, declared)
+}
+
+/// The committed contract is below the ceiling: it loads fully, and says so.
+fn committed_below_the_ceiling(load: &ContractLoad, declared: u32) -> Checked {
+    let describing = format!("a committed contract declaring the supported version {declared}");
+    let subject = Subject::new(&describing);
+    require(load.contract.is_ok(), || {
+        format!("{subject} must load fully — nothing degraded, nothing skipped")
+    })?;
+    // Exactly one, and that one: a below-ceiling corpus earns the
+    // classification and nothing else, so the allowance every other scenario
+    // extends to these two profiles cannot be hiding a second finding.
+    require_only(&load.diagnostics, NEWER_FORMAT, subject)?;
+    require(load.diagnostics[0].severity == Severity::Info, || {
+        "the classification is information, never a failure severity".to_string()
+    })?;
+    // Naming the newer version is the whole point: a message that only says a
+    // newer format exists tells a reader nothing to do about it.
+    require_contains(
+        &rendered(&load.diagnostics),
+        &SUPPORTED_CONTRACT_VERSIONS.end().to_string(),
+        subject,
+    )
+}
+
+/// The committed contract is at the ceiling: rewriting it down fails loudly.
+fn at_the_ceiling(corpus: &Corpus, declared: u32) -> Checked {
     let original = corpus.contract_text()?;
     let derived = corpus.derived("supported-v1", |text| set_contract_version(text, 1))?;
-    let load = derived.load()?;
-    let uses_version_two = original.contains("[tags]") || original.contains("\"record\"");
-    if uses_version_two {
-        return require(load.contract.is_err(), || {
-            "a version-1 contract carrying version-2 constructs must fail loudly, not load"
-                .to_string()
-        });
-    }
-    require(load.contract.is_ok(), || {
-        "a supported below-current contract loads fully".to_string()
-    })?;
-    require_id(
-        &load.diagnostics,
-        "compat.newer-format-available",
-        Subject::new("a contract declaring the supported version 1"),
-    )?;
+    let describing = format!("a contract declaring version {declared} rewritten to version 1");
+    let subject = Subject::new(&describing);
+    // The guard on the guard: the claim below is only meaningful because the
+    // contract uses a construct version 1 does not define, so that is asserted
+    // rather than assumed.
     require(
-        load.diagnostics
+        BEYOND_VERSION_ONE
             .iter()
-            .all(|diagnostic| diagnostic.severity == Severity::Info),
-        || "the classification is information, never a failure severity".to_string(),
-    )
+            .any(|marker| original.contains(marker)),
+        || {
+            format!(
+                "{subject} would load as a pretend-version-1 and this case would test nothing: a \
+                 contract at the current version must use something a later version added"
+            )
+        },
+    )?;
+    let load = derived.load()?;
+    require(load.contract.is_err(), || {
+        format!(
+            "{subject} must fail loudly, not load; it reported {}",
+            rendered(&load.diagnostics)
+        )
+    })
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use dogtag::contract::parse_contract;
+    use dogtag::diagnostic::{Diagnostic, DiagnosticId};
 
     use super::super::corpus::NO_AXIS;
 
@@ -212,7 +282,7 @@ mod tests {
     );
 
     /// The subject every assertion below is about.
-    const SUBJECT: &str = "the doctor report for a version-3 contract";
+    const SUBJECT: &str = "the doctor report for a version-4 contract";
 
     /// The refusal must be the version's, not the parser's — so a contract
     /// reporting something other than the expected identifier fails the case
@@ -220,8 +290,8 @@ mod tests {
     #[test]
     fn a_version_reporting_another_identifier_fails_the_case() {
         let corpus = Corpus::holding("version-unexpected-identifier", NO_AXIS);
-        let detail = refuses(&corpus, 3, "compat.contract-below-supported-floor")
-            .expect_err("a version-3 contract is too new, not below the floor");
+        let detail = refuses(&corpus, 4, "compat.contract-below-supported-floor")
+            .expect_err("a version-4 contract is too new, not below the floor");
         assert!(
             detail.contains("must report `compat.contract-below-supported-floor`"),
             "the failure names the identifier: {detail}"
@@ -229,6 +299,64 @@ mod tests {
         assert!(
             detail.contains("compat.contract-too-new"),
             "the failure says what arrived: {detail}"
+        );
+    }
+
+    /// A committed contract below the ceiling that reports a second finding is
+    /// refused on the count: the allowance the conforming-contract scenario
+    /// extends to these two profiles is one diagnostic, and this is where that
+    /// is held.
+    #[test]
+    fn a_below_ceiling_contract_reporting_anything_else_fails_the_case() {
+        // A load that resolved and carries the classification, with a second
+        // finding pushed onto it. Assembled rather than provoked: a contract
+        // fault fatal enough to report twice is fatal enough not to resolve, so
+        // the shape this assertion guards against is one only an assembled load
+        // can present.
+        let mut load =
+            parse_contract(&NO_AXIS.replace("contract_version = 3", "contract_version = 2"));
+        load.diagnostics.push(Diagnostic::new(
+            DiagnosticId::external("ext.harness.second").expect("an `ext.` identifier"),
+            Severity::Error,
+            "a second finding",
+        ));
+        let detail = committed_below_the_ceiling(&load, 2)
+            .expect_err("a second diagnostic is not the classification alone");
+        assert!(
+            detail.contains("must report exactly one diagnostic"),
+            "the count: {detail}"
+        );
+        assert!(
+            detail.contains("a second finding"),
+            "what arrived: {detail}"
+        );
+    }
+
+    /// ...and one that does not load at all is refused on the load, before any
+    /// question about what it reported.
+    #[test]
+    fn a_below_ceiling_contract_that_does_not_load_fails_the_case() {
+        let load = parse_contract("contract_version = 2\n");
+        let detail = committed_below_the_ceiling(&load, 2)
+            .expect_err("a contract missing every mandatory table does not load fully");
+        assert!(detail.contains("must load fully"), "the demand: {detail}");
+    }
+
+    /// A contract at the ceiling that uses nothing a later version added would
+    /// load as a pretend-version-1, so the case refuses rather than asserting a
+    /// failure that would not happen.
+    #[test]
+    fn a_ceiling_contract_using_no_later_construct_fails_the_case() {
+        let corpus = Corpus::holding("version-ceiling-without-constructs", NO_AXIS);
+        let detail = at_the_ceiling(&corpus, 3)
+            .expect_err("a contract using nothing version 3 added tests nothing when rewritten");
+        assert!(
+            detail.contains("would load as a pretend-version-1"),
+            "what would happen: {detail}"
+        );
+        assert!(
+            detail.contains("must use something a later version added"),
+            "why it matters: {detail}"
         );
     }
 
@@ -254,7 +382,7 @@ mod tests {
         )
         .expect_err("a message that stops before the range names only half of it");
         assert!(
-            half.contains("must carry `1..=2`"),
+            half.contains("must carry `1..=3`"),
             "the failure names the range: {half}"
         );
     }
@@ -264,11 +392,11 @@ mod tests {
     /// on those two alone would accept.
     #[test]
     fn a_report_that_drops_the_supported_range_fails_the_case() {
-        let json = "\"found\": 3,\n\"classification\": \"too-new\"\n";
-        let detail = version_is_reported(json, 3, Subject::new(SUBJECT))
+        let json = "\"found\": 4,\n\"classification\": \"too-new\"\n";
+        let detail = version_is_reported(json, 4, Subject::new(SUBJECT))
             .expect_err("a report carrying no supported range does not name one");
         assert!(
-            detail.contains("must carry `\"supported\": { \"min\": 1, \"max\": 2 }`"),
+            detail.contains("must carry `\"supported\": { \"min\": 1, \"max\": 3 }`"),
             "the failure names the object and the range: {detail}"
         );
     }

@@ -177,7 +177,7 @@ mod tests {
     use std::fs;
 
     const ABSENT: &str = concat!(
-        "contract_version = 2\n\n[dialect]\nlinks = \"wikilink\"\n",
+        "contract_version = 3\n\n[dialect]\nlinks = \"wikilink\"\n",
         "\n[lifecycle]\naxis = \"stage\"\nordinary = { absent = true }\n",
         "\n[tags]\nproperty = \"tags\"\n",
         "\n[[type]]\nname = \"work\"\ncapabilities = [\"identity-bearing\"]\n",

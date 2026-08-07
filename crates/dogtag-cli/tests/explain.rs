@@ -10,6 +10,20 @@ use support::{
     DENSE, Finished, STARTER, TOO_NEW, Tree, dogtag, registering, run, well_formed_json,
 };
 
+/// A contract declaring no flag at all.
+///
+/// Authored here rather than borrowed from a fixture profile: `starter`
+/// declares the triage flag its catch-all is born carrying, and `dense`
+/// declares three, so neither corpus can stand for the absence any more. The
+/// statement of absence is what this file is about, so the input is the
+/// smallest contract that makes it.
+const NO_FLAGS: &str = concat!(
+    "contract_version = 3\n",
+    "\n[dialect]\nlinks = \"wikilink\"\n",
+    "\n[lifecycle]\nnone = true\n",
+    "\n[[type]]\nname = \"note\"\ncapabilities = [\"catch-all\"]\n",
+);
+
 /// A tree whose vault sits inside the home directory and is registered.
 fn vault(label: &str, contract: &str) -> Tree {
     let tree = Tree::new(label);
@@ -60,7 +74,7 @@ fn the_markdown_names_the_vault_and_renders_every_declaration() {
 
 #[test]
 fn a_contract_with_no_flags_says_so_rather_than_omitting_the_section() {
-    let tree = vault("no-flags", STARTER);
+    let tree = vault("no-flags", NO_FLAGS);
     let finished = explain(&tree, &[]);
     assert!(
         finished.stdout.contains("This contract declares no flags."),
@@ -105,7 +119,7 @@ fn provenance_is_opt_in_and_annotates_nothing_without_the_flag() {
         "a declared value names where it was written: {with:?}"
     );
     assert!(
-        with.stdout.contains("(default, contract version 2)"),
+        with.stdout.contains("(default, contract version 3)"),
         "a defaulted value names the contract version that defines it: {with:?}"
     );
     assert!(
@@ -124,9 +138,9 @@ fn the_json_is_one_document_that_always_carries_provenance() {
         "not one JSON document: {finished:?}"
     );
     for fragment in [
-        "\"schema_version\": 3",
+        "\"schema_version\": 4",
         "\"report\": \"contract\"",
-        "\"contract_version\": 2",
+        "\"contract_version\": 3",
         "\"links\": \"wikilink\"",
         "\"provenance\"",
         "\"source\": \"contract\"",

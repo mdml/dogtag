@@ -359,7 +359,7 @@ mod tests {
     /// A contract with an axis, tags, and an `aliases` declaration on the one
     /// identity-bearing type — every field search reads, declared.
     const CONTRACT: &str = concat!(
-        "contract_version = 2\n",
+        "contract_version = 3\n",
         "\n[dialect]\nlinks = \"wikilink\"\n",
         "\n[lifecycle]\naxis = \"stage\"\nordinary = { absent = true }\n",
         "\n[tags]\nproperty = \"tags\"\n",
@@ -372,7 +372,7 @@ mod tests {
 
     /// A contract that declares `aliases` as a single string.
     const SCALAR_ALIAS: &str = concat!(
-        "contract_version = 2\n",
+        "contract_version = 3\n",
         "\n[dialect]\nlinks = \"wikilink\"\n",
         "\n[lifecycle]\nnone = true\n",
         "\n[[type]]\nname = \"work\"\ncapabilities = [\"identity-bearing\"]\n",
@@ -763,7 +763,7 @@ mod tests {
             "the path-only hit has no snippet column, and the window's line break folds"
         );
         let json = crate::report::search_json(&result, result.diagnostics());
-        assert!(json.starts_with("{\n  \"schema_version\": 3,\n  \"report\": \"search\",\n"));
+        assert!(json.starts_with("{\n  \"schema_version\": 4,\n  \"report\": \"search\",\n"));
         assert!(json.ends_with("}\n"));
         assert!(json.contains("\"hits\": ["));
         assert!(json.contains("\"snippet\": \"# A\\nengine here\""));

@@ -55,8 +55,9 @@
 
 use super::yes_no;
 use crate::contract::{
-    CONTRACT_PATH, Contract, FieldDecl, FieldKind, LifecycleDecl, LinkDialect, NamespaceMembership,
-    Ordinary, PropertyDecl, PropertyKind, RelationshipDecl, ScalarKind, TagNamespaceDecl, TypeDecl,
+    CONTRACT_PATH, Contract, DEFAULT_CAPTURE_DIRECTORY, FieldDecl, FieldKind, LifecycleDecl,
+    LinkDialect, NamespaceMembership, Ordinary, PropertyDecl, PropertyKind, RelationshipDecl,
+    ScalarKind, TagNamespaceDecl, TypeDecl,
 };
 use crate::diagnostic::Location;
 use crate::provenance::{ProvenanceEntry, Source};
@@ -117,6 +118,8 @@ impl Render<'_> {
         blocks.extend(self.annotations(&lifecycle_keys(self.contract.lifecycle())));
         blocks.push("## Flags".to_owned());
         blocks.extend(self.flag_blocks());
+        blocks.push("## Capture".to_owned());
+        blocks.extend(self.capture_blocks());
         blocks.push("## Tags".to_owned());
         blocks.extend(self.tags_blocks());
         blocks.push("## Dialect".to_owned());
@@ -140,7 +143,33 @@ impl Render<'_> {
     fn type_blocks(&self, declared: &TypeDecl) -> Vec<String> {
         let mut blocks = vec![heading(declared)];
         blocks.extend(self.annotations(&type_keys(declared)));
+        blocks.extend(self.birth_block(declared));
         blocks.extend(self.declaration_blocks(declared));
+        blocks
+    }
+
+    /// What a note of this type is born carrying, where it is born carrying
+    /// anything.
+    ///
+    /// Silent where a type declares no birth state, which is most of them and
+    /// every type of a contract whose version has no seat. An agent reading
+    /// this needs to know that creating one of these stamps something; a
+    /// sentence saying that creating one stamps nothing is the ordinary case
+    /// spelled out, and the rendering says only what a contract declares.
+    fn birth_block(&self, declared: &TypeDecl) -> Vec<String> {
+        if declared.born_flagged().is_empty() {
+            return Vec::new();
+        }
+        let flags: Vec<String> = declared
+            .born_flagged()
+            .iter()
+            .map(|flag| format!("`{}`", one_line(flag)))
+            .collect();
+        let mut blocks = vec![format!(
+            "A note of this type is born carrying {}.",
+            flags.join(", ")
+        )];
+        blocks.extend(self.annotations(&[format!("type.{}.born-flagged", declared.name())]));
         blocks
     }
 
@@ -245,6 +274,28 @@ impl Render<'_> {
 
     /// The property a corpus carries its tags on, or the statement that it
     /// declares no tag vocabulary.
+    /// Where a capture lands, or the statement that this contract's version has
+    /// no seat to say so in.
+    ///
+    /// The statement of absence names the directory a capture uses anyway,
+    /// because *this version cannot configure it* and *captures are refused*
+    /// are very different facts and an agent must not read the first as the
+    /// second.
+    fn capture_blocks(&self) -> Vec<String> {
+        let Some(capture) = self.contract.capture() else {
+            return vec![format!(
+                "This contract version declares no capture directory, so captures land in \
+                 `{DEFAULT_CAPTURE_DIRECTORY}`."
+            )];
+        };
+        let mut blocks = vec![format!(
+            "Captures land in the directory `{}`.",
+            one_line(capture.directory())
+        )];
+        blocks.extend(self.annotations(&["capture.directory".to_owned()]));
+        blocks
+    }
+
     fn tags_blocks(&self) -> Vec<String> {
         let Some(tags) = self.contract.tags() else {
             return vec!["This contract declares no tag vocabulary.".to_owned()];
@@ -623,7 +674,7 @@ mod tests {
             &document,
             &format!("This vault is at `{}`.", shown(root.path())),
         );
-        assert_holds(&document, "`.dogtag/contract.toml` (contract version 2)");
+        assert_holds(&document, "`.dogtag/contract.toml` (contract version 3)");
         assert_holds(&document, "Do not edit this rendering; edit the contract.");
         assert!(document.ends_with(".\n"));
     }
@@ -758,7 +809,7 @@ mod tests {
         assert_holds(&document, "| field | kind | required | source |\n");
         assert_holds(
             &document,
-            "| `family` | string | no | (default, contract version 2) |\n",
+            "| `family` | string | no | (default, contract version 3) |\n",
         );
         assert_holds(
             &document,
@@ -848,7 +899,7 @@ mod tests {
     #[test]
     fn a_type_declaring_no_namespace_renders_no_namespace_table() {
         // Silence rather than a statement of absence: the construct exists only
-        // at contract version 2, so every type of a version-1 contract would
+        // at contract version 3, so every type of a version-1 contract would
         // otherwise carry a remark about a construct its format does not have.
         let tree = Tree::new("markdown-no-namespaces");
         assert_no_line(&markdown(&tree, NAMED_ORDINARY, false), |line| {
@@ -866,7 +917,7 @@ mod tests {
         );
         assert_holds(
             &document,
-            "| `topic/` | open | no | (default, contract version 2) |\n",
+            "| `topic/` | open | no | (default, contract version 3) |\n",
         );
         assert_holds(&document, "- `tags.property` — `.dogtag/contract.toml:");
     }
@@ -918,12 +969,12 @@ mod tests {
         );
         assert_holds(
             &document,
-            "| `tags` | list of string | no | (default, contract version 2) |\n",
+            "| `tags` | list of string | no | (default, contract version 3) |\n",
         );
         assert_holds(&document, "| relationship | required | source |\n");
         assert_holds(
             &document,
-            "| `involves` | no | (default, contract version 2) |\n",
+            "| `involves` | no | (default, contract version 3) |\n",
         );
     }
 
@@ -972,7 +1023,7 @@ mod tests {
         let tree = Tree::new("markdown-provenance-default");
         assert_holds(
             &markdown(&tree, NAMED_ORDINARY, true),
-            "- `type.project.capabilities` — (default, contract version 2)\n",
+            "- `type.project.capabilities` — (default, contract version 3)\n",
         );
     }
 

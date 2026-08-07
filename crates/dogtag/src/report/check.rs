@@ -96,7 +96,7 @@ mod tests {
     use std::fs;
 
     const CONTRACT: &str = concat!(
-        "contract_version = 2\n",
+        "contract_version = 3\n",
         "\n[dialect]\nlinks = \"wikilink\"\n",
         "\n[lifecycle]\nnone = true\n",
         "\n[tags]\nproperty = \"labels\"\n",

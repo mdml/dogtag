@@ -18,6 +18,7 @@ use toml::de::{DeTable, DeValue};
 use crate::diagnostic::KernelDiagnostic;
 use crate::document;
 
+use super::capture;
 use super::fields;
 use super::kinds::{PropertyKind, ScalarKind};
 use super::model::{Capability, PropertyDecl, RelationshipDecl, TypeDecl};
@@ -91,6 +92,7 @@ fn declared_type(
             .as_ref()
             .map_or_else(String::new, |f| f.text.to_owned()),
         capabilities: capabilities(sink, &section),
+        born_flagged: capture::born_flagged(sink, &section),
         properties: properties(sink, &section, &mut catalog.kinds),
         relationships: relationships(sink, &section),
         tag_namespaces: tags::namespaces(sink, &section),

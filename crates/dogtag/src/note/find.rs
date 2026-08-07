@@ -137,7 +137,7 @@ mod tests {
     use std::fs;
 
     const CONTRACT: &str = concat!(
-        "contract_version = 2\n",
+        "contract_version = 3\n",
         "\n[dialect]\nlinks = \"wikilink\"\n",
         "\n[lifecycle]\naxis = \"stage\"\nordinary = { absent = true }\n",
         "\n[[type]]\nname = \"work\"\ncapabilities = [\"identity-bearing\"]\n",
@@ -352,7 +352,7 @@ mod tests {
             "people/ada.md\twork\tactive\n"
         );
         let json = crate::report::find_json(&result, result.diagnostics());
-        assert!(json.starts_with("{\n  \"schema_version\": 3,\n  \"report\": \"find\",\n"));
+        assert!(json.starts_with("{\n  \"schema_version\": 4,\n  \"report\": \"find\",\n"));
         assert!(json.contains("\"note\": {"));
         assert!(json.contains("\"lifecycle\": \"active\""));
         let refused = found("find-render-refusal", notes, "absent", None);

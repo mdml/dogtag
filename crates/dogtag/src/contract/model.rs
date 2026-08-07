@@ -34,6 +34,7 @@ pub struct Contract {
     pub(crate) dialect: Dialect,
     pub(crate) lifecycle: LifecycleDecl,
     pub(crate) tags: Option<TagsDecl>,
+    pub(crate) capture: Option<CaptureDecl>,
     pub(crate) flags: Vec<FlagDecl>,
     pub(crate) types: Vec<TypeDecl>,
     pub(crate) provenance: Provenance,
@@ -64,6 +65,25 @@ impl Contract {
     /// format has no tag vocabulary to declare.
     pub fn tags(&self) -> Option<&TagsDecl> {
         self.tags.as_ref()
+    }
+
+    /// Where this corpus's captures land, at a version that carries the seat.
+    ///
+    /// `None` says only that the contract's version defines no capture seat: a
+    /// version-1 or version-2 corpus has no table to declare one in. It does not
+    /// mean the vault cannot be captured into — where a contract carries no
+    /// seat, `capture` reads
+    /// [`DEFAULT_CAPTURE_DIRECTORY`](crate::contract::DEFAULT_CAPTURE_DIRECTORY),
+    /// which is the same directory a version-3 contract declaring no `[capture]`
+    /// resolves to.
+    ///
+    /// The asymmetry with [`Contract::tags`] is deliberate and is the seat's
+    /// whole point. A corpus either has a tag vocabulary or does not; every
+    /// corpus has a place captures land, so at a version defining the seat this
+    /// is always `Some` — declared or defaulted, with the provenance saying
+    /// which.
+    pub fn capture(&self) -> Option<&CaptureDecl> {
+        self.capture.as_ref()
     }
 
     /// The declared flags, in declaration order.
@@ -239,6 +259,27 @@ impl Ordinary {
     }
 }
 
+/// Where a corpus's captures land.
+///
+/// A mechanic with a config seat, so that it stays a mechanic: the location
+/// carries no meaning, and the seat exists so two agents working one vault
+/// agree about it rather than each choosing.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct CaptureDecl {
+    pub(crate) directory: String,
+}
+
+impl CaptureDecl {
+    /// The vault-relative directory captures land in.
+    ///
+    /// Always a directory the corpus can see: `/`-separated names, none of them
+    /// empty and none beginning with `.`, which is checked when the contract
+    /// loads rather than when a write is attempted.
+    pub fn directory(&self) -> &str {
+        &self.directory
+    }
+}
+
 /// A boolean property declared as a lifecycle flag.
 ///
 /// Orthogonality is structural: a flag is a separate property from the axis, so
@@ -260,6 +301,7 @@ impl FlagDecl {
 pub struct TypeDecl {
     pub(crate) name: String,
     pub(crate) capabilities: Vec<Capability>,
+    pub(crate) born_flagged: Vec<String>,
     pub(crate) properties: Vec<PropertyDecl>,
     pub(crate) relationships: Vec<RelationshipDecl>,
     pub(crate) tag_namespaces: Vec<TagNamespaceDecl>,
@@ -274,6 +316,22 @@ impl TypeDecl {
     /// The capabilities the type declares, in declaration order.
     pub fn capabilities(&self) -> &[Capability] {
         &self.capabilities
+    }
+
+    /// The flags a note of this type is born carrying, in declaration order.
+    ///
+    /// Empty is the ordinary answer and means *stamp nothing*, which is the
+    /// polarity a flag has: absence is the mature state and the flag marks the
+    /// exception. Empty for every type of a version-1 or version-2 contract,
+    /// whose format has no birth state to declare, and for a version-3 type that
+    /// declares none — the difference between those two is which source the
+    /// provenance records, not what a note is born carrying.
+    ///
+    /// Each name is a property this type declares *and* one the contract
+    /// declares as a flag, both checked when the contract loads, so a writer can
+    /// stamp them without consulting either roster again.
+    pub fn born_flagged(&self) -> &[String] {
+        &self.born_flagged
     }
 
     /// The properties the type declares, in declaration order.
@@ -425,6 +483,9 @@ mod tests {
             tags: Some(TagsDecl {
                 property: "labels".to_owned(),
             }),
+            // Version 1 defines no capture seat, so the model carries none:
+            // absent from, never defaulted into.
+            capture: None,
             flags: vec![FlagDecl {
                 property: "leaned_on".to_owned(),
             }],
@@ -437,6 +498,7 @@ mod tests {
         TypeDecl {
             name: "person".to_owned(),
             capabilities: vec![Capability::IdentityBearing],
+            born_flagged: Vec::new(),
             properties: vec![
                 PropertyDecl {
                     name: "full_name".to_owned(),
@@ -476,10 +538,54 @@ mod tests {
         TypeDecl {
             name: "capture".to_owned(),
             capabilities: vec![Capability::CatchAll, Capability::ClosedWrite],
+            born_flagged: Vec::new(),
             properties: Vec::new(),
             relationships: Vec::new(),
             tag_namespaces: Vec::new(),
         }
+    }
+
+    /// The same corpus at a version that carries the write seats, so the two
+    /// accessors that answer for them are exercised at a version that has them.
+    fn with_write_seats() -> Contract {
+        let mut contract = sample();
+        contract.contract_version = 3;
+        contract.capture = Some(CaptureDecl {
+            directory: "captures".to_owned(),
+        });
+        contract.types[1].born_flagged = vec!["leaned_on".to_owned()];
+        contract
+    }
+
+    /// The two answers a version that defines no write seats gives, side by
+    /// side with a version that does: `None` and empty rather than a directory
+    /// version 1 never had a table to name.
+    #[test]
+    fn the_write_seats_are_absent_from_a_version_that_does_not_define_them() {
+        let older = sample();
+        assert_eq!(older.capture(), None);
+        assert!(older.types()[1].born_flagged().is_empty());
+        let newer = with_write_seats();
+        assert_eq!(
+            newer.capture().map(CaptureDecl::directory),
+            Some("captures")
+        );
+        assert_eq!(newer.types()[1].born_flagged(), ["leaned_on"]);
+    }
+
+    #[test]
+    fn a_capture_declaration_clones_compares_and_formats() {
+        let seat = CaptureDecl {
+            directory: "captures".to_owned(),
+        };
+        assert_eq!(seat.clone(), seat);
+        assert_ne!(
+            seat,
+            CaptureDecl {
+                directory: "elsewhere".to_owned()
+            }
+        );
+        assert!(format!("{seat:?}").contains("captures"));
     }
 
     #[test]
