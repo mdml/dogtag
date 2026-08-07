@@ -9,7 +9,7 @@
 //! carries no version string of its own: everything it reports comes from
 //! [`dogtag::version`].
 //!
-//! Four surfaces:
+//! Nine surfaces, one of which writes:
 //!
 //! - `dogtag version` — the SDK's version, and nothing else.
 //! - `dogtag doctor` — a vault's configuration health check. It opens exactly
@@ -24,14 +24,19 @@
 //! - `dogtag search` — lexical retrieval over the corpus, composed with
 //!   `list`'s filters.
 //! - `dogtag find` — entity lookup: the one note a name resolves to.
+//! - `dogtag capture` — the one mutation: a thought becomes a note.
 //!
-//! Exit codes are `0`, `1` and `2`, and no more. Severity alone decides `0`
-//! from `1`; `2` is reserved for an argument-parsing failure that produces no
-//! diagnostic at all, which is why an unregistered `--vault work` exits `1`
-//! even though it arrives as a bad argument.
+//! Exit codes are `0`, `1` and `2`, and no more. For every **read** verb,
+//! severity alone decides `0` from `1`; `2` is reserved for an
+//! argument-parsing failure that produces no diagnostic at all, which is why
+//! an unregistered `--vault work` exits `1` even though it arrives as a bad
+//! argument. A **write** verb answers a different question — *did my act
+//! land* — and its code follows the transaction's verdict instead, which is
+//! why `capture` carries no `--strict`. See [`exit`].
 
 #![forbid(unsafe_code)]
 
+mod capture;
 mod check;
 mod doctor;
 mod environment;
@@ -45,6 +50,7 @@ mod search;
 mod select;
 mod show;
 
+use std::path::PathBuf;
 use std::process;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
@@ -69,6 +75,25 @@ struct Cli {
 enum Command {
     /// Print the dogtag version.
     Version,
+    /// Every verb that opens a vault, flattened to the same level.
+    ///
+    /// A type of its own rather than seven more variants here, because these
+    /// seven share a rule the other two do not: each takes a vault selector,
+    /// and each is refused identically when the selector is empty. Flattened,
+    /// and declared where those seven were declared, so the command line a
+    /// caller types and the order `--help` lists them in are both unchanged.
+    #[command(flatten)]
+    Vault(VaultCommand),
+    /// Work with the vault's committed contract.
+    Contract {
+        #[command(subcommand)]
+        command: ContractCommand,
+    },
+}
+
+/// A verb that opens a vault.
+#[derive(Subcommand)]
+enum VaultCommand {
     /// Report a vault's configuration health.
     Doctor(DoctorArgs),
     /// Report the corpus's health: every finding, with summary counts.
@@ -81,11 +106,8 @@ enum Command {
     Search(SearchArgs),
     /// Find the one note a name resolves to.
     Find(FindArgs),
-    /// Work with the vault's committed contract.
-    Contract {
-        #[command(subcommand)]
-        command: ContractCommand,
-    },
+    /// Capture a thought as a new, unfiled note.
+    Capture(CaptureArgs),
 }
 
 #[derive(Subcommand)]
@@ -271,6 +293,61 @@ enum FindFormat {
     Json,
 }
 
+/// What `capture` creates a note from, and how it reports.
+///
+/// No `--strict`, deliberately. Strictness promotes warnings for the exit code
+/// alone, and a write verb's exit code is its transaction's verdict rather than
+/// a weighing of severities — so the flag would have nothing to promote and
+/// would suggest that a corpus finding could fail a capture that landed.
+#[derive(Args)]
+#[command(group = clap::ArgGroup::new("thought").required(true).args(["text", "file"]))]
+struct CaptureArgs {
+    /// The thought to capture. `-` reads it from standard input instead.
+    #[arg(value_name = "TEXT")]
+    text: Option<String>,
+    /// Read the thought from this file rather than from an argument.
+    #[arg(long, value_name = "PATH")]
+    file: Option<PathBuf>,
+    #[command(flatten)]
+    vault: VaultArg,
+    /// The report's format.
+    #[arg(long, value_enum, default_value_t = CaptureFormat::Text)]
+    format: CaptureFormat,
+    /// Emit the plan and write nothing.
+    #[arg(long)]
+    preview: bool,
+    /// Who is capturing, overriding the installation record's actor.
+    #[arg(long, value_name = "NAME")]
+    actor: Option<String>,
+    /// In what capacity this capture is being performed.
+    #[arg(long, value_enum, default_value_t = CaptureProvenance::Human)]
+    provenance: CaptureProvenance,
+}
+
+/// How `capture` reports.
+#[derive(Clone, Copy, ValueEnum)]
+enum CaptureFormat {
+    /// What the act did, and how to undo it; findings on stderr.
+    Text,
+    /// One structured document carrying the plan, the outcome, and the
+    /// diagnostics.
+    Json,
+}
+
+/// In what capacity an act is performed, as the invocation spells it.
+///
+/// The SDK's closed set, spelled once here so the CLI's help text and the
+/// commit trailer cannot drift apart.
+#[derive(Clone, Copy, ValueEnum)]
+enum CaptureProvenance {
+    /// A person, acting directly.
+    Human,
+    /// An agent acting on a person's behalf.
+    Agent,
+    /// A scheduled or triggered process.
+    Automation,
+}
+
 #[derive(Args)]
 struct ShowArgs {
     /// A vault-relative path (any `/` or a trailing `.md`) or an unambiguous bare name.
@@ -333,19 +410,43 @@ fn main() {
 fn dispatch(environment: &Environment, command: Command) -> i32 {
     match command {
         Command::Version => version(environment),
-        Command::Doctor(args) => refuse_empty(environment, args.vault.requested())
-            .unwrap_or_else(|| doctor::run(environment, &args)),
-        Command::Check(args) => refuse_empty(environment, args.vault.requested())
-            .unwrap_or_else(|| check::run(environment, &args)),
-        Command::List(args) => refuse_empty(environment, args.vault.requested())
-            .unwrap_or_else(|| listing::run(environment, &args)),
-        Command::Show(args) => refuse_empty(environment, args.vault.requested())
-            .unwrap_or_else(|| show::run(environment, &args)),
-        Command::Search(args) => refuse_empty(environment, args.vault.requested())
-            .unwrap_or_else(|| search::run(environment, &args)),
-        Command::Find(args) => refuse_empty(environment, args.vault.requested())
-            .unwrap_or_else(|| find::run(environment, &args)),
+        Command::Vault(command) => vault(environment, command),
         Command::Contract { command } => contract(environment, command),
+    }
+}
+
+/// Runs one vault verb, behind the empty-selector refusal they all share.
+///
+/// The refusal is stated once, before the verb is chosen, rather than wrapped
+/// around each of seven calls: it is the same refusal for the same reason every
+/// time, and seven copies of it is seven places for one of them to drift.
+fn vault(environment: &Environment, command: VaultCommand) -> i32 {
+    if let Some(refused) = refuse_empty(environment, command.requested()) {
+        return refused;
+    }
+    match command {
+        VaultCommand::Doctor(args) => doctor::run(environment, &args),
+        VaultCommand::Check(args) => check::run(environment, &args),
+        VaultCommand::List(args) => listing::run(environment, &args),
+        VaultCommand::Show(args) => show::run(environment, &args),
+        VaultCommand::Search(args) => search::run(environment, &args),
+        VaultCommand::Find(args) => find::run(environment, &args),
+        VaultCommand::Capture(args) => capture::run(environment, &args),
+    }
+}
+
+impl VaultCommand {
+    /// The vault selector this verb was given, as it was given.
+    fn requested(&self) -> Option<&str> {
+        match self {
+            Self::Doctor(args) => args.vault.requested(),
+            Self::Check(args) => args.vault.requested(),
+            Self::List(args) => args.vault.requested(),
+            Self::Show(args) => args.vault.requested(),
+            Self::Search(args) => args.vault.requested(),
+            Self::Find(args) => args.vault.requested(),
+            Self::Capture(args) => args.vault.requested(),
+        }
     }
 }
 
