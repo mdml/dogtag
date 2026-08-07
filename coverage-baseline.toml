@@ -161,8 +161,29 @@ toolchain = "nightly-2026-07-30"
 # Measured on the pinned toolchain, integrated: 98.8449 lines and 98.8753
 # branches, against 98.8404 / 98.8323 on the commit this branched from. Floors
 # one hundredth under, as above: 98.83 (unmoved) / 98.86.
-line = 98.83
-branch = 98.86
+#
+# The write transaction raised both again, and again as an ordinary ratchet
+# raise rather than an adjudication. The new module is the plan, the identity a
+# capture takes, the bytes it writes, the commit seam, and the transaction that
+# composes them, and every arm of each is reached from a named test — a preview
+# and an act, a declared capture directory and a defaulted one, a birth state
+# and none, a collision and the bound that stops one, an ownership refusal, a
+# directory that cannot be made and a note that cannot be written, a target
+# that leaves the vault through a link, an unattributed act, a repository that
+# commits and a repository whose hook refuses.
+#
+# Three refusals that no test could reach were **removed rather than left
+# uncovered**, which is the rule the kernel floor exists to enforce: a
+# catch-all that a resolved contract cannot lack, a canonicalization failure
+# that the containment check already answers for, and a created file with no
+# vault-relative spelling — the last by making the containment check
+# per-candidate, so obtaining the spelling and proving the target is inside the
+# root became one act instead of two.
+#
+# Measured on the pinned toolchain, integrated: 98.92 lines and 98.93
+# branches. Floors one hundredth under: 98.91 / 98.92.
+line = 98.91
+branch = 98.92
 
 [thresholds]
 line = 95.0

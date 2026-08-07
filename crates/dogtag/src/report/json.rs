@@ -39,6 +39,7 @@ use crate::contract::{
     CONTRACT_PATH, Capability, Contract, FieldDecl, LifecycleDecl, Ordinary, PropertyDecl,
     PropertyKind, RelationshipDecl, TagNamespaceDecl, TagsDecl, TypeDecl,
 };
+use crate::diagnostic::VaultPath;
 use crate::diagnostic::{Diagnostic, FileRef, Location, Position, Related, SeverityCounts, Span};
 use crate::note::{
     Binding, FindResult, ListResult, Note, NoteSummary, PropertyValue, RecordValue, SearchHit,
@@ -46,6 +47,7 @@ use crate::note::{
 };
 use crate::provenance::{ProvenanceEntry, Source};
 use crate::vault::VaultRoot;
+use crate::write::{Outcome, Recovery, WriteResult};
 
 /// Renders the `doctor` report as JSON.
 pub fn doctor_json(report: &DoctorReport) -> String {
@@ -212,6 +214,128 @@ pub fn contract_json(root: &VaultRoot, contract: &Contract) -> String {
             .map(provenance_wire)
             .collect(),
     })
+}
+
+/// Renders a write transaction's result and its diagnostic envelope as one
+/// JSON document.
+///
+/// **A fixed key set, with `null` for what does not apply**, which is `doctor`'s
+/// position rather than `contract`'s: a caller diffing a parallel run against
+/// the path it would otherwise have written reads this, and a key that came and
+/// went would make every diff say something happened. So `path`, `commit` and
+/// `recovery` are always present, and a preview's are `null`.
+///
+/// `reported` carries what the *loading* path had to say — the selection, the
+/// root's trust, the contract's own diagnostics — exactly as every other result
+/// document takes it. A structured document that carried only the act's
+/// findings would answer a different question from the plain-text run beside
+/// it, and the one that carries less is the one a parallel week diffs.
+pub fn capture_json(result: &WriteResult, reported: &[Diagnostic]) -> String {
+    let mut merged = crate::diagnostic::DiagnosticList::new();
+    merged.extend(reported.iter().cloned());
+    merged.extend(result.diagnostics().iter().cloned());
+    let counts = merged.counts();
+    let diagnostics = merged.sorted();
+    document(&CaptureWire {
+        schema_version: SCHEMA_VERSION,
+        report: "capture",
+        landed: result.landed(),
+        outcome: outcome_wire(result.outcome()),
+        plan: PlanWire {
+            actor: WriteActorWire {
+                name: result.plan().actor().name(),
+                provenance: result.plan().actor().kind().as_str(),
+            },
+            scope: result
+                .plan()
+                .scope()
+                .iter()
+                .map(VaultPath::as_str)
+                .collect(),
+            // Always `null`: no operation at this milestone can move the
+            // contract's version, and the field is the shared transaction
+            // shape rather than a claim that one could.
+            compatibility: result.plan().compatibility().map(|_| "moves-the-contract"),
+        },
+        created: created_wire(result),
+        recovery: recovery_wire(result.recovery().as_ref()),
+        diagnostics: diagnostics.iter().map(diagnostic_wire).collect(),
+        summary: summary_wire(counts),
+    })
+}
+
+#[derive(Serialize)]
+struct CaptureWire<'a> {
+    schema_version: u32,
+    report: &'static str,
+    /// The transaction's verdict, and deliberately not derivable from
+    /// `summary`: a capture that landed beside a corpus error landed.
+    landed: bool,
+    outcome: &'static str,
+    plan: PlanWire<'a>,
+    created: Option<&'a str>,
+    recovery: Option<RecoveryWire<'a>>,
+    diagnostics: Vec<DiagnosticWire<'a>>,
+    summary: SummaryWire,
+}
+
+#[derive(Serialize)]
+struct PlanWire<'a> {
+    actor: WriteActorWire<'a>,
+    scope: Vec<&'a str>,
+    compatibility: Option<&'static str>,
+}
+
+/// Who performed the act, and in what capacity.
+///
+/// Distinct from the `doctor` report's actor, which names only what the
+/// installation record says; this one also names the capacity the invocation
+/// acted in, which the record never carries.
+#[derive(Serialize)]
+struct WriteActorWire<'a> {
+    /// `null` where the installation names nobody, which is a state rather
+    /// than a fault and is warned about rather than refused.
+    name: Option<&'a str>,
+    provenance: &'static str,
+}
+
+#[derive(Serialize)]
+struct RecoveryWire<'a> {
+    action: &'static str,
+    path: &'a str,
+    /// `null` for a recovery that is a deletion, which has no commit to name.
+    commit: Option<&'a str>,
+}
+
+fn outcome_wire(outcome: &Outcome) -> &'static str {
+    match outcome {
+        Outcome::Previewed => "previewed",
+        Outcome::Committed { .. } => "committed",
+        Outcome::Created { .. } => "created",
+        Outcome::Refused => "refused",
+    }
+}
+
+fn created_wire(result: &WriteResult) -> Option<&str> {
+    match result.outcome() {
+        Outcome::Committed { path, .. } | Outcome::Created { path } => Some(path.as_str()),
+        Outcome::Previewed | Outcome::Refused => None,
+    }
+}
+
+fn recovery_wire(recovery: Option<&Recovery>) -> Option<RecoveryWire<'_>> {
+    match recovery? {
+        Recovery::Revert { commit, path } => Some(RecoveryWire {
+            action: "revert",
+            path: path.as_str(),
+            commit: Some(commit),
+        }),
+        Recovery::Delete { path } => Some(RecoveryWire {
+            action: "delete",
+            path: path.as_str(),
+            commit: None,
+        }),
+    }
 }
 
 /// Renders a `show` result and its diagnostic envelope as one JSON document.
@@ -946,6 +1070,14 @@ mod tests {
     use crate::diagnostic::{KernelDiagnostic, Position, Span, VaultPath};
     use crate::installation::parse_installation;
     use crate::vault::open;
+    use crate::write::fixture::{CLOSED, Thought, Vault as WriteVault};
+
+    /// The capture document of a result the loading path had nothing to say
+    /// about, which is every fixture here but one.
+    fn capture_json_quiet(result: &crate::write::WriteResult) -> String {
+        capture_json(result, &[])
+    }
+
     use serde_json::Value;
     use std::fs;
 
@@ -965,21 +1097,200 @@ mod tests {
         serde_json::from_str(rendered).expect("this module's own output is JSON")
     }
 
-    /// Where each top-level key of a pretty document begins.
-    fn top_level_positions(rendered: &str, keys: &[&str]) -> Vec<usize> {
-        keys.iter()
+    /// Every named top-level key appears, in the order it is named.
+    ///
+    /// One function rather than two: locating the keys and comparing their
+    /// order are one question — *does this document carry these keys in this
+    /// order* — and a caller has never wanted the positions on their own.
+    fn assert_key_order(rendered: &str, keys: &[&str]) {
+        let positions: Vec<usize> = keys
+            .iter()
             .map(|key| {
                 let missing = format!("no top-level `{key}` in {rendered}");
                 rendered.find(&format!("\n  \"{key}\":")).expect(&missing)
             })
-            .collect()
-    }
-
-    fn assert_key_order(rendered: &str, keys: &[&str]) {
-        let positions = top_level_positions(rendered, keys);
+            .collect();
         let mut sorted = positions.clone();
         sorted.sort_unstable();
         assert_eq!(positions, sorted, "keys are out of order: {keys:?}");
+    }
+
+    #[test]
+    fn the_capture_document_carries_its_keys_in_a_fixed_order() {
+        let vault = WriteVault::new("json-capture-order");
+        let json = capture_json_quiet(&vault.capture(Thought("a loose thought")));
+        assert!(json.starts_with("{\n  \"schema_version\": 4,\n  \"report\": \"capture\",\n"));
+        assert_key_order(
+            &json,
+            &[
+                "schema_version",
+                "report",
+                "landed",
+                "outcome",
+                "plan",
+                "created",
+                "recovery",
+                "diagnostics",
+                "summary",
+            ],
+        );
+        assert!(json.ends_with("}\n"));
+    }
+
+    /// What a document says about an act that wrote nothing: the outcome's own
+    /// word, the verdict, and `null` for the two facts that do not apply —
+    /// present as `null` rather than dropped, so a consumer diffing two runs
+    /// never reads a vanished key as a changed answer.
+    fn wrote_nothing(document: &Value) -> (&Value, &Value, &Value, &Value) {
+        (
+            &document["outcome"],
+            &document["landed"],
+            &document["created"],
+            &document["recovery"],
+        )
+    }
+
+    #[test]
+    fn a_capture_that_landed_names_its_outcome_its_path_and_its_recovery() {
+        let vault = WriteVault::new("json-capture-created");
+        let created = parsed(&capture_json_quiet(&vault.capture(Thought("landed"))));
+        let landed = (
+            &created["outcome"],
+            &created["landed"],
+            &created["recovery"]["action"],
+            &created["recovery"]["commit"],
+        );
+        let expected = (
+            &Value::from("created"),
+            &Value::Bool(true),
+            &Value::from("delete"),
+            &Value::Null,
+        );
+        assert_eq!(landed, expected);
+        let path = created["created"].as_str().expect("a created path");
+        assert!(path.starts_with("captures/"), "{path}");
+    }
+
+    #[test]
+    fn the_plan_names_the_actor_the_scope_and_no_compatibility_impact() {
+        let vault = WriteVault::new("json-capture-plan");
+        let created = parsed(&capture_json_quiet(&vault.capture(Thought("landed"))));
+        let plan = (
+            &created["plan"]["compatibility"],
+            &created["plan"]["actor"]["name"],
+            &created["plan"]["actor"]["provenance"],
+            created["plan"]["scope"].as_array().expect("a scope").len(),
+        );
+        let expected = (
+            &Value::Null,
+            &Value::from("A Maintainer"),
+            &Value::from("agent"),
+            1,
+        );
+        assert_eq!(plan, expected);
+    }
+
+    /// The two outcomes that wrote nothing, side by side: one landed and one
+    /// did not, and both leave the same two keys `null`.
+    #[test]
+    fn a_preview_and_a_refusal_both_name_nothing_created() {
+        let vault = WriteVault::new("json-capture-nothing");
+        let previewed = parsed(&capture_json_quiet(&vault.preview(Thought("nothing"))));
+        let expected = (
+            &Value::from("previewed"),
+            &Value::Bool(true),
+            &Value::Null,
+            &Value::Null,
+        );
+        assert_eq!(wrote_nothing(&previewed), expected);
+        let closed = WriteVault::holding("json-capture-refused", CLOSED);
+        let refused = parsed(&capture_json_quiet(&closed.capture(Thought("nothing"))));
+        let expected = (
+            &Value::from("refused"),
+            &Value::Bool(false),
+            &Value::Null,
+            &Value::Null,
+        );
+        assert_eq!(wrote_nothing(&refused), expected);
+    }
+
+    /// A committed act names the commit twice — as the outcome and as the
+    /// recovery — and reverting it is what undoes the act.
+    #[test]
+    fn a_committed_capture_names_its_commit_and_reverting_it() {
+        let vault = WriteVault::repository("json-capture-committed");
+        let json = parsed(&capture_json_quiet(
+            &vault.capture(Thought("a loose thought")),
+        ));
+        assert_eq!(json["outcome"], Value::from("committed"));
+        assert_eq!(json["recovery"]["action"], Value::from("revert"));
+        let commit = json["recovery"]["commit"].as_str().expect("a commit");
+        assert!(!commit.is_empty());
+        assert_eq!(json["recovery"]["path"], json["created"]);
+    }
+
+    /// The loading path's diagnostics reach the document and its summary.
+    ///
+    /// A structured document carrying only the act's own findings would answer
+    /// a different question from the text run beside it — and the structured
+    /// one is what a parallel week diffs, so it is the one that must be
+    /// complete.
+    #[test]
+    fn what_the_loading_path_reported_reaches_the_document_and_its_summary() {
+        let vault = WriteVault::new("json-capture-loading");
+        let reported = [Diagnostic::kernel(
+            KernelDiagnostic::DiscoveryRootOutsideHome,
+            "the root is not under the home directory",
+        )];
+        let json = parsed(&capture_json(
+            &vault.capture(Thought("a loose thought")),
+            &reported,
+        ));
+        let identifiers: Vec<&str> = json["diagnostics"]
+            .as_array()
+            .expect("a diagnostics array")
+            .iter()
+            .filter_map(|reported| reported["id"].as_str())
+            .collect();
+        assert!(
+            identifiers.contains(&"discovery.root-outside-home"),
+            "{identifiers:?}"
+        );
+        // One: this act is attributed, so the only warning is the one the
+        // loading path handed in — which is the point. Counted, not merely
+        // listed, because the summary is what a diff reads first.
+        assert_eq!(json["summary"]["warning"], Value::from(1));
+        assert_eq!(json["landed"], Value::Bool(true));
+    }
+
+    /// The verdict is not the severity summary: a capture that landed beside a
+    /// corpus error reports the error and still says it landed.
+    #[test]
+    fn the_verdict_is_reported_beside_the_corpus_and_never_derived_from_it() {
+        let vault = WriteVault::new("json-capture-verdict");
+        std::fs::write(
+            vault.root().path().join("wrong.md"),
+            "---\ntype: nonesuch\n---\nbody\n",
+        )
+        .expect("a note the contract does not admit");
+        let json = parsed(&capture_json_quiet(
+            &vault.capture(Thought("a loose thought")),
+        ));
+        assert_eq!(json["landed"], Value::Bool(true));
+        assert!(json["summary"]["error"].as_u64().expect("a count") > 0);
+    }
+
+    /// An unattributed act names nobody rather than naming an invented
+    /// identity, and still says in what capacity it happened.
+    #[test]
+    fn an_unattributed_capture_names_nobody_and_still_names_a_capacity() {
+        let vault = WriteVault::new("json-capture-unattributed");
+        let request = WriteVault::anonymous(Thought("a loose thought"), 0);
+        let result = crate::write::capture(vault.root(), vault.contract(), &request);
+        let json = parsed(&capture_json_quiet(&result));
+        assert_eq!(json["plan"]["actor"]["name"], Value::Null);
+        assert_eq!(json["plan"]["actor"]["provenance"], Value::from("agent"));
+        assert_eq!(json["landed"], Value::Bool(true));
     }
 
     #[test]

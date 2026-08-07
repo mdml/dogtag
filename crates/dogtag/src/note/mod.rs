@@ -46,6 +46,8 @@ use crate::contract::Contract;
 use crate::diagnostic::{Diagnostic, DiagnosticList, VaultPath};
 use crate::vault::VaultRoot;
 
+pub(crate) use frontmatter::opens_a_block;
+
 pub use find::{FindResult, find};
 pub use list::{ListFilter, ListResult, NoteSummary, list};
 pub use model::{
