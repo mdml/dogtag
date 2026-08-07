@@ -11,7 +11,7 @@ Dogtag is a personal knowledge management SDK designed for AI agents: they confi
 Three rules carry the architecture. Do not trade any of them for convenience — if one is genuinely in the way, that is a decision record, not a workaround.
 
 1. **The SDK is the kernel; the CLI consumes only its public API.** All vault behavior lives in `crates/dogtag`. If `crates/dogtag-cli` needs something, the SDK grows public surface — never a private backchannel, a copied constant, or a reimplementation. (This goes as far as the version string: the CLI reports `dogtag::version()` and carries no version text of its own.)
-2. **No behavior ahead of its milestone.** Features land at the milestone that owns them (see [beta.md](docs/beta.md)). Do not implement the document model, `check`, `list`, `show`, search, an index, mutation, `init`, or any later-milestone behavior early — nothing reads a note, parses frontmatter, resolves a link, or builds an index before the milestone that owns it, and narrow interfaces and pending fixtures are the ceiling for foreshadowing.
+2. **No behavior ahead of its milestone.** Features land at the milestone that owns them (see [beta.md](docs/beta.md); [roadmap.md](docs/roadmap.md) names the rung in flight). As of the frozen M5 packet the fence sits after exactly one mutation, `capture`: no triage verbs, no `init`, no `import`, no `migrate`, no persistent index, no TypeScript binding source, no MCP server — nothing later-milestone lands early, and narrow interfaces and pending fixtures are the ceiling for foreshadowing.
 3. **Conformance has no waivers.** Every scenario runs against every fixture profile; there is no profile-specific skip, allowlist, or waiver mechanism, and the scenario format deliberately has no field that could name a profile. Do not add one. See [conformance/README.md](conformance/README.md).
 
 A fourth rule guards the future surfaces: **bindings hold no semantics.** `bindings/typescript` (and any later binding) wraps the one Rust core; it never reimplements vault behavior, and until its milestone it contains no source at all.
@@ -38,7 +38,7 @@ Every gate in those suites is declared once, in [scripts/gate.py](scripts/gate.p
 
 Narrower recipes, for when the ladder is more than you need. The expensive ones each have a `-verbose` twin:
 
-- `just fmt` (writes) / `just build` / `just conformance` — individual steps that are not gates.
+- `just fmt` (writes) / `just build` / `just conformance` / `just smoke` — individual steps that are not gates; `smoke` is the scripted fixture sequence that must be green before every release tag.
 - `just test` / `just coverage` / `just msrv` / `just deny` / `just osv` / `just zizmor` / `just links` / `just codescene`, each with a `-verbose` twin.
 - `just codescene-staged` before a commit, `just codescene-branch [BASE]` for the whole branch, `just codescene-files <paths>` for specific files. These are deltas and already print their findings in full, so they need no verbose twin.
 - `just semver` — API-compatibility check against the last release tag. Advisory until the first non-prerelease tag; see the ADR for why a blocking gate would be meaningless before then.
