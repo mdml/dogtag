@@ -1,10 +1,12 @@
 //! Reports, and the renderings the SDK owns.
 //!
 //! This module carries the `doctor` report model, the structured-output schema
-//! version, the JSON serialization of both reports, and the generated agent
-//! contract in Markdown. Those land with the M2 report surface. Rendering
-//! lives here rather than in a consumer so that an agent receives the same
-//! vault contract whichever door it enters by.
+//! version, the JSON serialization of every report, and the generated agent
+//! contract in Markdown. The first of them landed with the M2 report surface
+//! and the shapes have accrued milestone by milestone since. Rendering lives
+//! here rather than in a consumer so that an agent receives the same vault
+//! contract — and the same account of what a write did — whichever door it
+//! enters by.
 //!
 //! # Why rendering is kernel work
 //!
@@ -37,15 +39,26 @@
 //! - **The two contract renderings are semantically equal.** Every declaration
 //!   in the Markdown appears in the JSON and the reverse, and neither carries a
 //!   declaration the contract does not make.
-//! - **Determinism.** Types, properties and relationships render in
-//!   *declaration* order and never sorted; provenance renders in key order; JSON
-//!   object keys are emitted in a fixed order. Identical input produces
-//!   byte-identical output on any machine: no map iteration reaches the output,
-//!   no absolute path but the vault root does, and there is no timestamp and no
-//!   locale anywhere in it.
+//! - **Determinism, and what it means once a surface writes.** Types,
+//!   properties and relationships render in *declaration* order and never
+//!   sorted; provenance renders in key order; JSON object keys are emitted in a
+//!   fixed order. Identical input produces byte-identical output on any
+//!   machine: no map iteration reaches the output, no absolute path but the
+//!   vault root does, and no rendering reads a clock or a locale.
+//!
+//!   That last clause used to read *there is no timestamp anywhere in it*, and
+//!   the write transaction's report makes it false in the letter while keeping
+//!   it in the substance. A capture's created path carries the instant it was
+//!   captured at, and a committed act's result carries a commit identifier —
+//!   both **derived from the act's inputs**, never read here. The claim that
+//!   binds is the one that was always the point: a rendering is a function of
+//!   its argument, so two renderings of one value are byte-identical, and a
+//!   caller diffing two runs is looking at what changed rather than at when it
+//!   looked.
 //!
 //! [`FileRef::INSTALLATION_RECORD_PATH`]: crate::diagnostic::FileRef::INSTALLATION_RECORD_PATH
 
+mod capture;
 mod check;
 mod doctor;
 mod find;
@@ -72,11 +85,13 @@ use crate::diagnostic::{Diagnostic, DiagnosticList, SeverityCounts};
 use crate::installation::{Installation, InstallationRecord, VaultEntry};
 use crate::vault::{Opened, VaultRoot};
 
+pub use capture::capture_text;
 pub use check::{CheckReport, check_report, check_text};
 pub use doctor::doctor_text;
 pub use find::find_text;
 pub use json::{
-    check_json, contract_json, doctor_json, find_json, list_json, search_json, show_json,
+    capture_json, check_json, contract_json, doctor_json, find_json, list_json, search_json,
+    show_json,
 };
 pub use list::list_text;
 pub use markdown::contract_markdown;

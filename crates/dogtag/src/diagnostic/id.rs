@@ -306,6 +306,36 @@ pub enum KernelDiagnostic {
     CompatInstallationTooNew,
     /// The record declares a supported version below the newest this SDK reads.
     CompatNewerInstallationFormatAvailable,
+    /// The act's target resolves outside the vault root.
+    ///
+    /// Every write resolves its target through the verified root handle, so a path this
+    /// SDK built cannot leave the root by spelling; what can take it out is a capture
+    /// directory that is a symbolic link. Such a target is refused rather than followed —
+    /// the corpus traversal does not follow links either, so a note written through one
+    /// would be written and then invisible, which is a loss wearing a success.
+    WriteTargetOutsideVault,
+    /// The act's target could not be created or written.
+    ///
+    /// A directory that cannot be made, a file that cannot be opened, a device that is
+    /// full: every filesystem refusal of the write itself arrives here, because what a
+    /// caller does about them is the same and the cause travels in the message.
+    WriteTargetUnwritable,
+    /// The act would write a note of a type the contract declares no caller may modify.
+    WriteClosedWrite,
+    /// The act landed with no actor to attribute it to.
+    ///
+    /// Never a refusal: a missing actor does not stand between a thought and its capture.
+    /// The write lands, provenance records as unattributed, and this says so — the
+    /// advance warning `doctor` gives about an unconfigured installation, arriving at the
+    /// moment it starts to cost something.
+    WriteActorUnattributed,
+    /// The act landed and the commit that would have recorded it did not.
+    ///
+    /// Not a refusal either, and for the same reason: the file is written, so refusing
+    /// afterwards would report a loss that did not happen. The result names the created
+    /// path as the recovery it is, exactly as it does where the substrate never owned the
+    /// commit path at all.
+    WriteCommitFailed,
 }
 
 /// The single source of identifiers and severities.
@@ -799,6 +829,31 @@ const REGISTRY: &[(KernelDiagnostic, &str, Severity)] = &[
         "compat.newer-installation-format-available",
         Severity::Info,
     ),
+    (
+        KernelDiagnostic::WriteTargetOutsideVault,
+        "write.target-outside-vault",
+        Severity::Error,
+    ),
+    (
+        KernelDiagnostic::WriteTargetUnwritable,
+        "write.target-unwritable",
+        Severity::Error,
+    ),
+    (
+        KernelDiagnostic::WriteClosedWrite,
+        "write.closed-write",
+        Severity::Error,
+    ),
+    (
+        KernelDiagnostic::WriteActorUnattributed,
+        "write.actor-unattributed",
+        Severity::Warning,
+    ),
+    (
+        KernelDiagnostic::WriteCommitFailed,
+        "write.commit-failed",
+        Severity::Warning,
+    ),
 ];
 
 /// How many diagnostics the registry holds.
@@ -959,6 +1014,7 @@ fn expected_id(kind: KernelDiagnostic) -> &'static str {
         "link" => expected_link_id(kind),
         "search" => expected_search_id(kind),
         "installation" => expected_installation_id(kind),
+        "write" => expected_write_id(kind),
         _ => expected_compat_id(kind),
     }
 }
@@ -1116,6 +1172,18 @@ macro_rules! compat_variants {
     };
 }
 
+/// Every `write.*` variant, as one pattern.
+#[cfg(test)]
+macro_rules! write_variants {
+    () => {
+        KernelDiagnostic::WriteTargetOutsideVault
+            | KernelDiagnostic::WriteTargetUnwritable
+            | KernelDiagnostic::WriteClosedWrite
+            | KernelDiagnostic::WriteActorUnattributed
+            | KernelDiagnostic::WriteCommitFailed
+    };
+}
+
 /// The area each variant belongs to.
 ///
 /// The groups above name every variant exactly once, and this is an
@@ -1132,6 +1200,7 @@ fn expected_area(kind: KernelDiagnostic) -> &'static str {
         search_variants!() => "search",
         installation_variants!() => "installation",
         compat_variants!() => "compat",
+        write_variants!() => "write",
     }
 }
 
@@ -1295,10 +1364,24 @@ fn expected_compat_id(kind: KernelDiagnostic) -> &'static str {
     }
 }
 
+/// The identifier each `write.*` variant carries, and `""` for any other area.
+#[cfg(test)]
+fn expected_write_id(kind: KernelDiagnostic) -> &'static str {
+    use KernelDiagnostic::*;
+    match kind {
+        WriteTargetOutsideVault => "write.target-outside-vault",
+        WriteTargetUnwritable => "write.target-unwritable",
+        WriteClosedWrite => "write.closed-write",
+        WriteActorUnattributed => "write.actor-unattributed",
+        WriteCommitFailed => "write.commit-failed",
+        _ => "",
+    }
+}
+
 /// The severity each identifier must carry.
 ///
 /// Stated as the exceptions it is: every kernel diagnostic is an error unless
-/// it is one of the nine named here.
+/// it is one of the eleven named here.
 #[cfg(test)]
 fn expected_severity(id: &str) -> Severity {
     match id {
@@ -1306,6 +1389,7 @@ fn expected_severity(id: &str) -> Severity {
         | "discovery.root-outside-home"
         | "discovery.root-group-or-world-writable" => Severity::Warning,
         "note.byte-order-mark" | "note.carriage-return-line-ending" => Severity::Warning,
+        "write.actor-unattributed" | "write.commit-failed" => Severity::Warning,
         "discovery.root-resolved-through-symlink"
         | "note.undeclared-property"
         | "compat.newer-format-available"
@@ -1320,8 +1404,15 @@ mod tests {
     use std::collections::BTreeSet;
 
     /// The areas the kernel claims: M2's four, M3's two — `note` for a single
-    /// note's own structure, `link` for resolution between notes — and M4's
-    /// `search`, scoped to query-expression faults.
+    /// note's own structure, `link` for resolution between notes — M4's
+    /// `search`, scoped to query-expression faults, and M5's `write`, scoped to
+    /// what an *act* is told, never to a finding about the corpus.
+    ///
+    /// `write` meets the lattice rule's own test for the first time: refusing an
+    /// act is not a finding about the corpus, so it fits neither `note` nor
+    /// `link` nor any M2 area. The post-write report reuses `note.*` and
+    /// `link.*` unchanged — a capture that lands beside a corpus error reports
+    /// that error under the identifier every other door reports it under.
     const AREAS: &[&str] = &[
         "discovery",
         "contract",
@@ -1330,6 +1421,7 @@ mod tests {
         "search",
         "installation",
         "compat",
+        "write",
     ];
 
     #[test]
@@ -1355,8 +1447,12 @@ mod tests {
         assert_eq!(expected_note_id(contract), "");
         assert_eq!(expected_link_id(contract), "");
         assert_eq!(expected_search_id(contract), "");
+        assert_eq!(expected_write_id(contract), "");
         let discovery = KernelDiagnostic::DiscoveryNestedVault;
         assert_eq!(expected_contract_id(discovery), "");
+        let write = KernelDiagnostic::WriteClosedWrite;
+        assert_eq!(expected_contract_id(write), "");
+        assert_eq!(expected_note_id(write), "");
     }
 
     #[test]
