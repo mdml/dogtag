@@ -193,7 +193,7 @@ toolchain = "nightly-2026-07-30"
 # Measured on the pinned toolchain, integrated: 98.92 lines and 98.94
 # branches. Floors one hundredth under: 98.91 (unmoved) / 98.93.
 #
-# PROPOSED FOR ADJUDICATION with the M5 scenario graduation, on the 2026-08-04
+# RATIFIED by the maintainer 2026-08-08, with the M5 scenario graduation, on the 2026-08-04
 # entry's precedent and for the same reason a fourth time: BOTH global floors
 # move DOWN to the measurement, because the ten graduated write cases add
 # ~390 harness lines whose remaining uncovered arms are the `?` that
