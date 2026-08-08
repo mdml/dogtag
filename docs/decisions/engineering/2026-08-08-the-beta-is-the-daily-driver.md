@@ -1,6 +1,6 @@
 # The beta is the daily driver
 
-- Status: proposed
+- Status: accepted
 - Date: 2026-08-08
 
 ## Context
@@ -15,7 +15,7 @@ That is the real cost, and it is not about a missing feature. The beta's [ship t
 
 ## Decision
 
-**The beta is the daily driver.** Adjudicated by the maintainer 2026-08-08: the beta's purpose is not to prove a kernel and hand daily work back to the incumbent tooling, but to take that work over. The Promise's "deliberately small operational kernel" described the M0–M5 rungs honestly and stops being the whole story here; the small kernel is the *foundation* the authoring surfaces are built on, not the boundary of the beta.
+**The beta is the daily driver.** Adjudicated by the maintainer 2026-08-08, and the rung shape below ratified by him the same day: the beta's purpose is not to prove a kernel and hand daily work back to the incumbent tooling, but to take that work over. The Promise's "deliberately small operational kernel" described the M0–M5 rungs honestly and stops being the whole story here; the small kernel is the *foundation* the authoring surfaces are built on, not the boundary of the beta.
 
 ### Three surfaces stand between `capture` and daily driving
 
