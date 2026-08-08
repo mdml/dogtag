@@ -2,7 +2,7 @@
 
 > **Status: beta product draft (2026-07-29).** This README is written as if the product shipped — readme-driven development makes it true. Start here for what it is and the first hour; [product.md](docs/product.md) carries the full case, [abstractions.md](docs/abstractions.md) the domain concepts, [architecture.md](docs/architecture.md) the SDK architecture, [beta.md](docs/beta.md) the first release contract, and [strategy.md](docs/strategy.md) the experiment sequence.
 
-> **Beta status.** The published release, `0.1.0-beta.3`, reads, validates, and retrieves over a configured vault: `dogtag version`, `doctor`, `contract explain`, `check`, `list`, `show`, `search`, and `find`. Mutation is the next rung. Install it with `curl -fsSL https://raw.githubusercontent.com/mdml/dogtag/main/install.sh | sh` (`dogtag.dev` will front the same script). Commands land in the repository before they land in a release, so what is installable today is behind what is implemented — the rest of this document set describes the product under construction, readme-driven development, with the milestone ladder in [beta.md](docs/beta.md) and where the work actually stands in [roadmap.md](docs/roadmap.md). The Getting started below is the destination, not the current state.
+> **Beta status.** The published release, `0.1.0-beta.4`, reads, validates, retrieves, and now writes over a configured vault: `dogtag version`, `doctor`, `contract explain`, `check`, `list`, `show`, `search`, `find`, and `capture`. `capture` is the one mutation, and it is deliberately ungated: a missing actor or an undeclared capture directory produces a warning and a note, never a refusal, because nothing should stand between a thought and the vault. It exits on whether your act landed rather than on the corpus's health, which is a different question the read verbs still answer. Triage — filing what capture leaves unfiled — is the next rung. Install it with `curl -fsSL https://raw.githubusercontent.com/mdml/dogtag/main/install.sh | sh` (`dogtag.dev` will front the same script). Commands land in the repository before they land in a release, so what is installable today is behind what is implemented — the rest of this document set describes the product under construction, readme-driven development, with the milestone ladder in [beta.md](docs/beta.md) and where the work actually stands in [roadmap.md](docs/roadmap.md). The Getting started below is the destination, not the current state.
 
 Dogtag is a personal knowledge management SDK designed for AI agents and applications: they configure it, co-author the notes, and keep the vault maintained. The CLI, MCP server, TUI, webhooks, CI jobs, and agent loops are consumers of the same public Rust, TypeScript, Python, and later bindings—not separate homes of vault behavior. The full case — why now, who it's for, what's deliberately absent — is in [product.md](docs/product.md). The whole documentation set is indexed in [docs/](docs/README.md), including both decision trails; contributor and agent instructions are in [AGENTS.md](AGENTS.md).
 
@@ -19,7 +19,8 @@ my-vault/
   <notes, in whatever folders the user likes — folders carry no semantics>
   .dogtag/
     contract.toml   # the one committed asset: types, properties, relationships,
-                    # capabilities, lifecycle, write policy, dialect, version
+                    # capabilities, lifecycle, write policy, dialect, version,
+                    # and where captures land
   skills/           # travel-with-vault agent verbs
   AGENTS.md         # generated agent contract — regenerated from the contract, not hand-edited
   .index/           # derived search index + caches, gitignored
