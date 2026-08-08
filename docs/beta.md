@@ -6,14 +6,15 @@
 
 Two people with independently configured vaults can install the same released Dogtag SDK, operate both vaults through the CLI, embed the same semantics in a TypeScript workflow, and upgrade to a fix without manual vault repair.
 
-The beta proves the complete product lifecycle with a deliberately small operational kernel:
+The beta proves the complete product lifecycle, and takes over the maintainers' daily vault work rather than handing it back — [the daily-driver record](decisions/engineering/2026-08-08-the-beta-is-the-daily-driver.md) settles that the small operational kernel below is the foundation the authoring surfaces are built on, not the boundary of the beta:
 
 1. install a released artifact without a product source checkout;
 2. discover, configure, inspect, and validate a vault;
 3. read it through stable SDK operations and their CLI binding;
 4. make one planned, scoped, validated write;
 5. embed the same operation model in a non-CLI workflow;
-6. upgrade and preserve compatibility.
+6. author the corpus through it — create typed notes, edit them, and import attachments — so the incumbent tooling retires;
+7. upgrade and preserve compatibility.
 
 ## In scope
 
@@ -24,7 +25,7 @@ The beta proves the complete product lifecycle with a deliberately small operati
 - Vault discovery and validated configuration, each setting owned by exactly one scope: one committed vault contract, one local installation record.
 - Structured diagnostics and machine-readable results.
 - `version`, `doctor`, `check`, `list`, `show`, lexical `search`, and `contract explain` — the last rendering the resolved contract as agent-readable instructions so they cannot drift from it.
-- One plan/validate/apply mutation, initially `capture`.
+- The plan/validate/apply mutation sequence the ladder walks: `capture`, then typed creation and triage, then editing, then `import`.
 - Sanitized golden fixtures representing two different vault configurations, with two further profiles specified and scheduled.
 - Versioned macOS and Linux prerelease artifacts, checksums, an installer, and upgrade inspection.
 - A minimal documentation site at `dogtag.dev`.
@@ -62,7 +63,7 @@ The beta ships when:
 
 - both vaults pass the shared read and validation scenarios, and no scenario is profile-scoped;
 - both users install the same prerelease independently;
-- both complete a real CLI read workflow and a real CLI write workflow;
+- both complete a real CLI read workflow, and author through the CLI — a typed note created, a note edited, an attachment imported — with the incumbent verbs retired;
 - one real TypeScript workflow operates a vault without shelling out to the CLI;
 - an older beta upgrades to the final beta candidate on both installations;
 - every workflow moved onto Dogtag by the per-milestone cutover rule is still there;
@@ -71,7 +72,7 @@ The beta ships when:
 
 ## Milestones
 
-The beta ships in nine milestones, each an installable vertical slice published as a prerelease. Which one is active, and what the finished ones produced, is [roadmap.md](roadmap.md); this section defines what each one delivers. Every milestone from M2 on names one real workflow that moves from the incumbent personal tooling onto installed Dogtag and does not move back — the cutover rule in Required properties.
+The beta ships in twelve milestones, each an installable vertical slice published as a prerelease. Which one is active, and what the finished ones produced, is [roadmap.md](roadmap.md); this section defines what each one delivers. Every milestone from M2 on names one real workflow that moves from the incumbent personal tooling onto installed Dogtag and does not move back — the cutover rule in Required properties.
 
 - **M0 — beta contract and extraction packet.** Shipped: the decisions this document carries.
 - **M1 — clean repository and empty release.** The product repository, Rust workspace, CLI and TypeScript scaffolds, conformance harness, release automation, and the doc set; `dogtag version` published and installed as `0.1.0-beta.0`.
@@ -79,9 +80,12 @@ The beta ships in nine milestones, each an installable vertical slice published 
 - **M3 — read and validate.** The public document model plus `check`, `list`, and `show`, against the shared conformance scenarios written at M0. Cutover, three parts: reading and listing notes, **M2's deferred schema-explanation cutover**, and the incumbent's scheduled corpus lint moving onto `check --strict` — the last per [the M2 surfaces record](decisions/engineering/2026-07-31-m2-surfaces-and-the-sdk-boundary.md)'s standing line that corpus checks move at M3 with `check`, and the first cutover in the beta with a genuine scheduled incumbent. *(Widened 2026-08-03; decision packet frozen the same day — six records beginning with [the document model](decisions/engineering/2026-08-03-m3-document-model.md).)* This is the first `contract_version` bump: a tag-vocabulary construct so a corpus that follows [note-types](decisions/product/note-types.md) in carrying subtypes as tags can declare them — the PDR routed subtypes into tags and version 1 provided no way to describe tags — plus the `record` kind the kind-lattice record scopes. The bump raises the ceiling only; the floor stays at 1, so a version-1 vault keeps loading. It also makes the per-version key set and default table due, and makes the `supported`-but-not-current classification reachable for the first time.
 - **M4 — lexical retrieval.** Basic search and entity lookup over the common model; the `docs` fixture profile is built here, where a folder-organized markdown-link corpus stresses retrieval hardest. Cutover: search.
 - **M5 — safe mutation.** Plan/validate/apply transaction with one `capture` operation: explicit file scope, actor/provenance, preview, post-write validation, structured result, recovery. Cutover: one capture path. *(Rolled forward 2026-08-08. The named incumbent — the note-minting step inside the maintainers' authoring skills — turned out not to exist in that shape: those skills delegate to a typed-note stamper, which is filing rather than capture, so repointing it onto `capture` would have removed structure rather than moved a workflow. Mis-specified rather than unmet, as at M2; M5 ships on criteria 1–6 with an honest receipt, and the capture cutover is scheduled at M6, where the MCP server gives `capture` a consumer. See [the release record's amendments](decisions/engineering/2026-08-07-m5-release-and-cutover.md#amendments).)*
-- **M6 — TypeScript SDK and dynamic workflow.** The binding backed by the Rust core, then an SDK-backed MCP server (`search`, `show`, `capture`) deployed alongside the maintainers' existing infrastructure.
-- **M7 — second-vault onboarding.** Install the released artifact, configure the second founder vault, complete one read and one write workflow without a product source checkout.
-- **M8 — upgrade and beta verdict.** Upgrade both installations from older prereleases, run the complete conformance and workflow test, publish limitations and recovery documentation, and decide whether E0 graduates to assisted adoption ([strategy.md](strategy.md)).
+- **M6 — TypeScript SDK and dynamic workflow.** The binding backed by the Rust core, then an SDK-backed MCP server (`search`, `show`, `capture`) deployed alongside the maintainers' existing infrastructure. Cutover: **capture**, rolled forward from M5, where the server gives the verb its consumer.
+- **M7 — typed creation and triage.** `new` stamps a note of a declared type — template, required tags, born state, per-type structure — and triage files what `capture` leaves unfiled. Cutover: the incumbent's typed-note stamper.
+- **M8 — editing.** `edit` mutates a note in place under the rule that a writing surface never alters bytes it did not semantically touch, plus lifecycle transitions. The first mutation that must decide the plan scope, collision, and atomicity questions [the M5 surfaces record](decisions/engineering/2026-08-07-m5-capture-and-the-write-transaction.md) deliberately left unmade. Cutover: the incumbent's note-editing path.
+- **M9 — attachments.** `import` brings a binary into the vault's attachment layout with its sidecar — the residue carried forward, homeless since M2. Cutover: the incumbent's attachment import.
+- **M10 — second-vault onboarding.** Install the released artifact, configure the second founder vault, complete one read and one write workflow without a product source checkout.
+- **M11 — upgrade and beta verdict.** Upgrade both installations from older prereleases, run the complete conformance and workflow test, publish limitations and recovery documentation, and decide whether E0 graduates to assisted adoption ([strategy.md](strategy.md)).
 
 ## Fixture profiles
 
