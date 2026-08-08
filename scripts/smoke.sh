@@ -4,10 +4,25 @@
 #
 # Every surface of the built binary runs against a throwaway copy of each
 # profile corpus: the pristine subset (version, doctor, contract explain,
-# check, list, search) on every profile that ships a corpus, and the full
-# seeded sequence (list with content, show, search, find, refusals) on
-# `starter`, the normative initialization profile. The script writes only
-# under mktemp and leaves the tree untouched.
+# check, list, search) on every profile that ships a corpus, then the one
+# mutation (preview, capture, read-back) on each of them, and the full seeded
+# sequence (list with content, show, search, find, refusals) on `starter`, the
+# normative initialization profile. The script writes only under mktemp and
+# leaves the tree untouched.
+#
+# The capture steps run LAST inside the per-profile loop, after every read
+# assertion, so a capture cannot perturb what the reads are about. Two ambient
+# facts make them what they are: `HOME` is a fresh mktemp directory, so there is
+# no installation record and every capture here is unattributed by design; and
+# the copies are not repositories, so every capture exercises guest mode.
+#
+# Expect informational output on standard error from two of the three profiles.
+# `dense` and `docs` declare contract version 2 while the current version is 3,
+# deliberately — they are the standing witnesses that a below-ceiling vault
+# keeps loading and gains `capture` through the default table — so every run
+# against them prints `compat.newer-format-available`. It is information, it is
+# true, and hiding it here would be the wrong instinct: a green run that says
+# what it noticed is worth more than a quiet one.
 
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -34,6 +49,20 @@ mkdir -p "$HOME"
 json_ok() {
   python3 -m json.tool >/dev/null 2>&1
 }
+
+# The path a capture's structured result says it created.
+created_path() {
+  python3 -c 'import json,sys; print(json.load(sys.stdin)["created"] or "")'
+}
+
+# Every file under a vault, as one comparable listing.
+files_under() {
+  find "$1" -type f | sort
+}
+
+# An invented phrase no fixture corpus carries, so finding it back proves the
+# capture rather than a coincidence.
+THOUGHT="vellichor sweep of the harbour ledgers"
 
 # --- every profile with a corpus: the pristine subset ---------------------
 for profile in conformance/profiles/*/corpus; do
@@ -69,6 +98,39 @@ for profile in conformance/profiles/*/corpus; do
   (cd "$vault" && "$dogtag" search smoke-pristine-sweep --format json | json_ok) \
     || fail "$name: search json"
   step "$name: search answers in both formats"
+
+  # --- the one mutation ---------------------------------------------------
+  before=$(files_under "$vault")
+  (cd "$vault" && "$dogtag" capture --preview "smoke preview for $name" >/dev/null 2>&1) \
+    || fail "$name: capture --preview"
+  [ "$before" = "$(files_under "$vault")" ] || fail "$name: the preview wrote something"
+  step "$name: capture --preview writes nothing"
+
+  captured=$(cd "$vault" && "$dogtag" capture "$THOUGHT for $name" --format json 2>/dev/null) \
+    || fail "$name: capture"
+  printf '%s' "$captured" | json_ok || fail "$name: capture json"
+  landed=$(printf '%s' "$captured" | created_path)
+  case "$landed" in
+    */*) ;;
+    *) fail "$name: the capture named no created path" ;;
+  esac
+  step "$name: capture creates one note and names it"
+
+  # The read-back, through the ordinary doors: the note is listed, it shows the
+  # thought that was captured, and the corpus is still green under strict —
+  # which is the structural exemption made visible, since a capture binds to a
+  # catch-all that can require nothing.
+  (cd "$vault" && "$dogtag" list | grep -q "$landed") || fail "$name: list omits the capture"
+  (cd "$vault" && "$dogtag" show "$landed" | grep -q "$THOUGHT") \
+    || fail "$name: show omits the captured thought"
+  (cd "$vault" && "$dogtag" check --strict >/dev/null) || fail "$name: check after capture"
+  step "$name: the captured note reads back and leaves the corpus green"
+
+  # No installation record is in scope, so provenance is unattributed — a
+  # warning that never gates the act, which is why this still exits 0.
+  (cd "$vault" && "$dogtag" capture "smoke unattributed for $name" 2>&1 >/dev/null) \
+    | grep -q "write.actor-unattributed" || fail "$name: an unattributed capture must warn"
+  step "$name: an unattributed capture warns and still lands"
 done
 
 # --- starter, seeded: content flows through list and show -----------------
