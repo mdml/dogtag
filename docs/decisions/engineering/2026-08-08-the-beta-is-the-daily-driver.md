@@ -58,3 +58,9 @@ Each is a `pkm` verb in constant use, and each is a distinct packet:
 - **Three cutovers now retire load-bearing daily verbs.** A fidelity regression in any of them stops that milestone, and unlike the read cutovers, a bad week here costs the maintainers real authoring friction rather than a fallback command.
 - **`pkm` retires incrementally rather than at once**, and the intermediate states — dogtag creating, `pkm` editing — must both work against one vault throughout.
 - **This record does not design the three surfaces.** Each needs its own packet, and the hard questions M5 parked land in M8's.
+
+## Amendments
+
+The Decision above stands as written; this later entry corrects the M6 receipt shape after packet-time verification, without changing M6's deliverable or the daily-driver ladder.
+
+- **2026-08-12 — M6 establishes capture's first real workflow; it does not cut over an incumbent.** The ladder table calls M6's cutover `capture` and the Decision says that cutover survives unchanged. The M6 packet verified that direct `dogtag capture` had not become a real workflow after release verification, while the incumbent typed-creation and attachment-import paths are filing rather than capture. M6 still gives capture its first real consumer through the MCP server and still closes M5's rolled-forward obligation, but the receipt records adoption with no incumbent rather than inventing a transfer. The typed-creation, editing, and attachment cutovers assigned to M7–M9 are unchanged.
