@@ -163,7 +163,7 @@ jobs:
         with:
           toolchain: "nightly-2026-07-30"
           components: llvm-tools-preview
-      - uses: taiki-e/install-action@6a1bd70eaac3c8bdf093356838d7ee09fda951cf # v2.85.5
+      - uses: taiki-e/install-action@91ddec75689c4c78665b598d188dc821c5a43e5c # v2.85.9
         with:
           tool: cargo-llvm-cov@0.8.7
       - name: Measure and enforce coverage
@@ -205,10 +205,10 @@ jobs:
         with:
           toolchain: "1.97.1"
           targets: x86_64-unknown-linux-musl
-      - uses: taiki-e/install-action@6a1bd70eaac3c8bdf093356838d7ee09fda951cf # v2.85.5
+      - uses: taiki-e/install-action@91ddec75689c4c78665b598d188dc821c5a43e5c # v2.85.9
         with:
           tool: cargo-auditable@0.7.5
-      - uses: taiki-e/install-action@6a1bd70eaac3c8bdf093356838d7ee09fda951cf # v2.85.5
+      - uses: taiki-e/install-action@91ddec75689c4c78665b598d188dc821c5a43e5c # v2.85.9
         with:
           tool: cargo-cyclonedx@0.5.9
       # Byte-for-byte the release workflow's build invocation, including the
