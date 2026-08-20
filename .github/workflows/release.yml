@@ -53,10 +53,10 @@ jobs:
         with:
           toolchain: "1.97.1"
           targets: ${{ matrix.target }}
-      - uses: taiki-e/install-action@6a1bd70eaac3c8bdf093356838d7ee09fda951cf # v2.85.5
+      - uses: taiki-e/install-action@82cd3e7658a6f96c86c0234aeeda1748937cb0a1 # v2.85.13
         with:
           tool: cargo-auditable@0.7.5
-      - uses: taiki-e/install-action@6a1bd70eaac3c8bdf093356838d7ee09fda951cf # v2.85.5
+      - uses: taiki-e/install-action@82cd3e7658a6f96c86c0234aeeda1748937cb0a1 # v2.85.13
         with:
           tool: cargo-cyclonedx@0.5.9
       # The target reaches the shell through the environment rather than
@@ -177,7 +177,7 @@ jobs:
           subject-path: dist/dogtag-x86_64-apple-darwin.tar.gz
           predicate-type: https://cyclonedx.org/bom
           predicate-path: dist/dogtag-x86_64-apple-darwin.cdx.json
-      - uses: taiki-e/install-action@6a1bd70eaac3c8bdf093356838d7ee09fda951cf # v2.85.5
+      - uses: taiki-e/install-action@82cd3e7658a6f96c86c0234aeeda1748937cb0a1 # v2.85.13
         with:
           tool: git-cliff@2.13.1
       # Deterministic notes from the Conventional Commit history, replacing
